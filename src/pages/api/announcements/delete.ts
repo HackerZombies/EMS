@@ -1,9 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import prisma from "../../../lib/prisma";
 
-//API endpoint for announcement deletion utilising the announcement ID as the identifier for deletion
-//Utilised POST as Nextauth.js did not allow for DELETE method to work
-//Ensures that it also deals with errors as accordingly
+// API endpoint for announcement deletion utilizing the announcement ID as the identifier for deletion
+// Utilised POST as NextAuth.js did not allow for DELETE method to work
+// Ensures that it also deals with errors accordingly
 export default async function announcementDelete(
   req: NextApiRequest,
   res: NextApiResponse,
@@ -11,18 +11,19 @@ export default async function announcementDelete(
   if (req.method === "POST") {
     try {
       const { announcementID } = req.body;
-
       if (!announcementID) {
         return res
           .status(400)
           .json({ err: "Announcement ID not present in Announcements" });
       }
 
+      // Ensure the announcementID is treated as a string
       const deletedAnnouncement = await prisma.announcement.delete({
         where: {
-          id: Number(announcementID),
+          id: String(announcementID),
         },
       });
+
       res.status(200).json(deletedAnnouncement);
     } catch (err) {
       console.error(err);

@@ -12,11 +12,10 @@ import { motion } from "framer-motion";
 import { Icon } from "@iconify/react";
 import Button from "@/components/Button";
 
-//Gets all the announcements from the prisma database to be outputted before rendering the page
+// Gets all the announcements from the prisma database to be outputted before rendering the page
 export const getServerSideProps: GetServerSideProps = async (context) => {
   const session = await getServerSession(context.req, context.res, authOptions);
   var announcements: Announcement[];
-
   if (session?.user) {
     if (session.user.role === "HR") {
       announcements = await prisma.announcement.findMany();
@@ -28,7 +27,6 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
   } else {
     announcements = [];
   }
-
   return {
     props: {
       initialAnnouncements: announcements,
@@ -36,8 +34,8 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
   };
 };
 
-//Deleting announcement utilising the announcements/delete.ts API endpoint using announcementID
-//DELETE method was not working so implemented POST method instead
+// Deleting announcement utilizing the announcements/delete.ts API endpoint using announcementID
+// DELETE method was not working so implemented POST method instead
 async function deleteAnnouncement(announcementID: number) {
   const response = await fetch("api/announcements/delete", {
     method: "POST",
@@ -46,30 +44,29 @@ async function deleteAnnouncement(announcementID: number) {
     },
     body: JSON.stringify({ announcementID }),
   });
-  //Ensuring that any issues are being outputted
+  // Ensuring that any issues are being outputted
   if (!response.ok) {
     throw new Error(response.statusText);
   }
   return await response.json();
 }
 
-//Main function used to render the page
+// Main function used to render the page
 export default function Announcements({
   initialAnnouncements,
 }: {
   initialAnnouncements: Announcement[];
 }) {
-  //Stores all announcements from the database
+  // Stores all announcements from the database
   const [announcements, setAnnouncements] =
     useState<Announcement[]>(initialAnnouncements);
-  //Utilising the role from the session based on the user login
+  // Utilising the role from the session based on the user login
   const session = useSession();
-  //State checking the filter being applied using the dropdown menu for HR employees
+  // State checking the filter being applied using the dropdown menu for HR employees
   const [filter, setFilter] = useState("");
-  //State used that checks if the announcement has been clicked to get further details
+  // State used that checks if the announcement has been clicked to get further details
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
-
-  //Used to ensure that the date outputted is in a readable form
+  // Used to ensure that the date outputted is in a readable form
   const converttoReadable = (date: Date): string => {
     const options: Intl.DateTimeFormatOptions = {
       year: "numeric",
@@ -82,20 +79,20 @@ export default function Announcements({
     const readable = date.toLocaleString("en-GB", options);
     return readable;
   };
-  //Used to signify the expansion or collapse of a announcement details
+  // Used to signify the expansion or collapse of a announcement details
   const toggleCollapse = (index: number) => {
     setExpandedIndex((prevIndex) => (prevIndex === index ? null : index));
   };
-  //Used to change the filter value changing based on the HR employee filtering
+  // Used to change the filter value changing based on the HR employee filtering
   const handleFilterChange = (e: ChangeEvent<HTMLSelectElement>) => {
     setFilter(e.target.value);
   };
-  //Dealing with the announcement deletion by calling "deleteAnnouncement" and removing the announcement from the page rendered
+  // Dealing with the announcement deletion by calling "deleteAnnouncement" and removing the announcement from the page rendered
   const handleDeleteAnnouncement = async (announcementID: number) => {
     try {
       await deleteAnnouncement(announcementID);
       const updated = announcements.filter(
-        (announcement) => announcement.id != announcementID,
+        (announcement) => Number(announcement.id) !== announcementID,
       );
       setAnnouncements(updated);
       return true;
@@ -104,12 +101,10 @@ export default function Announcements({
       return false;
     }
   };
-
-  //All constants deal with the content for each of the roles and also for the HR employee filter functionality implemented
+  // All constants deal with the content for each of the roles and also for the HR employee filter functionality implemented
   const filteredContent = filter
     ? announcements.filter((announcement) => announcement.role === filter)
     : announcements;
-
   const list = {
     visible: {
       opacity: 1,
@@ -124,7 +119,6 @@ export default function Announcements({
       },
     },
   };
-
   const item = {
     visible: {
       opacity: 1,
@@ -134,7 +128,6 @@ export default function Announcements({
     },
     hidden: { opacity: 0, y: 10, filter: "blur(3px)" },
   };
-
   if (session.data && session.data.user) {
     return (
       <>
@@ -200,7 +193,7 @@ export default function Announcements({
               animate="visible"
               variants={list}
             >
-              {/*Displaying the announcements only for the HR employee to view as necessary*/}
+              {/* Displaying the announcements only for the HR employee to view as necessary */}
               {filteredContent
                 .slice()
                 .reverse()
@@ -213,7 +206,9 @@ export default function Announcements({
                     {/* Subject of each announcement represented as the button to be pressed to expand and collapse the text for each announcement */}
                     <button
                       type="button"
-                      className={`w-full p-1 text-left transition-colors duration-300 ${expandedIndex === index ? "active" : ""} `}
+                      className={`w-full p-1 text-left transition-colors duration-300 ${
+                        expandedIndex === index ? "active" : ""
+                      } `}
                       onClick={() => toggleCollapse(index)}
                     >
                       <h1 className="text-2xl font-bold">
@@ -224,7 +219,9 @@ export default function Announcements({
                       </h2>
                     </button>
                     <div
-                      className={`relative flex flex-col overflow-hidden border-t border-black border-opacity-50 p-2 text-black ${expandedIndex === index ? "" : "hidden"}`}
+                      className={`relative flex flex-col overflow-hidden border-t border-black border-opacity-50 p-2 text-black ${
+                        expandedIndex === index ? "" : "hidden"
+                      }`}
                     >
                       {/* Outputs text for the announcement and also the date it was created in a readable format */}
                       <p className="mt-1 max-h-64 overflow-auto">
@@ -235,7 +232,7 @@ export default function Announcements({
                         <div className="flex justify-end">
                           <Button
                             onClick={() =>
-                              handleDeleteAnnouncement(announcement.id)
+                              handleDeleteAnnouncement(Number(announcement.id))
                             }
                           >
                             Remove

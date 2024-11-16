@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String         @id @default(auto()) @map("_id") @db.ObjectId
+  username      String         @unique
+  password      String
+  firstName     String
+  lastName      String
+  email         String         @unique
+  phoneNumber   String         @unique
+  dateCreated   DateTime       @default(now())
+  leaveBalance  Int
+  leaveRequests LeaveRequest[]
+  documents     Document[]
+  tickets       Ticket[]
+  messages      Message[]
+  role          String         @default("EMPLOYEE")
+}
+
+model LeaveRequest {
+  id            String       @id @default(auto()) @map("_id") @db.ObjectId
+  reason        String
+  startDate     DateTime
+  endDate       DateTime
+  requestStatus String    @default("Pending")
+  dateCreated   DateTime  @default(now())
+  dateResponded DateTime?
+  User          User      @relation(fields: [userUsername], references: [username], onDelete: Cascade)
+  userUsername  String
+}
+
+model Document {
+  id           String      @id @default(auto()) @map("_id") @db.ObjectId
+  filename     String
+  data         Bytes
+  dateCreated  DateTime @default(now())
+  User         User     @relation(fields: [userUsername], references: [username], onDelete: Cascade)
+  userUsername String
+}
+
+model Announcement {
+  id          String      @id @default(auto()) @map("_id") @db.ObjectId
+  title       String
+  text        String
+  dateCreated DateTime @default(now())
+  role        String
+}
+
+model Ticket {
+  id           String       @id @default(auto()) @map("_id") @db.ObjectId
+  subject      String
+  status       String    @default("Unresolved")
+  messages     Message[]
+  dateCreated  DateTime  @default(now())
+  User         User      @relation(fields: [userUsername], references: [username], onDelete: Cascade)
+  userUsername String
+}
+
+model Message {
+  id           String      @id @default(auto()) @map("_id") @db.ObjectId
+  Ticket       Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticketId     String
+  text         String
+  dateCreated  DateTime @default(now())
+  User         User     @relation(fields: [userUsername], references: [username], onDelete: Cascade)
+  userUsername String
+}

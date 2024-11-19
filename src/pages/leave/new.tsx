@@ -119,18 +119,18 @@ export default function NewLeaveRequest() {
           <label className="flex flex-col text-left">
             Reason:
             <select
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              className="rounded-xl bg-gray-200 bg-opacity-50 px-3 py-2 shadow-lg outline-none transition hover:bg-opacity-70"
-            >
-              <option value="Empty">Select a Reason</option>
-              <option value="Holiday">Holiday</option>
-              <option value="Sick">Sick Leave</option>
-              <option value="Parental">Parental Leave</option>
-              <option value="Study">Study Leave</option>
-              <option value="Training">Training Leave</option>
-              <option value="Family">Family Leave</option>
-            </select>
+  value={reason}
+  onChange={(e) => setReason(e.target.value)}
+  className="custom-select rounded-xl bg-gray-100 bg-opacity-50 px-4 py-3 shadow-lg outline-none transition hover:bg-opacity-70 focus:ring-2 focus:ring-blue-500 border border-gray-300"
+>
+  <option value="Empty" className="text-white">Select a Reason</option>
+  <option value="Holiday" className="text-white">Holiday</option>
+  <option value="Sick" className="text-white">Sick Leave</option>
+  <option value="Parental" className="text-white">Parental Leave</option>
+  <option value="Study" className="text-white">Study Leave</option>
+  <option value="Training" className="text-white">Training Leave</option>
+  <option value="Family" className="text-white">Family Leave</option>
+</select>
           </label>
 
           <label className="flex flex-col text-left">

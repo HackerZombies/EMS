@@ -18,18 +18,57 @@ type Props = {
 export default function PersonalInfo({ user }: Props) {
   const router = useRouter();
   const { data: session, status, update } = useSession();
-
   const [firstName, setFirstName] = useState(user?.firstName || "");
   const [lastName, setLastName] = useState(user?.lastName || "");
   const [password, setPassword] = useState("");
   const [email, setEmail] = useState(user?.email || "");
   const [phoneNumber, setPhoneNumber] = useState(user?.phoneNumber || "");
-
   const [visible, setVisible] = useState(false);
   const [message, setMessage] = useState(<></>);
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+
+  const validate = () => {
+    const newErrors: { [key: string]: string } = {};
+
+    // Validate email format
+    const emailPattern = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/;
+    if (email && !emailPattern.test(email)) {
+      newErrors.email = "Invalid email format";
+    }
+
+    // Validate phone number format
+    const phonePattern = /^91[0-9]{10}$/;
+    if (phoneNumber && !phonePattern.test(phoneNumber)) {
+      newErrors.phoneNumber = "Invalid phone number format. Please enter 91 followed by a 10-digit number.";
+    }
+
+    // Validate required fields
+    if (!firstName) {
+      newErrors.firstName = "First Name is required";
+    }
+    if (!lastName) {
+      newErrors.lastName = "Last Name is required";
+    }
+    if (!password) {
+      newErrors.password = "Password is required , Enter New Password to update it";
+    }
+    if (!email) {
+      newErrors.email = "Valid Email is required";
+    }
+    if (!phoneNumber) {
+      newErrors.phoneNumber = "Valid Phone Number is required";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   // Handle Update Info button click
   const handleUpdate = async () => {
+    if (!validate()) {
+      return;
+    }
+
     try {
       // Send a POST request to the updateUser API endpoint
       const response = await axios.post("/api/users/updateUserInfo", {
@@ -40,7 +79,6 @@ export default function PersonalInfo({ user }: Props) {
         email,
         phoneNumber,
       });
-
       if (response.status === 200) {
         setMessage(
           <div className="flex flex-col gap-3">
@@ -62,14 +100,13 @@ export default function PersonalInfo({ user }: Props) {
       if (axios.isAxiosError(error)) {
         const status = error.response?.status;
         const data = error.response?.data;
-
         // If status code is 409, means the email / phone num already in use
         if (status === 409) {
           alert(data.message);
         } else {
           alert(
             "Error updating user: " +
-              (data?.message || "An unexpected error occurred."),
+            (data?.message || "An unexpected error occurred."),
           );
         }
       } else {
@@ -99,10 +136,12 @@ export default function PersonalInfo({ user }: Props) {
               name="fname"
               id="fname"
               defaultValue={firstName}
-              onChange={(e: { target: { value: SetStateAction<string> } }) =>
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                 setFirstName(e.target.value)
               }
+              required
             />
+            {errors.firstName && <p className="text-red-500">{errors.firstName}</p>}
           </div>
           <div className="flex flex-col">
             <label className="font-medium" htmlFor="lname">
@@ -113,10 +152,12 @@ export default function PersonalInfo({ user }: Props) {
               name="lname"
               id="lname"
               defaultValue={lastName}
-              onChange={(e: { target: { value: SetStateAction<string> } }) =>
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                 setLastName(e.target.value)
               }
+              required
             />
+            {errors.lastName && <p className="text-red-500">{errors.lastName}</p>}
           </div>
           <div className="flex flex-col">
             <label className="font-medium" htmlFor="password">
@@ -127,10 +168,12 @@ export default function PersonalInfo({ user }: Props) {
               name="password"
               id="password"
               placeholder="***********"
-              onChange={(e: { target: { value: SetStateAction<string> } }) =>
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                 setPassword(e.target.value)
               }
+              required
             />
+            {errors.password && <p className="text-red-500">{errors.password}</p>}
           </div>
           <div className="flex flex-col">
             <label className="font-medium" htmlFor="email">
@@ -141,10 +184,13 @@ export default function PersonalInfo({ user }: Props) {
               name="email"
               id="email"
               defaultValue={email}
-              onChange={(e: { target: { value: SetStateAction<string> } }) =>
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                 setEmail(e.target.value)
               }
+              pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"
+              required
             />
+            {errors.email && <p className="text-red-500">{errors.email}</p>}
           </div>
           <div className="flex flex-col">
             <label className="font-medium" htmlFor="phone">
@@ -155,10 +201,13 @@ export default function PersonalInfo({ user }: Props) {
               name="phone"
               id="phone"
               defaultValue={phoneNumber}
-              onChange={(e: { target: { value: SetStateAction<string> } }) =>
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                 setPhoneNumber(e.target.value)
               }
+              pattern="91[0-9]{10}"
+              required
             />
+            {errors.phoneNumber && <p className="text-red-500">{errors.phoneNumber}</p>}
           </div>
           <div className="flex w-full justify-end">
             <Button onClick={handleUpdate}>Save Changes</Button>
@@ -179,7 +228,6 @@ export default function PersonalInfo({ user }: Props) {
 
 export async function getServerSideProps(context: GetServerSidePropsContext) {
   const session = await getSession(context);
-
   if (!session || !prisma) {
     return {
       redirect: {
@@ -188,13 +236,11 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
       },
     };
   }
-
   const user = await prisma.user.findUnique({
     where: {
       username: session.user?.username,
     },
   });
-
   if (!user) {
     return {
       redirect: {
@@ -203,7 +249,6 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
       },
     };
   }
-
   return {
     props: {
       user,

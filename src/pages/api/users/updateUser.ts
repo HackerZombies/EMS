@@ -4,36 +4,46 @@ import argon2 from "argon2";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
+import { sendUserUpdateEmail } from "@/lib/sendUserUpdateEmail"; // Import the sendUpdateEmail function
 
 export default async function handle(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
   const session = await getServerSession(req, res, authOptions);
-
   if (!session) {
     return res.status(401).json({ message: "Unauthorized" });
   }
-
   if (req.method !== "POST") {
     return res.status(405).json({ message: "Method Not Allowed" });
   }
 
   // Extract user data from req body
-  let { username, firstName, lastName, password, email, phoneNumber } =
-    req.body;
+  let { username, firstName, lastName, password, email, phoneNumber } = req.body;
 
-  // don't update empty fields
-  if (firstName == "") {
+  // Validate email format
+  const emailPattern = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/;
+  if (email && !emailPattern.test(email)) {
+    return res.status(400).json({ message: "Invalid email format" });
+  }
+
+  // Validate phone number format
+  const phonePattern = /^91[0-9]{10}$/;
+  if (phoneNumber && !phonePattern.test(phoneNumber)) {
+    return res.status(400).json({ message: "Invalid phone number format. Please enter 91 followed by a 10-digit number." });
+  }
+
+  // Don't update empty fields
+  if (firstName === "") {
     firstName = undefined;
   }
-  if (lastName == "") {
+  if (lastName === "") {
     lastName = undefined;
   }
-  if (email == "") {
+  if (email === "") {
     email = undefined;
   }
-  if (phoneNumber == "") {
+  if (phoneNumber === "") {
     phoneNumber = undefined;
   }
 
@@ -41,7 +51,7 @@ export default async function handle(
     // Hash the raw password from req body
     const hashedPassword = password ? await argon2.hash(password) : undefined;
 
-    // Update  user in database
+    // Update user in database
     const updatedUser = await prisma.user.update({
       where: { username },
       data: {
@@ -52,6 +62,17 @@ export default async function handle(
         phoneNumber,
       },
     });
+
+    // Send update email with updated information
+    if (email) {
+      await sendUserUpdateEmail(email, username, password);
+    }
+    if (email && password) {
+      await sendUserUpdateEmail(email, username, password);
+    }
+    if (username) {
+      await sendUserUpdateEmail(email, username, password);
+    }
     return res.status(200).json(updatedUser);
   } catch (error) {
     if (error instanceof PrismaClientKnownRequestError) {

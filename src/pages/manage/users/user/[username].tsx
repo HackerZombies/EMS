@@ -32,9 +32,34 @@ export default function EditUser({ user }: Props) {
   const [visible, setVisible] = useState(false);
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState(<></>);
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+
+  // Validate input fields
+  const validate = () => {
+    const newErrors: { [key: string]: string } = {};
+
+    // Validate email format
+    const emailPattern = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/;
+    if (email && !emailPattern.test(email)) {
+      newErrors.email = "Invalid email format";
+    }
+
+    // Validate phone number format
+    const phonePattern = /^91[0-9]{10}$/;
+    if (phoneNumber && !phonePattern.test(phoneNumber)) {
+      newErrors.phoneNumber = "Invalid phone number format. Please enter 91 followed by a 10-digit number.";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   // Handle Update Info button click
   const handleUpdate = async () => {
+    if (!validate()) {
+      return;
+    }
+
     // If all fields blank don't update
     if (!firstName && !lastName && !password && !email && !phoneNumber) {
       setTitle("Oops...");
@@ -53,7 +78,6 @@ export default function EditUser({ user }: Props) {
         email,
         phoneNumber,
       });
-
       if (response.status === 200) {
         router.push("/manage/users");
       }
@@ -61,7 +85,6 @@ export default function EditUser({ user }: Props) {
       if (axios.isAxiosError(error)) {
         const status = error.response?.status;
         const data = error.response?.data;
-
         // If status code is 409, means the email / phone num already in use
         if (status === 409) {
           setTitle("Oops...");
@@ -70,7 +93,7 @@ export default function EditUser({ user }: Props) {
         } else {
           alert(
             "Error updating user: " +
-              (data?.message || "An unexpected error occurred."),
+            (data?.message || "An unexpected error occurred."),
           );
         }
       } else {
@@ -82,13 +105,11 @@ export default function EditUser({ user }: Props) {
 
   const deleteUser = async () => {
     setVisible(false);
-
     try {
       // Send a DELETE request to the deleteUser API endpoint
       const response = await axios.delete("/api/users/deleteUser", {
         data: { username: userName },
       });
-
       if (response.status === 200) {
         router.push("/manage/users");
       }
@@ -96,10 +117,9 @@ export default function EditUser({ user }: Props) {
       if (axios.isAxiosError(error)) {
         const status = error.response?.status;
         const data = error.response?.data;
-
         alert(
           "Error deleting user: " +
-            (data?.message || "An unexpected error occurred."),
+          (data?.message || "An unexpected error occurred."),
         );
       } else {
         console.error("Error deleting user:", error);
@@ -157,7 +177,6 @@ export default function EditUser({ user }: Props) {
             )}
           </div>
         </div>
-
         <div className="flex flex-col gap-3 rounded-2xl bg-white bg-opacity-80 p-3 text-black">
           <div className="flex flex-col">
             <label className="font-medium" htmlFor="uname">
@@ -234,6 +253,7 @@ export default function EditUser({ user }: Props) {
                 setEmail(e.target.value)
               }
             />
+            {errors.email && <p className="text-red-500">{errors.email}</p>}
           </div>
           <div className="flex flex-col">
             <label className="font-medium" htmlFor="phone">
@@ -249,6 +269,7 @@ export default function EditUser({ user }: Props) {
                 setPhoneNumber(e.target.value)
               }
             />
+            {errors.phoneNumber && <p className="text-red-500">{errors.phoneNumber}</p>}
           </div>
           <div className="flex w-full justify-end">
             <Button onClick={handleUpdate}>Save Changes</Button>
@@ -264,20 +285,16 @@ export default function EditUser({ user }: Props) {
 
 export const getServerSideProps: GetServerSideProps = async (context) => {
   const session = await getServerSession(context.req, context.res, authOptions);
-
   if (!session) {
     return { props: {} };
   }
-
   try {
     const username = context.params?.username as string;
-
     const user = await prisma.user.findUnique({
       where: {
         username: String(username),
       },
     });
-
     return {
       props: {
         user,

@@ -1,19 +1,17 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/lib/prisma";
-import argon2 from "argon2";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
+import { sendDeleteEmail } from "@/lib/sendDeleteEmail"; // Import the sendDeleteEmail function
 
 export default async function handle(
   req: NextApiRequest,
   res: NextApiResponse,
 ) {
   const session = await getServerSession(req, res, authOptions);
-
   if (!session || session.user.role !== "TECHNICIAN") {
     return res.status(401).json({ message: "Unauthorized" });
   }
-
   if (req.method !== "DELETE") {
     return res.status(405).json({ message: "Method Not Allowed" });
   }
@@ -22,10 +20,24 @@ export default async function handle(
   const { username } = req.body;
 
   try {
+    // Fetch the user's email before deleting
+    const user = await prisma.user.findUnique({
+      where: { username },
+      select: { email: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
     // Delete user from database
     const deletedUser = await prisma.user.delete({
       where: { username },
     });
+
+    // Send delete email with notification
+    await sendDeleteEmail(user.email, username);
+
     return res.status(200).json(deletedUser);
   } catch (error) {
     // Handle case where user doesn't exist or other db error

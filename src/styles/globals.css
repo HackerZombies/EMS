@@ -12,3 +12,16 @@
 #__next {
   overflow-y: hidden;
 }
+
+.custom-select {
+  color: #ffffff; /* White text color */
+}
+
+.custom-select option {
+  color: #094f2d; /* White text color for options */
+}
+
+.custom-select option:checked {
+  background-color: #ffffff; /* White background for selected option */
+  color: #000000; /* Black text color for selected option */
+}

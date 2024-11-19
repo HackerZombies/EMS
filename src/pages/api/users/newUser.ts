@@ -1,4 +1,3 @@
-// src/pages/api/users/newUser .ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/lib/prisma";
 import argon2 from "argon2";
@@ -8,17 +7,19 @@ import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { sendEmail } from "@/lib/sendEmail"; // Import sendEmail function
 
 // Function to generate a random 5-digit number between 10000 - 90000
-function generateUsername() {
+function generateUsername(): string {
   const randomNumber = Math.floor(Math.random() * 90000) + 10000;
   return `${randomNumber}`;
 }
 
-export default async function handle(
-  req: NextApiRequest,
-  res: NextApiResponse,
-) {
-  const session = await getServerSession(req, res, authOptions);
+// Function to validate email format
+function validateEmail(email: string): boolean {
+  const re = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  return re.test(String(email).toLowerCase());
+}
 
+export default async function handle(req: NextApiRequest, res: NextApiResponse) {
+  const session = await getServerSession(req, res, authOptions);
   if (!session || session.user.role !== "TECHNICIAN") {
     return res.status(401).json({ message: "Unauthorized" });
   }
@@ -30,6 +31,11 @@ export default async function handle(
   // Extract user data from req body
   const { firstName, lastName, password, email, phoneNumber, role } = req.body;
 
+  // Validate email format
+  if (!validateEmail(email)) {
+    return res.status(400).json({ message: "Invalid email format" });
+  }
+
   try {
     // Generate Username
     const username = generateUsername();
@@ -38,7 +44,7 @@ export default async function handle(
     const hashedPassword = await argon2.hash(password);
 
     // Create user in database
-    const newUser  = await prisma.user.create({
+    const newUser = await prisma.user.create({
       data: {
         username,
         firstName,
@@ -54,7 +60,7 @@ export default async function handle(
     // Send email with username and password
     await sendEmail(email, username, password); // Send the email
 
-    return res.status(200).json(newUser );
+    return res.status(200).json(newUser);
   } catch (error) {
     if (error instanceof PrismaClientKnownRequestError) {
       return res

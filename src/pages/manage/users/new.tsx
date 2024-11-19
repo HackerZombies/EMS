@@ -5,7 +5,7 @@ import { SetStateAction, useState } from "react";
 import { useRouter } from "next/router";
 import Input from "@/components/Input";
 import Button from "@/components/Button";
-import Modal from "@/components/Modal";
+import ModalPopup from "@/components/Modal";
 
 export default function CreateUser() {
   // State for input fields
@@ -15,18 +15,37 @@ export default function CreateUser() {
   const [email, setEmail] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [role, setRole] = useState("EMPLOYEE");
-
   const [visible, setVisible] = useState(false);
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState(<></>);
   const [closeButton, setCloseButton] = useState(true);
-
   const router = useRouter();
+
+  const validateEmail = (email: string): boolean => {
+    const re = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return re.test(String(email).toLowerCase());
+  };
 
   const handleCreate = async () => {
     if (!firstName || !lastName || !password || !email || !phoneNumber) {
       setTitle("Oops...");
-      setMessage(<p>Please fill out all fields.</p>);
+      setMessage(
+        <div className="text-center">
+          <p className="text-red-500 text-lg">Please fill out all fields.</p>
+        </div>
+      );
+      setCloseButton(true);
+      setVisible(true);
+      return;
+    }
+
+    if (!validateEmail(email)) {
+      setTitle("Invalid Email");
+      setMessage(
+        <div className="text-center">
+          <p className="text-red-500 text-lg">Please enter a valid email address.</p>
+        </div>
+      );
       setCloseButton(true);
       setVisible(true);
       return;
@@ -41,17 +60,18 @@ export default function CreateUser() {
         phoneNumber,
         role,
       });
-
       if (response.status === 200) {
         setTitle("User created");
         setMessage(
-          <div className="flex flex-col gap-3">
-            <p>
+          <div className="flex flex-col gap-3 text-center">
+            <p className="text-green-500 text-lg">
               User was created successfully. Their User ID is{" "}
               <b>{response.data.username}</b>.
             </p>
-            <Button onClick={() => router.push("/manage/users")}>OK</Button>
-          </div>,
+            <Button onClick={() => router.push("/manage/users")} className="bg-blue-500 text-white px-4 py-2 rounded">
+              OK
+            </Button>
+          </div>
         );
         setCloseButton(false);
         setVisible(true);
@@ -60,14 +80,13 @@ export default function CreateUser() {
       if (axios.isAxiosError(error)) {
         const status = error.response?.status;
         const data = error.response?.data;
-
         // If status code is 409, means the email / phone num already in use
         if (status === 409) {
           alert(data.message);
         } else {
           alert(
             "Error creating user: " +
-              (data?.message || "An unexpected error occurred."),
+            (data?.message || "An unexpected error occurred."),
           );
         }
       } else {
@@ -87,7 +106,6 @@ export default function CreateUser() {
         <div className="flex justify-between">
           <h1 className="text-4xl font-bold">Add User</h1>
         </div>
-
         <div className="flex flex-col gap-3 rounded-2xl bg-white bg-opacity-80 p-3 text-black">
           <div className="flex flex-col">
             <label className="font-medium" htmlFor="fname">
@@ -177,18 +195,20 @@ export default function CreateUser() {
             </select>
           </div>
           <div className="flex w-full justify-end">
-            <Button onClick={handleCreate}>Submit</Button>
+            <Button onClick={handleCreate} className="bg-blue-500 text-white px-4 py-2 rounded">
+              Submit
+            </Button>
           </div>
         </div>
       </div>
-      <Modal
+      <ModalPopup
         visible={visible}
         setVisible={setVisible}
         title={title}
         closeButton={closeButton}
       >
         {message}
-      </Modal>
+      </ModalPopup>
     </>
   );
 }

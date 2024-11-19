@@ -31,11 +31,11 @@ export default function ManageTickets({ tickets }: Props) {
         <div className="flex flex-row justify-between gap-2 max-md:flex-col">
           <h1 className="text-4xl font-semibold">Manage Tickets</h1>
           <select
-            className="flex items-center justify-center gap-1 rounded-full bg-gray-200 px-3 py-2 font-medium text-black shadow-lg transition hover:bg-opacity-90 active:bg-white active:bg-opacity-70"
+            className="flex items-center justify-between rounded-full bg-white border border-gray-300 shadow-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out px-4 py-3 appearance-none"
             onChange={(e) => setFilter(e.target.value)}
             defaultValue="Unresolved"
           >
-            <option value="">No Filter</option>
+            <option value="">All Tickets</option>
             <option value="Unresolved">Unresolved</option>
             <option value="Resolved">Resolved</option>
           </select>

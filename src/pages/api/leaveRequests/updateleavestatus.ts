@@ -1,10 +1,8 @@
-import { NextApiRequest, NextApiResponse } from "next";
+import type { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/lib/prisma";
+import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse,
-) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { id } = req.query;
 
   if (req.method === "PATCH") {
@@ -12,14 +10,20 @@ export default async function handler(
       const { requestStatus } = req.body;
 
       // Ensure id is treated as a string
-      if (typeof id !== "string") {
+      if (typeof id !== "string" || id.length !== 24) {
+        console.error("Invalid ID format:", id);
         return res.status(400).json({ error: "Invalid ID format" });
       }
 
       // Validate requestStatus
-      if (!requestStatus) {
-        return res.status(400).json({ error: "Request status is required" });
+      const validStatuses = ["Accepted", "Declined", "Pending"];
+      if (!requestStatus || !validStatuses.includes(requestStatus)) {
+        console.error("Invalid request status:", requestStatus);
+        return res.status(400).json({ error: "Invalid request status" });
       }
+
+      // Log the values before updating
+      console.log("Updating leave request:", { id, requestStatus });
 
       // Update the leave request
       const updatedLeaveRequest = await prisma.leaveRequest.update({
@@ -29,8 +33,17 @@ export default async function handler(
 
       res.status(200).json(updatedLeaveRequest);
     } catch (error) {
-      console.error("Error updating leave request status:", error);
-      res.status(500).json({ error: "Failed to update leave request status" });
+      if (error instanceof PrismaClientKnownRequestError) {
+        if (error.code === "P2025") {
+          return res.status(404).json({ error: "Leave request not found" });
+        } else {
+          console.error("Prisma error updating leave request status:", error);
+          return res.status(400).json({ error: "Failed to update leave request status" });
+        }
+      } else {
+        console.error("Unexpected error updating leave request status:", error);
+        return res.status(500).json({ error: "An unexpected error occurred" });
+      }
     }
   } else {
     res.setHeader("Allow", ["PATCH"]);

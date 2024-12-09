@@ -145,7 +145,6 @@ const ProfileDetailCard = ({
   );
 };
 
-// Server-side props remain the same
 export async function getServerSideProps(context: GetServerSidePropsContext) {
   const session = await getSession(context);
 

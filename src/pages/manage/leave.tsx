@@ -53,7 +53,6 @@ const LeaveManagementPage = () => {
           return dateA.getTime() - dateB.getTime();
         });
         setLeaveRequests(sortedData);
-        console.log("leaveRequests:", sortedData);
       } catch (error) {
         console.error("Error fetching leave requests:", error);
       }
@@ -127,17 +126,16 @@ const LeaveManagementPage = () => {
     },
     hidden: { opacity: 0, y: 10, filter: "blur(3px)" },
   };
-
   return (
     <>
       <Head>
         <title>EMS Manage Leave</title>
       </Head>
-      <div className="flex grow flex-col gap-5">
+      <div className="flex grow flex-col gap-5 bg-gray-900 p-5 rounded-lg shadow-lg">
         <div className="flex justify-between gap-3 max-md:flex-col">
-          <h1 className="text-4xl font-semibold">Manage Leave</h1>
+          <h1 className="text-4xl font-semibold text-white">Manage Leave</h1>
           <select
-            className="flex items-center justify-center rounded-md bg-white border border-gray-300 shadow-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out px-4 py-2"
+            className="flex items-center justify-center rounded-md bg-gray-800 border border-gray-600 text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-150 ease-in-out px-4 py-2"
             value={filter}
             onChange={(e) => {
               setFilter(e.target.value);
@@ -150,19 +148,15 @@ const LeaveManagementPage = () => {
           </select>
         </div>
         {leaveRequests.length === 0 ? (
-          <div className="flex grow flex-col items-center justify-center gap-2 text-center text-neutral-400">
+          <div className="flex grow flex-col items-center justify-center gap-2 text-center text-gray-400">
             <Icon icon="ph:airplane-takeoff-light" width="8em" />
             <h1 className="text-2xl font-semibold">No leave requests</h1>
           </div>
         ) : filteredRequests.length === 0 ? (
-          <div className="flex grow flex-col items-center justify-center gap-2 text-center text-neutral-400">
+          <div className="flex grow flex-col items-center justify-center gap-2 text-center text-gray-400">
             <Icon icon="ph:funnel-light" width="8em" />
-            <h1 className="text-2xl font-semibold">
-              No requests matching filter
-            </h1>
-            <p className="text-neutral-500">
-              Try selecting a different filter in the dropdown.
-            </p>
+            <h1 className="text-2xl font-semibold">No requests matching filter</h1>
+            <p className="text-gray-500">Try selecting a different filter in the dropdown.</p>
           </div>
         ) : (
           <motion.div

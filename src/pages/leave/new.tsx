@@ -99,41 +99,40 @@ export default function NewLeaveRequest() {
         throw new Error("Network response was not ok");
       }
 
-      const data = await response.json();
-
       await Router.push("/leave");
     } catch (error) {
       console.error("There was an error!", error);
       alert("Please Try Again");
     }
   };
+
   return (
     <>
       <Head>
         <title>EMS - New Leave Request</title>
       </Head>
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3 p-5 bg-gray-900 rounded-lg shadow-lg">
         <BackButton />
-        <h1 className="text-4xl font-semibold">New Leave Request</h1>
+        <h1 className="text-4xl font-semibold text-white">New Leave Request</h1>
         <div className="flex flex-col gap-5">
-          <label className="flex flex-col text-left">
+          <label className="flex flex-col text-left text-white">
             Reason:
             <select
-  value={reason}
-  onChange={(e) => setReason(e.target.value)}
-  className="custom-select rounded-xl bg-gray-100 bg-opacity-50 px-4 py-3 shadow-lg outline-none transition hover:bg-opacity-70 focus:ring-2 focus:ring-blue-500 border border-gray-300"
->
-  <option value="Empty" className="text-white">Select a Reason</option>
-  <option value="Holiday" className="text-white">Holiday</option>
-  <option value="Sick" className="text-white">Sick Leave</option>
-  <option value="Parental" className="text-white">Parental Leave</option>
-  <option value="Study" className="text-white">Study Leave</option>
-  <option value="Training" className="text-white">Training Leave</option>
-  <option value="Family" className="text-white">Family Leave</option>
-</select>
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              className="custom-select rounded-xl bg-gray-800 bg-opacity-80 px-4 py-3 shadow-lg outline-none transition hover:bg-opacity-70 focus:ring-2 focus:ring-blue-500 border border-gray-600 text-white"
+            >
+              <option value="Empty">Select a Reason</option>
+              <option value=" Holiday">Holiday</option>
+              <option value="Sick">Sick Leave</option>
+              <option value="Parental">Parental Leave</option>
+              <option value="Study">Study Leave</option>
+              <option value="Training">Training Leave</option>
+              <option value="Family">Family Leave</option>
+            </select>
           </label>
 
-          <label className="flex flex-col text-left">
+          <label className="flex flex-col text-left text-white">
             Start Date:
             <Input
               type="date"
@@ -141,10 +140,11 @@ export default function NewLeaveRequest() {
               onChange={(e: { target: { value: SetStateAction<string> } }) =>
                 setStartDate(e.target.value)
               }
+              className="rounded-xl bg-gray-800 bg-opacity-80 px-4 py-3 shadow-lg outline-none transition hover:bg-opacity-70 focus:ring-2 focus:ring-blue-500 border border-gray-600 text-white"
             />
           </label>
 
-          <label className="flex flex-col text-left">
+          <label className="flex flex-col text-left text-white">
             End Date:
             <Input
               type="date"
@@ -152,25 +152,22 @@ export default function NewLeaveRequest() {
               onChange={(e: { target: { value: SetStateAction<string> } }) =>
                 setEndDate(e.target.value)
               }
+              className="rounded-xl bg-gray-800 bg-opacity-80 px-4 py-3 shadow-lg outline-none transition hover:bg-opacity-70 focus:ring-2 focus:ring-blue-500 border border-gray-600 text-white"
             />
           </label>
 
-          <p
-            className={calculateDaysRequested() > balance ? "text-red-500" : ""}
-          >
+          <p className={calculateDaysRequested() > balance ? "text-red-500" : "text-white"}>
             Days Requested: {calculateDaysRequested()}
           </p>
-          {calculateDaysRequested() > balance ? (
+          {calculateDaysRequested() > balance && (
             <p className="text-red-500">Leave Balance Limit Reached</p>
-          ) : (
-            ""
           )}
-          <Button onClick={handleSubmit}>
-            Submit <Icon icon="ph:arrow-right-bold"></Icon>
+          <Button onClick={handleSubmit} className="bg-blue-600 hover:bg-blue-700 text-white">
+            Submit <Icon icon="ph:arrow-right-bold" />
           </Button>
         </div>
       </div>
-      <Modal visible={visible} setVisible={setVisible} title="Oops...">
+      <Modal visible={visible} setVisible={setVisible} title="Oops..." className="bg-gray-800 text-white">
         {message}
       </Modal>
     </>

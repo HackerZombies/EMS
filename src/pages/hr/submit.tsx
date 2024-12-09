@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 
 interface Document {
@@ -17,7 +17,7 @@ export default function SubmitDocument() {
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
-  const fetchDocuments = async () => {
+  const fetchDocuments = useCallback(async () => {
     if (!session) return;
 
     try {
@@ -31,11 +31,11 @@ export default function SubmitDocument() {
       console.error(err);
       setError("Failed to load documents.");
     }
-  };
+  }, [session]);
 
   useEffect(() => {
     fetchDocuments();
-  }, [session]);
+  }, [fetchDocuments]); // Include fetchDocuments in the dependency array
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,7 +114,7 @@ export default function SubmitDocument() {
           <input
             type="file"
             onChange={(e) => setFile(e.target.files?.[0] || null)}
-            className="mb-4 w-full border border-gray-600 rounded p-2 bg-gray-700 text-gray-200"
+            className="mb- 4 w-full border border-gray-600 rounded p-2 bg-gray-700 text-gray-200"
             required
           />
           <button

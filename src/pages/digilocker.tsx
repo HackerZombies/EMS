@@ -34,44 +34,36 @@ export default function Digilocker({ digilockerFiles, username }: Props) {
       router.push('/login');
       return;
     }
-
     if (event.target.files && event.target.files[0]) {
       const selectedFile = event.target.files[0];
-      
       // File size validation (5MB limit)
       if (selectedFile.size > 5 * 1024 * 1024) {
         setUploadError("File size exceeds 5MB limit");
         return;
       }
-      
       // File type validation
       const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg'];
       if (!allowedTypes.includes(selectedFile.type)) {
         setUploadError("Invalid file type. Only PDF, PNG, and JPG are allowed.");
         return;
       }
-      
       const formData = new FormData();
       formData.append("file", selectedFile);
       formData.append("username", username);
-      
       setLoading(true);
       setUploadError(null);
-      
       try {
         const response = await fetch("/api/digilocker/upload", {
           method: "POST",
           body: formData,
         });
-        
         if (!response.ok) {
           const errorData = await response.json();
           throw new Error(errorData.message || "Upload failed");
         }
-        
         const newFile = await response.json();
         setFileList((prevFiles) => [
-          {...newFile, formattedDate: new Date(newFile.dateCreated).toLocaleDateString()}, 
+          {...newFile, formattedDate: new Date(newFile.dateCreated).toLocaleDateString()},
           ...prevFiles
         ]);
       } catch (error) {
@@ -97,7 +89,7 @@ export default function Digilocker({ digilockerFiles, username }: Props) {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = file.filename;
+      link.download = file.filename ?? "file"; // Use nullish coalescing operator
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -109,23 +101,21 @@ export default function Digilocker({ digilockerFiles, username }: Props) {
   };
 
   const handleDelete = async (file: DigilockerFile) => {
-    if (window.confirm(`Are you sure you want to delete ${file.filename}?`)) {
+    if (window.confirm(`Are you sure you want to delete ${file.filename ?? "this file"}?`)) {
       try {
         const response = await fetch(`/api/digilocker/delete?id=${file.id}`, {
           method: "DELETE",
         });
-        
         if (!response.ok) {
           throw new Error("Failed to delete file");
         }
-        
         setFileList(fileList.filter((f) => f.id !== file.id));
       } catch (error) {
         console.error("Error deleting file:", error);
         alert("Failed to delete file. Please try again.");
       }
     }
- };
+  };
 
   return (
     <div className="min-h-screen bg-dark-900 text-gray-100 px-4 py-8">
@@ -192,14 +182,14 @@ export default function Digilocker({ digilockerFiles, username }: Props) {
                   <div className="flex items-center gap-4">
                     <Icon
                       icon={
-                        file.filename.toLowerCase().endsWith('.pdf')
+                        file.filename?.toLowerCase().endsWith('.pdf')
                           ? "ph:file-pdf"
                           : "ph:file-image"
                       }
                       className="w-10 h-10 text-red-400"
                     />
                     <div>
-                      <p className="font-semibold">{file.filename}</p>
+                      <p className="font-semibold">{file.filename ?? "Untitled"}</p>
                       <p className="text-sm text-gray-400">
                         {file.formattedDate}
                       </p>
@@ -217,7 +207,7 @@ export default function Digilocker({ digilockerFiles, username }: Props) {
                       className="bg-red-500 text-gray-100 px-3 py-1.5 rounded-md hover:bg-red-600 transition"
                     >
                       Delete
-                    </ button>
+                    </button>
                   </div>
                 </motion.div>
               ))}

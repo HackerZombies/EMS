@@ -13,12 +13,12 @@ type HrDocument = {
   department: string;
   position: string;
   dateSubmitted: Date | string;
-  status: string; // Add status field
+  status: "Pending" | "Rejected" | "Approved"; // Add status field with specific values
   rejectionReason?: string; // Optional field for rejection reason
 };
 
 type Props = {
-  hrDocuments: HrDocument[]; 
+  hrDocuments: HrDocument[];
 };
 
 export default function HrDocuments({ hrDocuments }: Props) {
@@ -114,14 +114,15 @@ export default function HrDocuments({ hrDocuments }: Props) {
   const groupedDocuments = sortedDocuments.reduce((acc, doc) => {
     const key = `${doc.department} - ${doc.submitterFullName}`;
     if (!acc[key]) {
- acc[key] = [];
+      acc[key] = [];
     }
     acc[key].push(doc);
     return acc;
   }, {} as Record<string, HrDocument[]>);
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 p-8">
+    <div className=
+    "min-h-screen bg-gray-900 text-gray-100 p-8">
       <Head>
         <title>HR Documents</title>
       </Head>
@@ -153,26 +154,26 @@ export default function HrDocuments({ hrDocuments }: Props) {
                         <p className="text-red-400">Rejection Reason: {doc.rejectionReason}</p>
                       )}
                       <div className="mt-4 flex flex-wrap space-x-2">
-                        <button 
-                          onClick={() => handleDownload(doc.id, doc.filename)} 
+                        <button
+                          onClick={() => handleDownload(doc.id, doc.filename)}
                           className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition duration-200"
                         >
                           Download
                         </button>
-                        <button 
-                          onClick={() => handleApprove(doc.id)} 
+                        <button
+                          onClick={() => handleApprove(doc.id)}
                           className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition duration-200"
                         >
                           Approve
                         </button>
-                        <button 
-                          onClick={() => { setSelectedDocId(doc.id); }} 
+                        <button
+                          onClick={() => { setSelectedDocId(doc.id); }}
                           className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition duration-200"
                         >
                           Reject
                         </button>
-                        <button 
-                          onClick={() => handleDelete(doc.id)} 
+                        <button
+                          onClick={() => handleDelete(doc.id)}
                           className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition duration-200"
                         >
                           Delete
@@ -186,21 +187,20 @@ export default function HrDocuments({ hrDocuments }: Props) {
           ))}
         </div>
       )}
-
       {fileData && fileName && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-70">
           <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
             <h2 className="text-lg font-bold text-white">Document Download</h2>
             <p className="text-gray-300">Your document is ready to download: {fileName}</p>
-            <a 
-              href={URL.createObjectURL(fileData)} 
-              download={fileName} 
+            <a
+              href={URL.createObjectURL(fileData)}
+              download={fileName}
               className="text-blue-400 hover:underline"
             >
               Click here to download
             </a>
-            <button 
-              onClick={handleClose} 
+            <button
+              onClick={handleClose}
               className="mt-4 bg-red-600 text-white font-bold py-2 px-4 rounded hover:bg-red-700 transition duration-200"
             >
               Close
@@ -208,25 +208,24 @@ export default function HrDocuments({ hrDocuments }: Props) {
           </div>
         </div>
       )}
-
       {selectedDocId && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-70">
-          <div class Name="bg-gray-800 p-6 rounded-lg shadow-lg">
+          <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
             <h2 className="text-lg font-bold text-white">Reject Document</h2>
-            <textarea 
-              value={rejectionReason} 
-              onChange={(e) => setRejectionReason(e.target.value)} 
-              placeholder="Enter reason for rejection" 
+            <textarea
+              value={ rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              placeholder="Enter reason for rejection"
               className="w-full p-2 border border-gray-600 rounded bg-gray-700 text-white"
             />
-            <button 
-              onClick={handleReject} 
+            <button
+              onClick={handleReject}
               className="mt-4 bg-red-600 text-white font-bold py-2 px-4 rounded hover:bg-red-700 transition duration-200"
             >
               Submit Rejection
             </button>
-            <button 
-              onClick={() => setSelectedDocId(null)} 
+            <button
+              onClick={() => setSelectedDocId(null)}
               className="mt-2 text-gray-400 hover:underline"
             >
               Cancel
@@ -240,7 +239,6 @@ export default function HrDocuments({ hrDocuments }: Props) {
 
 export const getServerSideProps: GetServerSideProps<Props> = async (context) => {
   const session = await getServerSession(context.req, context.res, authOptions);
-
   if (session && session.user.role === 'HR') {
     const hrDocuments = await prisma.hrDocument.findMany({
       include: {
@@ -258,6 +256,8 @@ export const getServerSideProps: GetServerSideProps<Props> = async (context) => 
         dateSubmitted: 'desc',
       },
     });
+    
+    const validStatuses = ["Approved", "Rejected", "Pending"] as const;
 
     const documents: HrDocument[] = hrDocuments.map(doc => ({
       id: doc.id,
@@ -267,10 +267,10 @@ export const getServerSideProps: GetServerSideProps<Props> = async (context) => 
       department: doc.user.department || "N/A",
       position: doc.user.position || "N/A",
       dateSubmitted: doc.dateSubmitted.toISOString(),
-      status: doc.status || "Pending", // Add status
-      rejectionReason: doc.rejectionReason || null, // Optional field for rejection reason
+      status: (validStatuses.includes(doc.status as typeof validStatuses[number]) ? doc.status : "Pending") as HrDocument['status'], // Ensure status is of the correct type
+      rejectionReason: doc.rejectionReason || undefined, // Optional field for rejection reason
     }));
-
+    
     return { props: { hrDocuments: documents } };
   } else {
     return {

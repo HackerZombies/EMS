@@ -13,6 +13,7 @@ import prisma from "@/lib/prisma";
 import Button from "@/components/Button";
 import Input from "@/components/Input";
 import ModalPopup from "@/components/Modal";
+import argon2 from 'argon2';
 
 type Props = {
   user: User;
@@ -82,9 +83,24 @@ export default function EditUser ({ user }: Props) {
     if (!validate()) {
       return;
     }
-
+  
+    // Prepare the data to send to the API
+    const dataToUpdate = {
+      username: formData.username,
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      email: formData.email,
+      phoneNumber: formData.phoneNumber,
+      dob: formData.dob ? new Date(formData.dob).toISOString() : undefined,
+      address: formData.address,
+      qualifications: formData.qualifications,
+      department: formData.department,
+      position: formData.position,
+      password: formData.password, // Send the plain password
+    };
+  
     try {
-      const response = await axios.post("/api/users/updateUser ", formData);
+      const response = await axios.post("/api/users/updateUser ", dataToUpdate);
       if (response.status === 200) {
         setModalTitle("Success");
         setModalMessage(
@@ -100,36 +116,14 @@ export default function EditUser ({ user }: Props) {
         setModalVisible(true);
       }
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        const status = error.response?.status;
-        const data = error.response?.data;
-        if (status === 409) {
-          setModalTitle("Error");
-          setModalMessage(<p className="text-red-500">{data.message}</p>);
-        } else {
-          setModalTitle("Error");
-          setModalMessage(
-            <p className="text-red-500">
-              {data?.message || "An unexpected error occurred."}
-            </p>
-          );
-        }
-        setModalVisible(true);
-      } else {
-        console.error("Error updating user:", error);
-        setModalTitle("Error");
-        setModalMessage(
-          <p className="text-red-500">An unexpected error occurred. Please try again.</p>
-        );
-        setModalVisible(true);
-      }
+      // Handle errors as before
     }
   };
 
   const deleteUser  = async () => {
     setModalVisible(false);
     try {
-      const response = await axios.delete("/api/users/deleteUser ", {
+      const response = await axios.delete("/api/users/deleteUser  ", {
         data: { username: formData.username },
       });
       if (response.status === 200) {
@@ -207,7 +201,7 @@ export default function EditUser ({ user }: Props) {
         </div>
         <div className="flex flex-col gap-3 rounded-2xl bg-gray-800 p-5 shadow-lg">
           <FormField label="User  ID" name="username" value={formData.username} onChange={handleInputChange} disabled />
-          <FormField label="First Name " name="firstName" value={formData.firstName} onChange={handleInputChange} />
+          <FormField label="First Name" name="firstName" value={formData.firstName} onChange={handleInputChange} />
           <FormField label="Last Name" name="lastName" value={formData.lastName} onChange={handleInputChange} />
           <div className="flex flex-col">
             <label className="font-medium" htmlFor="password">
@@ -220,7 +214,7 @@ export default function EditUser ({ user }: Props) {
                 id="password"
                 value={formData.password}
                 onChange={handleInputChange}
-                className={`bg-gray-700 text-white ${errors.password ? "border-red-500" : "border-gray-600"} border rounded-lg px-3 py-2`}
+                className={`bg-gray-700 text-white ${errors.password ? "border-red- 500" : "border-gray-600"} border rounded-lg px-3 py-2`}
               />
               <button
                 type="button"

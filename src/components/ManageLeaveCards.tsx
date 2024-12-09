@@ -2,7 +2,7 @@ import React from "react";
 import { LeaveRequest } from "@prisma/client";
 
 interface ManageLeaveCardsProps {
-  leaveData: LeaveRequest & { userFirstName: string; userLastName: string; department: string; position: string }; // Extend to include user's full name, department, and position
+  leaveData: LeaveRequest & { userFirstName: string; userLastName: string; department: string; position: string };
   onAccept: (id: string) => void;
   onDecline: (id: string) => void;
 }
@@ -29,23 +29,23 @@ const ManageLeaveCards: React.FC<ManageLeaveCardsProps> = ({ leaveData, onAccept
 
   const getStatusColor = (status: string) => {
     if (status === "Accepted") {
-      return "bg-green-100 text-green-600";
+      return "bg-green-600 text-white";
     } else if (status === "Pending") {
-      return "bg-yellow-100 text-yellow-600";
+      return "bg-yellow-600 text-white";
     } else {
-      return "bg-red-100 text-red-600";
+      return "bg-red-600 text-white";
     }
   };
 
   return (
-    <div className="flex flex-col items-start justify-between gap-3 rounded-2xl bg-white bg-opacity-80 p-4 text-black shadow-lg">
+    <div className="flex flex-col items-start justify-between gap-3 rounded-2xl bg-gray-800 bg-opacity-80 p-4 text -black shadow-lg transition-transform transform hover:scale-105">
       <div className="flex w-full items-center justify-between">
         <div className="flex flex-col">
-          <span className="text-lg">{formatDate(new Date(leaveData.startDate))}</span>
-          <span className="font-bold">
+          <span className="text-lg text-white">{formatDate(new Date(leaveData.startDate))}</span>
+          <span className="font-bold text-white">
             Requested by: {leaveData.userFirstName} {leaveData.userLastName} (ID: {leaveData.userUsername})
           </span>
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-gray-400">
             Department: {leaveData.department} | Position: {leaveData.position}
           </span>
         </div>
@@ -54,11 +54,11 @@ const ManageLeaveCards: React.FC<ManageLeaveCardsProps> = ({ leaveData, onAccept
         </span>
       </div>
       <div className="w-full">
-        <p className="text-lg font-bold">Leave Request Details:</p>
-        <p>Type: {leaveData.reason}</p>
-        <p>Start Date: {formatDate(new Date(leaveData.startDate))}</p>
-        <p>End Date: {formatDate(new Date(leaveData.endDate))}</p>
-        <p>
+        <p className="text-lg font-bold text-white">Leave Request Details:</p>
+        <p className="text-gray-300">Type: {leaveData.reason}</p>
+        <p className="text-gray-300">Start Date: {formatDate(new Date(leaveData.startDate))}</p>
+        <p className="text-gray-300">End Date: {formatDate(new Date(leaveData.endDate))}</p>
+        <p className="text-gray-300">
           Duration: {calculateDuration(new Date(leaveData.startDate), new Date(leaveData.endDate))} days
         </p>
         <div className="flex justify-end gap-1">

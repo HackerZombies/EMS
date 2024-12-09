@@ -6,7 +6,7 @@ import { authOptions } from "./api/auth/[...nextauth]";
 import prisma from "@/lib/prisma";
 import { Icon } from "@iconify/react";
 import Head from "next/head";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/router";
 
 type DigilockerFile = Digilocker & {
@@ -28,6 +28,7 @@ export default function Digilocker({ digilockerFiles, username }: Props) {
   );
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [confirmDelete, setConfirmDelete] = useState<DigilockerFile | null>(null);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!username) {
@@ -89,7 +90,7 @@ export default function Digilocker({ digilockerFiles, username }: Props) {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = file.filename ?? "file"; // Use nullish coalescing operator
+      link.download = file.filename ?? "file";
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -101,38 +102,41 @@ export default function Digilocker({ digilockerFiles, username }: Props) {
   };
 
   const handleDelete = async (file: DigilockerFile) => {
-    if (window.confirm(`Are you sure you want to delete ${file.filename ?? "this file"}?`)) {
-      try {
-        const response = await fetch(`/api/digilocker/delete?id=${file.id}`, {
-          method: "DELETE",
-        });
-        if (!response.ok) {
-          throw new Error("Failed to delete file");
-        }
-        setFileList(fileList.filter((f) => f.id !== file.id));
-      } catch (error) {
-        console.error("Error deleting file:", error);
-        alert("Failed to delete file. Please try again.");
+    try {
+      const response = await fetch(`/api/digilocker/delete?id=${file.id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        throw new Error("Failed to delete file");
       }
+      setFileList(fileList.filter((f) => f.id !== file.id));
+      setConfirmDelete(null);
+    } catch (error) {
+      console.error("Error deleting file:", error);
+      alert("Failed to delete file. Please try again.");
     }
   };
 
   return (
     <div className="min-h-screen bg-dark-900 text-gray-100 px-4 py-8">
       <Head>
-        <title>My Digilocker</title>
-        <meta name="description" content="Personal document storage and management" />
+        <title>My Digilocker - Secure Document Storage</title>
+        <meta name="description" content="Securely store and manage your personal documents" />
       </Head>
       <div className="max-w-4xl mx-auto bg-dark-800 shadow-2xl rounded-2xl overflow-hidden border border-dark-700">
-        <div className="bg-gradient-to-r from-dark-600 to-dark-500 p-6 flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-gray-100 flex items-center gap-3">
+        <div className="bg-gradient-to-r from-dark-600 to-dark-500 p-6">
+          <h1 className="text-3xl font-bold text-gray-100 flex items-center gap-3 mb-2">
             <Icon icon="ph:file-text-light" className="w-10 h-10 text-primary-400" />
             My Digilocker
           </h1>
+          <p className="text-sm text-gray-300 mb-4">
+            Your private, secure digital document vault. Safely store, manage, and access important personal documents with ease.
+          </p>
           <div className="flex items-center space-x-2">
             <span className="text-sm text-gray-300">Welcome, {username}</span>
           </div>
         </div>
+
         <div className="p-6">
           {/* File Upload Section */}
           <div className="mb-6">
@@ -162,58 +166,84 @@ export default function Digilocker({ digilockerFiles, username }: Props) {
               <div className="mt-4 text-red-400 text-sm">{uploadError}</div>
             )}
           </div>
+
           {/* File List Section */}
           {fileList.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               <Icon icon="ph:file-light" className="w-20 h-20 mx-auto mb-4 text-primary-400" />
-              <p className=" text-xl">No files uploaded yet</p>
-              <p className="text-sm">Start by uploading a file</p>
+              <p className="text-xl">No files uploaded yet</p>
+              <p className="text- sm">Upload your documents to get started.</p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {fileList.map((file) => (
-                <motion.div
-                  key={file.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="flex items-center justify-between bg-dark-700 p-4 rounded-lg hover:bg-dark-600 transition"
-                >
-                  <div className="flex items-center gap-4">
-                    <Icon
-                      icon={
-                        file.filename?.toLowerCase().endsWith('.pdf')
-                          ? "ph:file-pdf"
-                          : "ph:file-image"
-                      }
-                      className="w-10 h-10 text-red-400"
-                    />
-                    <div>
-                      <p className="font-semibold">{file.filename ?? "Untitled"}</p>
-                      <p className="text-sm text-gray-400">
-                        {file.formattedDate}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleDownload(file)}
-                      className="bg-primary-500 text-gray-100 px-3 py-1.5 rounded-md hover:bg-primary-600 transition"
-                    >
-                      Download
-                    </button>
-                    <button
-                      onClick={() => handleDelete(file)}
-                      className="bg-red-500 text-gray-100 px-3 py-1.5 rounded-md hover:bg-red-600 transition"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
+            fileList.map((file) => (
+              <motion.div
+                key={file.id}
+                className="flex justify-between items-center bg-dark-700 p-4 rounded-lg mb-4"
+              >
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-100">{file.filename}</h2>
+                  <p className="text-sm text-gray-400">{file.formattedDate}</p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleDownload(file)}
+                    className="bg-primary-500 text-gray-100 px-3 py-1.5 rounded-md hover:bg-primary-600 transition"
+                  >
+                    Download
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete(file)}
+                    className="bg-red-500 text-gray-100 px-3 py-1.5 rounded-md hover:bg-red-600 transition"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </motion.div>
+            ))
           )}
         </div>
+
+        {/* Delete Confirmation Modal */}
+        <AnimatePresence>
+  {confirmDelete && (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4 backdrop-blur-sm" // Added backdrop-blur-sm
+    >
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.9, opacity: 0 }}
+        className="bg-dark-800 rounded-xl p-6 max-w-md w-full shadow-lg" // Changed bg-dark-700 to bg-dark-800 for better contrast
+      >
+        <div className="flex items-center mb-4">
+          <Icon icon="ph:warning" className="w-8 h-8 text-yellow-500 mr-3" />
+          <h2 className="text-xl font-bold text-gray-100">Confirm Deletion</h2>
+        </div>
+        <p className="text-gray-300 mb-4">
+          Are you sure you want to delete {confirmDelete.filename ?? "this file"}? 
+          This action cannot be undone.
+        </p>
+        <div className="flex justify-end space-x-3">
+          <button
+            onClick={() => setConfirmDelete(null)}
+            className="bg-dark-600 text-gray-300 px-4 py-2 rounded-md hover:bg-dark-500 transition"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => handleDelete(confirmDelete)}
+            className="bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600 transition"
+          >
+            Delete
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  )}
+</AnimatePresence>
       </div>
     </div>
   );

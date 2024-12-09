@@ -1,12 +1,21 @@
 import Head from "next/head";
+import Image from "next/image";
 import { signOut } from "next-auth/react";
 import { User } from "@prisma/client";
 import { useRouter } from "next/router";
-import GreenButton from "@/components/GreenButton";
-import { Icon } from "@iconify/react";
 import { GetServerSidePropsContext } from "next";
 import { getSession } from "next-auth/react";
 import prisma from "@/lib/prisma";
+import { 
+  FaUserEdit, 
+  FaSignOutAlt, 
+  FaIdBadge, 
+  FaEnvelope, 
+  FaPhone, 
+  FaCalendarAlt, 
+  FaBriefcase, 
+  FaBuilding 
+} from "react-icons/fa";
 
 type Props = {
   user: User;
@@ -20,77 +29,132 @@ export default function Settings({ user }: Props) {
     router.push(data.url);
   };
 
+  const renderRoleLabel = (role: string) => {
+    const roleLabels: { [key: string]: string } = {
+      "EMPLOYEE": "Employee",
+      "HR": "HR Professional",
+      "TECHNICIAN": "Technician",
+      "ADMIN": "Administrator"
+    };
+    return roleLabels[role] || role;
+  };
+
   return (
-    <>
+    <div className="min-h-screen bg-gradient-to-br from-[#1a1a2e] to-[#16213e] py-12 px-4 sm:px-6 lg:px-8">
       <Head>
-        <title>EMS - Settings</title>
+        <title>Profile Settings | EMS</title>
       </Head>
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-row items-center justify-between gap-3 max-md:flex-col">
-            <div className="flex flex-row items-center gap-3">
-              <Icon icon="ph:user-circle-light" className="text-8xl" />
-              <div className="flex flex-col gap-1">
-                <p className="text-5xl font-semibold">
-                  {user.firstName} {user.lastName}
-                </p>
-                <p className="text-lg font-medium text-neutral-300">
-                  {user.role == "EMPLOYEE"
-                    ? "Employee"
-                    : user.role == "HR"
-                      ? "HR Employee"
-                      : user.role == "TECHNICIAN"
-                        ? "Technician"
-                        : ""}
-                </p>
-              </div>
+
+      <div className="max-w-4xl mx-auto bg-[#0f3460] bg-opacity-50 backdrop-blur-lg rounded-2xl shadow-2xl overflow-hidden">
+        {/* Profile Header */}
+        <div className="relative p-8">
+          <div className="absolute top-4 right-4 flex space-x-3">
+            <button 
+              onClick={() => router.push("/settings/edit")}
+              className="bg-[#e94560] text-white p-2 rounded-full hover:bg-opacity-80 transition-colors"
+              title="Edit Profile"
+            >
+              <FaUserEdit className="text-2xl" />
+            </button>
+            <button 
+              onClick={handleSignOut}
+              className="bg-red-600 text-white p-2 rounded-full hover:bg-opacity-80 transition-colors"
+              title="Sign Out"
+            >
+              <FaSignOutAlt className="text-2xl" />
+            </button>
+          </div>
+
+          <div className="flex items-center space-x-6 mb-6">
+            <div className="w-32 h-32 relative">
+              <Image 
+                src={"/default-avatar.png"}
+                alt="/default-avatar.png"
+                layout="fill" 
+                objectFit="cover" 
+                className="rounded-full border-4 border-[#e94560]"
+              />
             </div>
-            <div className="flex flex-col max-md:w-full">
-              <GreenButton onClick={() => router.push("/settings/edit")}>
-                Edit Personal Information
-              </GreenButton>
+            <div>
+              <h1 className="text-4xl font-bold text-gray-100">
+                {user.firstName} {user.lastName}
+              </h1>
+              <p className="text-xl text-gray-400">
+                {renderRoleLabel(user.role)}
+              </p>
             </div>
           </div>
-          <div className="flex flex-col gap-2">
-            <ProfileCard label="User ID" value={user.username} />
-            <ProfileCard label="Email" value={user.email} />
-            <ProfileCard label="Phone Number" value={user.phoneNumber} />
-            <ProfileCard
-              label="Account created"
-              value={user.dateCreated.toLocaleDateString()}
+
+          {/* Profile Details Grid */}
+          <div className="grid md:grid-cols-2 gap-4">
+            <ProfileDetailCard 
+              icon={<FaIdBadge className="text-[#e94560]" />}
+              label="User ID"
+              value={user.username}
+            />
+            <ProfileDetailCard 
+              icon={<FaEnvelope className="text-[#e94560]" />}
+              label="Email"
+              value={user.email}
+            />
+            <ProfileDetailCard 
+              icon={<FaPhone className="text-[#e94560]" />}
+              label="Phone Number"
+              value={user.phoneNumber}
+            />
+            <ProfileDetailCard 
+              icon={<FaCalendarAlt className="text-[#e94560]" />}
+              label="Account Created"
+              value={new Date(user.dateCreated).toLocaleDateString()}
+            />
+            <ProfileDetailCard 
+              icon={<FaBuilding className="text-[#e94560]" />}
+              label="Department"
+              value={user.department || "Not Specified"}
+            />
+            <ProfileDetailCard 
+              icon={<FaBriefcase className="text-[#e94560]" />}
+              label="Position"
+              value={user.position || "Not Specified"}
             />
           </div>
         </div>
-
-        <div className="flex gap-3">
-          <button
-            className="flex items-center justify-center gap-1 rounded-full bg-red-600 px-3 py-2 font-medium text-white shadow-lg transition hover:bg-white hover:text-black active:bg-white active:bg-opacity-70"
-            onClick={handleSignOut}
-          >
-            <Icon icon="ph:door-open-bold" />
-            Sign out
-          </button>
-        </div>
       </div>
-    </>
+    </div>
   );
 }
 
-const ProfileCard = ({ label, value }: { label: string; value: string }) => {
+// Profile Detail Card Component
+const ProfileDetailCard = ({ 
+  icon, 
+  label, 
+  value 
+}: { 
+  icon: React.ReactNode, 
+  label: string, 
+  value: string 
+}) => {
   return (
-    <div className="rounded-2xl bg-white bg-opacity-80 p-3 text-black">
-      <p className="text-lg font-semibold">{label}</p>
-      <p>{value}</p>
+    <div className="bg-[#16213e] bg-opacity-50 p-4 rounded-xl flex items-center space-x-4">
+      <div className="text-3xl">{icon}</div>
+      <div>
+        <p className="text-sm text-gray-400">{label}</p>
+        <p className="text-lg font-semibold text-gray-100">{value}</p>
+      </div>
     </div>
   );
 };
 
+// Server-side props remain the same
 export async function getServerSideProps(context: GetServerSidePropsContext) {
   const session = await getSession(context);
 
   if (!session) {
     return {
-      props: {},
+      redirect: {
+        destination: '/login',
+        permanent: false,
+      },
     };
   }
 
@@ -99,6 +163,15 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
       username: session.user?.username,
     },
   });
+
+  if (!user) {
+    return {
+      redirect: {
+        destination: '/login',
+        permanent: false,
+      },
+    };
+  }
 
   return {
     props: {

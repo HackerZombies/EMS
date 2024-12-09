@@ -16,7 +16,7 @@ export default function Leave() {
 
   useEffect(() => {
     const fetchLeaveRequests = () => {
-      fetch(`/api/leaveRequests?userUsername=${session?.user?.username}`)
+      fetch (`/api/leaveRequests?userUsername=${session?.user?.username}`)
         .then((res) => res.json())
         .then((data: any) => {
           const sortedData = data.sort(
@@ -110,24 +110,24 @@ export default function Leave() {
       <Head>
         <title>EMS - Leave</title>
       </Head>
-      <div className="flex grow flex-col gap-5">
+      <div className="flex grow flex-col gap-5 bg-gray-900 p-5 rounded-lg shadow-lg">
         <div className="flex justify-between">
-          <h1 className="text-4xl font-semibold">Leave</h1>
+          <h1 className="text-4xl font-semibold text-white">Leave</h1>
           <Link scroll={false} href="/leave/new">
             <GreenButton>New Leave Request</GreenButton>
           </Link>
         </div>
         <div>
-          <h1>
+          <h1 className="text-white">
             <b>Leave Balance:</b> Granted: {balance} days | Used:{" "}
             {totalLeaveDuration} days | Remaining:{" "}
             {balance - totalLeaveDuration} days
           </h1>
         </div>
-        {leaveRequests.length == 0 ? (
+        {leaveRequests.length === 0 ? (
           <div className="flex grow flex-col items-center justify-center gap-2 text-center text-neutral-400">
             <Icon icon="ph:airplane-takeoff-light" width="8em" />
-            <h1 className="text-2xl font-semibold">No leave requests</h1>
+            <h1 className="text-2xl font-semibold text-white">No leave requests</h1>
             <p className="text-neutral-500">
               Click &apos;New Leave Request&apos; in the top right to create
               one.

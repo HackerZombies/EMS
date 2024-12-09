@@ -6,6 +6,20 @@ import { authOptions } from "../auth/[...nextauth]";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { sendUserUpdateEmail } from "@/lib/sendUserUpdateEmail"; // Import the sendUpdateEmail function
 
+interface UpdateUserRequest {
+  username: string;
+  firstName?: string;
+  lastName?: string;
+  password?: string;
+  email?: string;
+  phoneNumber?: string;
+  dob?: string;
+  address?: string;
+  qualifications?: string;
+  department?: string;
+  position?: string;
+}
+
 export default async function handle(
   req: NextApiRequest,
   res: NextApiResponse,
@@ -19,7 +33,7 @@ export default async function handle(
   }
 
   // Extract user data from req body
-  let { username, firstName, lastName, password, email, phoneNumber, dob, address, qualifications, department, position } = req.body;
+  let { username, firstName, lastName, password, email, phoneNumber, dob, address, qualifications, department, position }: UpdateUserRequest = req.body;
 
   // Validate email format
   const emailPattern = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/;
@@ -28,7 +42,8 @@ export default async function handle(
   }
 
   // Validate phone number format
-  const phonePattern = /^91[0-9]{10}$/;
+  const phonePattern =
+/^91[0-9]{10}$/;
   if (phoneNumber && !phonePattern.test(phoneNumber)) {
     return res.status(400).json({ message: "Invalid phone number format. Please enter 91 followed by a 10-digit number." });
   }
@@ -75,9 +90,9 @@ export default async function handle(
   try {
     // Hash the raw password from req body
     const hashedPassword = password ? await argon2.hash(password) : undefined;
-
+  
     // Update user in database
-    const updatedUser = await prisma.user.update({
+    const updatedUser  = await prisma.user.update({
       where: { username },
       data: {
         firstName,
@@ -92,20 +107,18 @@ export default async function handle(
         position,
       },
     });
-
+  
     // Send update email with updated information
-    if (email) {
+    if (email && password) { // Ensure both email and password are defined
       await sendUserUpdateEmail(email, username, password);
     }
-
-    return res.status(200).json(updatedUser);
+  
+    return res.status(200).json({ success: true, data: updatedUser  });
   } catch (error) {
     if (error instanceof PrismaClientKnownRequestError) {
       return res.status(409).json({ message: "This email or phone number is already in use." });
     } else {
-      // Handle potential errors, like duplicate email or phone number since @unique in schema
       console.error("Failed to update user:", error);
       return res.status(500).json({ message: "Failed to update user" });
     }
-  }
-}
+  }}

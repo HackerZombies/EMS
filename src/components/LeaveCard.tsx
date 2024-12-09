@@ -37,7 +37,7 @@ const LeaveCard = ({ leaveData }: Props) => {
 
   return (
     <div
-      className="flex cursor-pointer flex-col items-start justify-between gap-3 rounded-2xl bg-white bg-opacity-80 p-3 text-black"
+      className="flex cursor-pointer flex-col items-start justify-between gap-3 rounded-2xl bg-gray-800 bg-opacity-80 p-4 text-white shadow-lg transition-transform transform hover:scale-105"
       onClick={handleClick}
     >
       <div className="flex w-full items-center justify-between">
@@ -49,7 +49,7 @@ const LeaveCard = ({ leaveData }: Props) => {
 
           <div>
             <span className="flex flex-col items-center text-2xl font-bold">
-              {duration} {duration == 1 ? "day" : "days"}
+              {duration} {duration === 1 ? "day" : "days"}
             </span>
           </div>
 
@@ -73,7 +73,7 @@ const LeaveCard = ({ leaveData }: Props) => {
       </div>
 
       {expanded && (
-        <div className="mt-2 w-full border-t border-black text-sm">
+        <div className="mt-2 w-full border-t border-gray-600 text-sm">
           <p className="my-5 text-lg font-bold">Leave Request Details:</p>
           <p>Start Date: {formatDate(leaveData.startDate)}</p>
           <p>End Date: {formatDate(leaveData.endDate)}</p>
@@ -89,11 +89,11 @@ const LeaveCard = ({ leaveData }: Props) => {
 
 const getStatusColor = (status: string) => {
   if (status === "Accepted") {
-    return "text-green-600";
+    return "text-green-400";
   } else if (status === "Pending") {
-    return "text-yellow-600";
+    return "text-yellow-400";
   } else {
-    return "text-red-600";
+    return "text-red-400";
   }
 };
 

@@ -8,24 +8,33 @@ datasource db {
 }
 
 model User {
-  id            String         @id @default(auto()) @map("_id") @db.ObjectId
-  username      String         @unique
-  password      String
-  firstName     String
-  lastName      String
-  email         String         @unique
-  phoneNumber   String         @unique
-  dateCreated   DateTime       @default(now())
-  leaveBalance  Int
-  leaveRequests LeaveRequest[]
-  documents     Document[]
-  tickets       Ticket[]
-  messages      Message[]
-  role          String         @default("EMPLOYEE")
+  id             String         @id @default(auto()) @map("_id") @db.ObjectId
+  username       String         @unique
+  password       String
+  firstName      String
+  lastName       String
+  email          String         @unique
+  phoneNumber    String         @unique
+  dateCreated    DateTime       @default(now())
+  leaveBalance   Int
+  leaveRequests  LeaveRequest[]
+  digilocker     Digilocker[]
+  documents      Document[]
+  tickets        Ticket[]
+  messages       Message[]
+  role           String         @default("EMPLOYEE")
+  dob            DateTime?
+  address        String?
+  qualifications String?
+  department     String?
+  position       String?
+  
+  // Relation to HrDocument
+  hrDocuments    HrDocument[]   @relation("User  HrDocuments")
 }
 
 model LeaveRequest {
-  id            String       @id @default(auto()) @map("_id") @db.ObjectId
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
   reason        String
   startDate     DateTime
   endDate       DateTime
@@ -36,8 +45,36 @@ model LeaveRequest {
   userUsername  String
 }
 
+model Digilocker {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  filename      String?
+  size          Int?
+  mimetype      String?
+  data          Bytes?
+  dateCreated   DateTime @default(now())
+  userUsername  String
+  user          User     @relation(fields: [userUsername], references: [username])
+}
+
+model HrDocument {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  filename         String
+  submittedBy      String   // This should be the username of the user
+  submitterFullName String
+  department       String
+  position         String
+  dateSubmitted    DateTime
+  fileSize         Int?
+  data             Bytes?
+  status           String   @default("Pending") // Add status field
+  rejectionReason  String?  // Optional field for rejection reason
+  
+  // Relation to User
+  user             User     @relation("User  HrDocuments", fields: [submittedBy], references: [username])
+}
+
 model Document {
-  id           String      @id @default(auto()) @map("_id") @db.ObjectId
+  id           String   @id @default (auto()) @map("_id") @db.ObjectId
   filename     String
   data         Bytes
   dateCreated  DateTime @default(now())
@@ -46,7 +83,7 @@ model Document {
 }
 
 model Announcement {
-  id          String      @id @default(auto()) @map("_id") @db.ObjectId
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
   title       String
   text        String
   dateCreated DateTime @default(now())
@@ -54,19 +91,19 @@ model Announcement {
 }
 
 model Ticket {
-  id           String       @id @default(auto()) @map("_id") @db.ObjectId
+  id           String     @id @default(auto()) @map("_id") @db.ObjectId
   subject      String
-  status       String    @default("Unresolved")
+  status       String     @default("Unresolved")
   messages     Message[]
-  dateCreated  DateTime  @default(now())
-  User         User      @relation(fields: [userUsername], references: [username], onDelete: Cascade)
+  dateCreated  DateTime   @default(now())
+  User         User       @relation(fields: [userUsername], references: [username], onDelete: Cascade)
   userUsername String
 }
 
 model Message {
-  id           String      @id @default(auto()) @map("_id") @db.ObjectId
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
   Ticket       Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  ticketId     String
+  ticketId     String   @db.ObjectId
   text         String
   dateCreated  DateTime @default(now())
   User         User     @relation(fields: [userUsername], references: [username], onDelete: Cascade)

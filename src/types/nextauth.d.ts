@@ -1,19 +1,24 @@
-import { DefaultSession, DefaultUser } from "next-auth";
-
-interface IUser extends DefaultUser {
-  username?: string;
-  role?: string;
-  firstName?: string;
-  lastName?: string;
-}
+// types/next-auth.d.ts
+import "next-auth";
 
 declare module "next-auth" {
-  interface User extends IUser {}
-  interface Session {
-    user?: User;
+  interface User {
+    username: string;
+    role: string;
+    firstName: string;
+    lastName: string;
+    department?: string;
+    position?: string;
   }
-}
 
-declare module "next-auth/jwt" {
-  interface JWT extends IUser {}
+  interface Session {
+    user: {
+      username: string;
+      role: string;
+      firstName: string;
+      lastName: string;
+      department?: string;
+      position?: string;
+    };
+  }
 }

@@ -2,9 +2,9 @@ import React from "react";
 import { LeaveRequest } from "@prisma/client";
 
 interface ManageLeaveCardsProps {
-  leaveData: LeaveRequest & { userFirstName: string; userLastName: string }; // Extend to include user's full name
-  onAccept: (id: string) => void; // Change to string
-  onDecline: (id: string) => void; // Change to string
+  leaveData: LeaveRequest & { userFirstName: string; userLastName: string; department: string; position: string }; // Extend to include user's full name, department, and position
+  onAccept: (id: string) => void;
+  onDecline: (id: string) => void;
 }
 
 const ManageLeaveCards: React.FC<ManageLeaveCardsProps> = ({ leaveData, onAccept, onDecline }) => {
@@ -45,6 +45,9 @@ const ManageLeaveCards: React.FC<ManageLeaveCardsProps> = ({ leaveData, onAccept
           <span className="font-bold">
             Requested by: {leaveData.userFirstName} {leaveData.userLastName} (ID: {leaveData.userUsername})
           </span>
+          <span className="text-sm text-gray-500">
+            Department: {leaveData.department} | Position: {leaveData.position}
+          </span>
         </div>
         <span className={`rounded-full px-3 py-1 text-md font-semibold ${getStatusColor(leaveData.requestStatus)}`}>
           {leaveData.requestStatus}
@@ -62,13 +65,13 @@ const ManageLeaveCards: React.FC<ManageLeaveCardsProps> = ({ leaveData, onAccept
           {leaveData.requestStatus !== "Accepted" && leaveData.requestStatus !== "Declined" ? (
             <>
               <button
-                onClick={() => onAccept(leaveData.id.toString())} // Pass ID as a string
+                onClick={() => onAccept(leaveData.id.toString())}
                 className="flex items-center justify-center gap-1 rounded-full bg-green-600 px-3 py-2 font-medium text-white shadow-lg transition hover:bg-white hover:text-black active:bg-white active:bg-opacity-70"
               >
                 Accept
               </button>
               <button
-                onClick={() => onDecline(leaveData.id.toString())} // Pass ID as a string
+                onClick={() => onDecline(leaveData.id.toString())}
                 className="flex items-center justify-center gap-1 rounded-full bg-red-600 px-3 py-2 font-medium text-white shadow-lg transition hover:bg-white hover:text-black active:bg-white active:bg-opacity-70"
               >
                 Decline

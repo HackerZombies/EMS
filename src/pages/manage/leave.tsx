@@ -12,8 +12,8 @@ import Modal from "@/components/Modal";
 const LeaveManagementPage = () => {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [leaveRequests, setLeaveRequests] = useState<any[]>([]); // Update the type accordingly
-  const [filter, setFilter] = useState("Pending"); // Set the initial filter to "Pending"
+  const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
+  const [filter, setFilter] = useState("Pending");
   const [visible, setVisible] = useState(false);
   const [message, setMessage] = useState(<></>);
 
@@ -53,7 +53,7 @@ const LeaveManagementPage = () => {
           return dateA.getTime() - dateB.getTime();
         });
         setLeaveRequests(sortedData);
-        console.log("leaveRequests:", sortedData); // Log the leaveRequests data
+        console.log("leaveRequests:", sortedData);
       } catch (error) {
         console.error("Error fetching leave requests:", error);
       }
@@ -76,12 +76,14 @@ const LeaveManagementPage = () => {
       if (!response.ok) {
         throw new Error("Failed to update leave request status");
       }
+
       const updatedLeaveRequests = leaveRequests.map((request) => {
         if (request.id === id) {
           return { ...request, requestStatus: newStatus };
         }
         return request;
       });
+
       setLeaveRequests(updatedLeaveRequests);
       setMessage(
         <div className="flex flex-col gap-3">
@@ -136,7 +138,7 @@ const LeaveManagementPage = () => {
           <h1 className="text-4xl font-semibold">Manage Leave</h1>
           <select
             className="flex items-center justify-center rounded-md bg-white border border-gray-300 shadow-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out px-4 py-2"
-            value={filter} // Set the value to the current filter state
+            value={filter}
             onChange={(e) => {
               setFilter(e.target.value);
             }}
@@ -174,8 +176,10 @@ const LeaveManagementPage = () => {
                 <ManageLeaveCards
                   leaveData={{
                     ...request,
-                    userFirstName: request.userFirstName, // Ensure this is part of the request data
-                    userLastName: request.userLastName, // Ensure this is part of the request data
+                    userFirstName: request.User.firstName,
+                    userLastName: request.User.lastName,
+                    department: request.User.department,
+                    position: request.User.position,
                   }}
                   onAccept={(id: any) => handleStatusUpdate(id, "Accepted")}
                   onDecline={(id: any) => handleStatusUpdate(id, "Declined")}

@@ -25,7 +25,7 @@ export default function ManageUsers({ users }: Props) {
       <Head>
         <title>EMS - Manage Users</title>
       </Head>
-      <div className="flex grow flex-col gap-5">
+      <div className="flex grow flex-col gap-5 p-5 bg-gray-900 text-white">
         <div className="flex justify-between">
           <h1 className="text-4xl font-semibold">Manage Users</h1>
           {userRole === "TECHNICIAN" && (
@@ -39,7 +39,7 @@ export default function ManageUsers({ users }: Props) {
           onChange={(e: { target: { value: SetStateAction<string> } }) =>
             setQuery(e.target.value)
           }
-        ></Input>
+        />
         <UserList users={users} query={query} />
       </div>
     </>

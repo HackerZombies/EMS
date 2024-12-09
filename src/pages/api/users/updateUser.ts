@@ -19,7 +19,7 @@ export default async function handle(
   }
 
   // Extract user data from req body
-  let { username, firstName, lastName, password, email, phoneNumber } = req.body;
+  let { username, firstName, lastName, password, email, phoneNumber, dob, address, qualifications, department, position } = req.body;
 
   // Validate email format
   const emailPattern = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/;
@@ -31,6 +31,16 @@ export default async function handle(
   const phonePattern = /^91[0-9]{10}$/;
   if (phoneNumber && !phonePattern.test(phoneNumber)) {
     return res.status(400).json({ message: "Invalid phone number format. Please enter 91 followed by a 10-digit number." });
+  }
+
+  // Validate date of birth
+  if (dob) {
+    const dobDate = new Date(dob);
+    const today = new Date();
+    const age = today.getFullYear() - dobDate.getFullYear();
+    if (age < 18) {
+      return res.status(400).json({ message: "Employee must be at least 18 years old" });
+    }
   }
 
   // Don't update empty fields
@@ -46,6 +56,21 @@ export default async function handle(
   if (phoneNumber === "") {
     phoneNumber = undefined;
   }
+  if (dob === "") {
+    dob = undefined;
+  }
+  if (address === "") {
+    address = undefined;
+  }
+  if (qualifications === "") {
+    qualifications = undefined;
+  }
+  if (department === "") {
+    department = undefined;
+  }
+  if (position === "") {
+    position = undefined;
+  }
 
   try {
     // Hash the raw password from req body
@@ -60,6 +85,11 @@ export default async function handle(
         password: hashedPassword,
         email,
         phoneNumber,
+        dob,
+        address,
+        qualifications,
+        department,
+        position,
       },
     });
 
@@ -67,18 +97,11 @@ export default async function handle(
     if (email) {
       await sendUserUpdateEmail(email, username, password);
     }
-    if (email && password) {
-      await sendUserUpdateEmail(email, username, password);
-    }
-    if (username) {
-      await sendUserUpdateEmail(email, username, password);
-    }
+
     return res.status(200).json(updatedUser);
   } catch (error) {
     if (error instanceof PrismaClientKnownRequestError) {
-      return res
-        .status(409)
-        .json({ message: "This email or phone number is already in use." });
+      return res.status(409).json({ message: "This email or phone number is already in use." });
     } else {
       // Handle potential errors, like duplicate email or phone number since @unique in schema
       console.error("Failed to update user:", error);

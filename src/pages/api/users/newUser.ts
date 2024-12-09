@@ -4,15 +4,13 @@ import argon2 from "argon2";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
-import { sendEmail } from "@/lib/sendEmail"; // Import sendEmail function
+import { sendEmail } from "@/lib/sendEmail";
 
-// Function to generate a random 5-digit number between 10000 - 90000
 function generateUsername(): string {
   const randomNumber = Math.floor(Math.random() * 90000) + 10000;
   return `${randomNumber}`;
 }
 
-// Function to validate email format
 function validateEmail(email: string): boolean {
   const re = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
   return re.test(String(email).toLowerCase());
@@ -28,22 +26,28 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     return res.status(405).json({ message: "Method Not Allowed" });
   }
 
-  // Extract user data from req body
-  const { firstName, lastName, password, email, phoneNumber, role } = req.body;
+  const { 
+    firstName, 
+    lastName, 
+    password, 
+    email, 
+    phoneNumber, 
+    role,
+    dob,
+    address,
+    qualifications,
+    department,
+    position
+  } = req.body;
 
-  // Validate email format
   if (!validateEmail(email)) {
     return res.status(400).json({ message: "Invalid email format" });
   }
 
   try {
-    // Generate Username
     const username = generateUsername();
-
-    // Hash the raw password from req body
     const hashedPassword = await argon2.hash(password);
 
-    // Create user in database
     const newUser = await prisma.user.create({
       data: {
         username,
@@ -54,22 +58,27 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
         phoneNumber,
         leaveBalance: 28,
         role,
+        dob: dob ? new Date(dob) : null,
+        address,
+        qualifications,
+        department,
+        position
       },
     });
 
-    // Send email with username and password
-    await sendEmail(email, username, password); // Send the email
+    await sendEmail(email, username, password);
 
     return res.status(200).json(newUser);
   } catch (error) {
     if (error instanceof PrismaClientKnownRequestError) {
-      return res
-        .status(409)
-        .json({ message: "This email / phone number is already in use." });
-    } else {
-      // Handle potential errors, like duplicate email or phone number since @unique in schema
-      console.error("Failed to create user:", error);
-      return res.status(500).json({ message: "Failed to create user" });
+      if (error.code === 'P2002') {
+        return res
+          .status(409)
+          .json({ message: "This email or phone number is already in use." });
+      }
     }
+    console.error("Failed to create user:", error);
+    return res.status(500).json({ message: "Failed to create user" });
   }
 }
+

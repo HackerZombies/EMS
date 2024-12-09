@@ -46,7 +46,7 @@ export default function UserList({ users, query }: Props) {
   });
   return (
     <>
-      {filteredUsers.length == 0 ? (
+      {filteredUsers.length === 0 ? (
         <div className="flex grow flex-col items-center justify-center gap-2 text-center text-neutral-400">
           <Icon icon="ph:magnifying-glass-light" width="8em" />
           <h1 className="text-2xl font-semibold">No users found</h1>
@@ -56,7 +56,7 @@ export default function UserList({ users, query }: Props) {
         </div>
       ) : (
         <motion.div
-          className="grid grid-cols-2 gap-2 max-md:grid-cols-1"
+          className="grid grid-cols-2 gap-4 max-md:grid-cols-1"
           initial="hidden"
           animate="visible"
           variants={list}
@@ -70,24 +70,23 @@ export default function UserList({ users, query }: Props) {
               <Link
                 scroll={false}
                 href={`/manage/users/user/${user.username}`}
-                className="flex flex-col items-start rounded-2xl bg-white bg-opacity-80 p-3 text-black"
+                className="flex flex-col items-start rounded-2xl bg-gray-800 p-4 text-white shadow-lg transition hover:bg-gray-700"
               >
                 <div className="flex w-full justify-between">
                   <h1 className="flex items-center gap-1 text-xl font-semibold">
-                    <Icon icon="ph:user-bold"></Icon> {user.firstName}{" "}
-                    {user.lastName}
+                    <Icon icon="ph:user-bold" /> {user.firstName} {user.lastName}
                   </h1>
-                  <p>
-                    {user.role == "EMPLOYEE"
+                  <p className="text-sm">
+                    {user.role === "EMPLOYEE"
                       ? "Employee"
-                      : user.role == "HR"
-                        ? "HR Employee"
-                        : user.role == "TECHNICIAN"
-                          ? "Technician"
-                          : ""}
+                      : user.role === "HR"
+                      ? "HR Employee"
+                      : user.role === "TECHNICIAN"
+                      ? "Technician"
+                      : ""}
                   </p>
                 </div>
-                <p className="text-sm font-medium text-neutral-600">
+                <p className="text-sm font-medium text-neutral-400">
                   <b>User ID:</b> {user.username}
                 </p>
               </Link>

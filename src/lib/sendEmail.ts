@@ -12,44 +12,41 @@ const getEnvVar = (name: string): string => {
 };
 
 // Ensure required environment variables are set
-const smtpHost = getEnvVar('SMTP_HOST');
-const smtpPort = parseInt(getEnvVar('SMTP_PORT'), 10);
-const smtpUser = getEnvVar('SMTP_USER');
-const smtpPass = getEnvVar('SMTP_PASS');
-const mailtrapUsername = getEnvVar('MAILTRAP_USERNAME');
+const gmailUser  = getEnvVar('GMAIL_USER');
+const gmailPass = getEnvVar('GMAIL_PASS');
 
-// Create a transporter object using SMTP transport
+// Create a transporter object using Gmail service
 const transporter = nodemailer.createTransport({
-    host: smtpHost,
-    port: smtpPort,
-    secure: false, // Set to true if using port 465
+    service: 'gmail',
+    secure: true, // Use SSL
+    port: 465,
     auth: {
-        user: smtpUser,
-        pass: smtpPass
+        user: gmailUser ,
+        pass: gmailPass,
     },
 });
 
 // Function to send email
 export const sendEmail = async (to: string, username: string, password: string) => {
     const mailOptions = {
-        from: mailtrapUsername, // Sender address from environment variable
+        from: gmailUser , // Sender address from environment variable
         to,
-        subject: 'Welcome to Our System', // Subject line
-        text: `Hey Employee!! you  has been added successfully! to our firm here is your \n\nUsername: ${username}\nPassword: ${password} , Please Update your Credentials after logging in.
-        Thank You.`, // Plain text body
+        subject: 'Welcome to Our System',
+        text: `Hello ${username},\n\nWelcome to our system! Your account has been created successfully.\n\nUsername: ${username}\nTemporary Password: ${password}\n\nPlease log in and change your password immediately.\n\nThank you!`,
     };
 
     try {
         await transporter.sendMail(mailOptions);
         console.log('Email sent successfully');
-    } catch (error) {
-        console.error('Error sending email:', error);
+    } catch (error: unknown) {
+        if (error instanceof Error) {
+            console.error('Error sending email:', error.message);
+            throw new Error(`Error sending email: ${error.message}`);
+        } else {
+            console.error('Error sending email:', error);
+            throw new Error('Error sending email: Unknown error occurred');
+        }
     }
 };
 
-// Verify the environment variables
-console.log('SMTP Host:', smtpHost);
-console.log('SMTP Port:', smtpPort);
-console.log('SMTP User:', smtpUser);
-console.log('SMTP Pass:', smtpPass);
-console.log('Sender Email:', mailtrapUsername);
+export default sendEmail; // Default export

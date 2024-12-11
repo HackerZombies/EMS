@@ -11,21 +11,18 @@ const getEnvVar = (name: string): string => {
   return value;
 };
 
-// Ensure required environment variables are set
-const smtpHost = getEnvVar('SMTP_HOST');
-const smtpPort = parseInt(getEnvVar('SMTP_PORT'), 10);
-const smtpUser = getEnvVar('SMTP_USER');
-const smtpPass = getEnvVar('SMTP_PASS');
-const mailtrapUsername = getEnvVar('MAILTRAP_USERNAME');
+// Ensure required environment variables are set for Gmail
+const gmailUser  = getEnvVar('GMAIL_USER');
+const gmailPass = getEnvVar('GMAIL_PASS');
 
-// Create a transporter object using SMTP transport
+// Create a transporter object using Gmail service
 const transporter = nodemailer.createTransport({
-  host: smtpHost,
-  port: smtpPort,
-  secure: false, // Set to true if using port 465
+  service: 'gmail',
+  secure: true, // Use SSL
+  port: 465,
   auth: {
-    user: smtpUser,
-    pass: smtpPass
+    user: gmailUser ,
+    pass: gmailPass,
   },
 });
 
@@ -37,7 +34,7 @@ export const sendLeaveRequestUpdateEmail = async (to: string, username: string, 
     : `Hey ${username},\n\nYour leave request has been declined. Please contact your manager for more information.\n\nThank You.`;
 
   const mailOptions = {
-    from: mailtrapUsername, // Sender address from environment variable
+    from: gmailUser , // Sender address from environment variable
     to,
     subject, // Subject line
     text, // Plain text body
@@ -52,8 +49,5 @@ export const sendLeaveRequestUpdateEmail = async (to: string, username: string, 
 };
 
 // Verify the environment variables
-console.log('SMTP Host:', smtpHost);
-console.log('SMTP Port:', smtpPort);
-console.log('SMTP User:', smtpUser);
-console.log('SMTP Pass:', smtpPass);
-console.log('Sender Email:', mailtrapUsername);
+console.log('Gmail User:', gmailUser );
+console.log('Gmail Pass:', gmailPass);

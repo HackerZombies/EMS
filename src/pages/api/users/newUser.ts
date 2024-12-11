@@ -48,7 +48,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     const username = generateUsername();
     const hashedPassword = await argon2.hash(password);
 
-    const newUser = await prisma.user.create({
+    const newUser  = await prisma.user.create({
       data: {
         username,
         firstName,
@@ -66,9 +66,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       },
     });
 
-    await sendEmail(email, username, password);
-
-    return res.status(200).json(newUser);
+    await sendEmail(email, username, password); return res.status(200).json(newUser );
   } catch (error) {
     if (error instanceof PrismaClientKnownRequestError) {
       if (error.code === 'P2002') {
@@ -81,4 +79,3 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     return res.status(500).json({ message: "Failed to create user" });
   }
 }
-

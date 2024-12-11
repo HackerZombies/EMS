@@ -48,14 +48,15 @@ export default function PersonalInfo({ user }: Props) {
 
   const handleUpdate = async () => {
     if (!validate()) return;
-
+  
     setIsSubmitting(true);
     try {
       const response = await axios.post("/api/users/updateUserInfo", {
         username: user?.username,
         password,
+        email: user?.email, // Include the email in the request
       });
-
+  
       if (response.status === 200) {
         setUpdateSuccess(true);
         setTimeout(() => {

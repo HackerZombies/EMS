@@ -83,8 +83,7 @@ export default function EditUser ({ user }: Props) {
     if (!validate()) {
       return;
     }
-  
-    // Prepare the data to send to the API
+
     const dataToUpdate = {
       username: formData.username,
       firstName: formData.firstName,
@@ -98,7 +97,7 @@ export default function EditUser ({ user }: Props) {
       position: formData.position,
       password: formData.password, // Send the plain password
     };
-  
+
     try {
       const response = await axios.post("/api/users/updateUser ", dataToUpdate);
       if (response.status === 200) {
@@ -116,14 +115,31 @@ export default function EditUser ({ user }: Props) {
         setModalVisible(true);
       }
     } catch (error) {
-      // Handle errors as before
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        const data = error.response?.data;
+        setModalTitle("Error");
+        setModalMessage(
+          <p className="text-red-500">
+            {data?.message || "An unexpected error occurred."}
+          </p>
+        );
+        setModalVisible(true);
+      } else {
+        console.error("Error updating user:", error);
+        setModalTitle("Error");
+        setModalMessage(
+          <p className="text-red-500">An unexpected error occurred. Please try again.</p>
+        );
+        setModalVisible(true);
+      }
     }
   };
 
   const deleteUser  = async () => {
     setModalVisible(false);
     try {
-      const response = await axios.delete("/api/users/deleteUser  ", {
+      const response = await axios.delete("/api/users/deleteUser ", {
         data: { username: formData.username },
       });
       if (response.status === 200) {
@@ -182,24 +198,19 @@ export default function EditUser ({ user }: Props) {
           EMS - Edit User - {user.firstName} {user.lastName}
         </title>
       </Head>
-      <div className="flex flex-col gap-3 p-5 bg-gray-900 text-white">
+      <div className="flex flex-col gap-5 p-6 bg-gray-900 text-white rounded-lg shadow-lg">
         <BackButton />
-        <div className="flex justify-between gap-2 max-md:flex-col">
-          <h1 className="text-4xl font-semibold">
+        <div className="flex justify-between items-center">
+          <h1 className="text-3xl font-bold">
             Edit User - {user.firstName} {user.lastName}
           </h1>
-          <div className="flex gap-3">
-            {userRole === "TECHNICIAN" && (
-              <button
-                onClick={handleDelete}
-                className="flex w-full items-center justify-center gap-1 rounded-full bg-red-600 px-3 py-2 font-medium text-white shadow-lg transition hover:bg-white hover:text-black active:bg-white active:bg-opacity-70"
-              >
-                Delete User
-              </button>
-            )}
-          </div>
+          {userRole === "TECHNICIAN" && (
+            <Button onClick={handleDelete} className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded">
+              Delete User
+            </Button>
+          )}
         </div>
-        <div className="flex flex-col gap-3 rounded-2xl bg-gray-800 p-5 shadow-lg">
+        <div className="bg-gray-800 p-5 rounded-lg shadow-md">
           <FormField label="User  ID" name="username" value={formData.username} onChange={handleInputChange} disabled />
           <FormField label="First Name" name="firstName" value={formData.firstName} onChange={handleInputChange} />
           <FormField label="Last Name" name="lastName" value={formData.lastName} onChange={handleInputChange} />
@@ -214,7 +225,7 @@ export default function EditUser ({ user }: Props) {
                 id="password"
                 value={formData.password}
                 onChange={handleInputChange}
-                className={`bg-gray-700 text-white ${errors.password ? "border-red- 500" : "border-gray-600"} border rounded-lg px-3 py-2`}
+                className={`bg-gray-700 text-white ${errors.password ? "border-red-500" : "border-gray-600"} border rounded-lg px-3 py-2`}
               />
               <button
                 type="button"
@@ -263,7 +274,7 @@ interface FormFieldProps {
 
 function FormField({ label, name, type = "text", value, onChange, error, disabled = false }: FormFieldProps) {
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col mb-4">
       <label className="font-medium" htmlFor={name}>
         {label}
       </label>

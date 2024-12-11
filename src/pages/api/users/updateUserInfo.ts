@@ -4,7 +4,7 @@ import argon2 from "argon2";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
-import { sendUpdateEmail } from "@/lib/sendUpdateEmail"; // Import the sendEmail function
+import sendUserUpdateEmail from "@/lib/sendUpdateEmail"; // Import the sendEmail function
 
 export default async function handle(
   req: NextApiRequest,
@@ -20,6 +20,9 @@ export default async function handle(
 
   // Extract user data from req body
   let { username, firstName, lastName, password, email, phoneNumber } = req.body;
+
+  // Log the incoming request body for debugging
+  console.log("Request body:", req.body);
 
   // Validate email format
   const emailPattern = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/;
@@ -52,7 +55,7 @@ export default async function handle(
     const hashedPassword = password ? await argon2.hash(password) : undefined;
 
     // Update user in database
-    const updatedUser = await prisma.user.update({
+    const updatedUser  = await prisma.user.update({
       where: { username },
       data: {
         firstName,
@@ -63,23 +66,18 @@ export default async function handle(
       },
     });
 
-    // Send email with updated information
-    if (email && password) {
-      await sendUpdateEmail(email, username, password);
-    }
+    // Send email with updated information if email is defined
     if (email) {
-      await sendUpdateEmail(email, username, password);
-    }
-    if (password) {
-      await sendUpdateEmail(email, username, password);
+      console.log(`Sending update email to: ${email}`); // Log the email being sent
+      await sendUserUpdateEmail(email, username, password || "No password provided");
+    } else {
+      console.warn("Email is not defined, skipping email sending.");
     }
 
-    return res.status(200).json(updatedUser);
+    return res.status(200).json(updatedUser );
   } catch (error) {
     if (error instanceof PrismaClientKnownRequestError) {
-      return res
-        .status(409)
-        .json({ message: "This email / phone number is already in use." });
+      return res.status(409).json({ message: "This email / phone number is already in use." });
     } else {
       // Handle potential errors, like duplicate email or phone number since @unique in schema
       console.error("Failed to update user:", error);

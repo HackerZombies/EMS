@@ -122,11 +122,11 @@ export default function HrDocuments({ hrDocuments }: Props) {
 
   return (
     <div className=
-    "min-h-screen bg-gray-900 text-gray-100 p-8">
+    "min-h-screen bg-black bg-opacity-50 opacity-80 text-white p-8 rounded-2xl shadow-lg">
       <Head>
         <title>HR Documents</title>
       </Head>
-      <h1 className="text-3xl font-bold mb-6">Submitted HR Documents</h1>
+      <h1 className="text-3xl font-bold mb-6">Verify Documents</h1>
       {Object.keys(groupedDocuments).length === 0 ? (
         <p className="text-gray-500">No documents submitted yet.</p>
       ) : (
@@ -135,7 +135,7 @@ export default function HrDocuments({ hrDocuments }: Props) {
             <div key={group} className="mb-4">
               <h2 className="text-xl font-semibold text-gray-300">{group}</h2>
               {docs.map((doc) => (
-                <div key={doc.id} className="bg-gray-800 rounded-lg shadow-lg p-4 mb-2 transition-transform transform hover:scale-105">
+                <div key={doc.id} className="bg-gray-800 rounded-2xl shadow-lg p-4 mb-2 transition-transform transform hover:scale-105">
                   <div className="flex justify-between items-center cursor-pointer" onClick={() => toggleExpand(doc.id)}>
                     <h3 className="text-lg font-semibold">{doc.filename}</h3>
                     <span className={`text-${doc.status === 'Approved' ? 'green' : doc.status === 'Rejected' ? 'red' : 'yellow'}-400`}>{doc.status}</span>
@@ -156,25 +156,25 @@ export default function HrDocuments({ hrDocuments }: Props) {
                       <div className="mt-4 flex flex-wrap space-x-2">
                         <button
                           onClick={() => handleDownload(doc.id, doc.filename)}
-                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition duration-200"
+                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-2 rounded transition duration-200"
                         >
                           Download
                         </button>
                         <button
                           onClick={() => handleApprove(doc.id)}
-                          className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition duration-200"
+                          className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-2 rounded transition duration-200"
                         >
                           Approve
                         </button>
                         <button
                           onClick={() => { setSelectedDocId(doc.id); }}
-                          className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition duration-200"
+                          className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-2 rounded transition duration-200"
                         >
                           Reject
                         </button>
                         <button
                           onClick={() => handleDelete(doc.id)}
-                          className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition duration-200"
+                          className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-2 rounded transition duration-200"
                         >
                           Delete
                         </button>
@@ -210,23 +210,23 @@ export default function HrDocuments({ hrDocuments }: Props) {
       )}
       {selectedDocId && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-70">
-          <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
-            <h2 className="text-lg font-bold text-white">Reject Document</h2>
+          <div className="bg-black bg-opacity-50 p-6 rounded-lg shadow-lg">
+            <h2 className="text-lg font-bold text-white py-2">Reject Document</h2>
             <textarea
               value={ rejectionReason}
               onChange={(e) => setRejectionReason(e.target.value)}
               placeholder="Enter reason for rejection"
-              className="w-full p-2 border border-gray-600 rounded bg-gray-700 text-white"
+              className="w-full p-2 border border-gray-600 rounded bg-black bg-opacity-20 text-white"
             />
             <button
               onClick={handleReject}
-              className="mt-4 bg-red-600 text-white font-bold py-2 px-4 rounded hover:bg-red-700 transition duration-200"
+              className="mt-4 bg-red-600 text-white font-bold py-2 px-2 rounded-lg hover:bg-red-700 transition duration-200"
             >
               Submit Rejection
             </button>
             <button
               onClick={() => setSelectedDocId(null)}
-              className="mt-2 text-gray-400 hover:underline"
+              className="px-5 text-gray-400 hover:underline"
             >
               Cancel
             </button>

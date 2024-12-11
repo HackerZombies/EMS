@@ -5,7 +5,6 @@ import Input from "../components/Input";
 import Head from "next/head";
 import { Icon } from "@iconify/react";
 import { useRouter } from "next/router";
-import { AnimatePresence, motion } from "framer-motion";
 import Image from "next/image";
 import fdmLogo from "../../public/fdm.svg";
 import Modal from "./Modal";
@@ -62,7 +61,7 @@ export default function SignIn() {
                 <Icon icon="ph:user-bold" />
                 User ID
               </div>
-              <Input name="username" type="text" placeholder="User ID" />
+              <Input name="username" type="text" placeholder="User  ID" />
             </label>
             <label className="flex flex-col text-left">
               <div className="flex flex-row items-center gap-1">
@@ -96,8 +95,8 @@ export default function SignIn() {
       </div>
       <Modal
         visible={popup}
-        setVisible={setPopup}
         title="Having trouble signing in?"
+        onClose={() => setPopup(false)} // Use onClose instead of setVisible
       >
         <div className="flex flex-col gap-2">
           <p>

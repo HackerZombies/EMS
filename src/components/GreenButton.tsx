@@ -7,7 +7,7 @@ type ButtonProps = {
 const GreenButton: FC<ButtonProps> = ({ children, ...attributes }) => {
   return (
     <button
-      className="flex items-center justify-center gap-1 text-nowrap rounded-full bg-green-600 px-4 py-2 font-medium text-white shadow-lg transition hover:bg-green-500 active:bg-green-700"
+      className="flex items-center justify-center gap-1 text-nowrap rounded-2xl bg-green-600 px-4 py-2 font-medium text-white shadow-lg transition hover:bg-red-500 active:bg-green-700"
       {...attributes}
     >
       {children}

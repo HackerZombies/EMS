@@ -6,7 +6,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import BackButton from "@/components/BackButton";
 import Input from "@/components/Input";
 import Button from "@/components/Button";
-import ModalPopup from "@/components/Modal";
+import Modal from "@/components/Modal";
 import { validateForm } from "@/lib/formValidation";
 
 interface FormData {
@@ -189,14 +189,14 @@ export default function CreateUser () {
           </div>
         </div>
       </div>
-      <ModalPopup
-        visible={visible}
-        setVisible={setVisible}
-        title ={title}
-        closeButton={closeButton}
-      >
-        {message}
-      </ModalPopup>
+      <Modal
+  visible={visible}
+  onClose={() => setVisible(false)} // Use onClose instead of setVisible
+  title={title}
+  closeButton={closeButton}
+>
+  {message}
+</Modal>
     </>
   );
 }

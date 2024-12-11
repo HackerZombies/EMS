@@ -31,12 +31,8 @@ export default function UserTicket({ ticket: initialTicket, messages }: Props) {
   const [message, setMessage] = useState("");
   const [commentList, setCommentList] = useState(messages);
   const [visible, setVisible] = useState(false);
-  const [isTicketSolved, setIsTicketSolved] = useState(
-    ticket.status === "Resolved",
-  );
-  const isAdmin =
-    session?.data?.user?.role === "HR" ||
-    session?.data?.user?.role === "TECHNICIAN";
+  const [isTicketSolved, setIsTicketSolved] = useState(ticket.status === "Resolved");
+  const isAdmin = session?.data?.user?.role === "HR" || session?.data?.user?.role === "TECHNICIAN";
 
   useEffect(() => {
     setIsTicketSolved(ticket.status === "Resolved");
@@ -113,9 +109,7 @@ export default function UserTicket({ ticket: initialTicket, messages }: Props) {
           <div>
             <h1 className="text-sm font-semibold">Ticket</h1>
             <h2 className="text-4xl font-semibold">
-              <span className="font-medium text-neutral-400">
-                #{ticket.id}{" "}
-              </span>
+              <span className="font-medium text-neutral-400">#{ticket.id} </span>
               {ticket.subject}
             </h2>
           </div>
@@ -126,12 +120,7 @@ export default function UserTicket({ ticket: initialTicket, messages }: Props) {
             )}
           </div>
         </div>
-        <motion.div
-          className="flex flex-col gap-2"
-          initial="hidden"
-          animate="visible"
-          variants={list}
-        >
+        <motion.div className="flex flex-col gap-2" initial="hidden" animate="visible" variants ={list}>
           {commentList.map((comment, index) => (
             <motion.div
               key={index}
@@ -161,7 +150,7 @@ export default function UserTicket({ ticket: initialTicket, messages }: Props) {
           <motion.div className="flex flex-col items-end gap-2" variants={item}>
             <textarea
               value={message}
-              onChange={( e) => setMessage(e.target.value)}
+              onChange={(e) => setMessage(e.target.value)}
               placeholder="Enter your message..."
               rows={4}
               cols={50}
@@ -175,7 +164,11 @@ export default function UserTicket({ ticket: initialTicket, messages }: Props) {
           </motion.div>
         </motion.div>
       </div>
-      <Modal visible={visible} setVisible={setVisible} title="Oops...">
+      <Modal
+        visible={visible}
+        title="Oops..."
+        onClose={() => setVisible(false)} // Use onClose instead of setVisible
+      >
         Please type a message before clicking send.
       </Modal>
     </>

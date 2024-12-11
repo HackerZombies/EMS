@@ -48,8 +48,8 @@ export default function Navigation() {
           { url: "/", title: "Home", icon: "ph:house" },
           { url: "/announcements", title: "Announcements", icon: "ph:megaphone" },
           { url: "/leave", title: "Leave", icon: "ph:airplane-takeoff" },
-          { url: "/documents", title: "Payslip Documents", icon: "ph:file-text" },
-          { url: "/hr/submit", title: "Submit Documents", icon: "ph:file-text" },
+          { url: "/documents", title: "Get Payslips", icon: "ph:file-text" },
+          { url: "/hr/submit", title: "HR Verification", icon: "ph:file-text" },
           { url: "/digilocker", title: "Digilocker", icon: "ph:files" },
           { url: "/help", title: "Help", icon: "ph:chats-circle" },
         ],
@@ -60,8 +60,8 @@ export default function Navigation() {
       const adminItems: NavCategoryType = {
         category: "Admins",
         items: [
-          { url: "/manage/users", title: "Manage Users", icon: "ph:address-book" },
-          { url: "/manage/tickets", title: "Manage Tickets", icon: "ph:ticket" },
+          { url: "/manage/users", title: "Manage Employees", icon: "ph:address-book" },
+          { url: "/manage/tickets", title: "Ressolve Tickets", icon: "ph:ticket" },
         ],
       };
 
@@ -69,7 +69,7 @@ export default function Navigation() {
         category: "HR Employees",
         items: [
           { url: "/manage/leave", title: "Manage Leave", icon: "ph:calendar-check" },
-          { url: "/manage/documents", title: "Manage Documents", icon: "ph:files" },
+          { url: "/manage/documents", title: "Upload Payslips", icon: "ph:files" },
           { url: "/hr/documents", title: "Approve Documents", icon: "ph:files" },
         ],
       };
@@ -116,7 +116,7 @@ const categoryTextClass = "text-white font-semibold opacity-100";
               animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
               exit={{ opacity: 0, y: -30, filter: "blur(10px)" }}
               transition={{ ease: "easeInOut", duration: 0.2 }}
-              className={`fixed z-10 flex w-screen items-center justify-between gap-1 rounded-b-xl ${headerBgClass} p-4 text-2xl drop-shadow-lg`}
+              className={`fixed z-10 flex w-screen items-center justify-between gap-1 rounded-b-2xl ${headerBgClass} p-4 text-2xl drop-shadow-lg shadow-black shadow opacity-80`}
             >
               <button onClick={() => setNavbarOpen(true)}>
                 <Icon icon="ph:list" />
@@ -154,7 +154,7 @@ const categoryTextClass = "text-white font-semibold opacity-100";
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setNavbarOpen(false)}
-                    className="p-2 rounded-full hover:bg-opacity-20"
+                    className="p-4 rounded-full hover:bg-opacity-20"
                   >
                     <Icon icon="ph:x" className="text-2xl" />
                   </button>
@@ -215,7 +215,7 @@ const categoryTextClass = "text-white font-semibold opacity-100";
           initial="initial"
           animate="animate"
           exit="exit"
-          transition={{ ease: "easeInOut", duration: 0.3 }}
+          transition={{ ease: "easeInOut", duration: 0.1 }}
           className={`fixed z-20 h-full w-64 py-5 shadow-lg ${navBgClass}`}
         >
           <div className="flex h-full flex-col overflow-y-auto">

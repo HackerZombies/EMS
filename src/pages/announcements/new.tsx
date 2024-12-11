@@ -9,7 +9,8 @@ import Modal from "@/components/Modal";
 
 export default function NewAnnouncement() {
   const [visible, setVisible] = useState(false);
-  //Saving announcements utilising the announcements/create.ts API endpoint
+
+  // Saving announcements utilizing the announcements/create.ts API endpoint
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -19,7 +20,7 @@ export default function NewAnnouncement() {
     const text = formData.get("text");
     const role = formData.get("role");
 
-    if (title == "" || text == "") {
+    if (title === "" || text === "") {
       setVisible(true);
       return;
     }
@@ -30,7 +31,7 @@ export default function NewAnnouncement() {
       body: JSON.stringify({ title, text, role }),
     });
 
-    //Ensuring that any issues are being outputted
+    // Ensuring that any issues are being outputted
     if (!response.ok) {
       throw new Error(response.statusText);
     }
@@ -74,7 +75,11 @@ export default function NewAnnouncement() {
           </Button>
         </form>
       </div>
-      <Modal visible={visible} setVisible={setVisible} title="Oops...">
+      <Modal
+        visible={visible}
+        title="Oops..."
+        onClose={() => setVisible(false)} // Use onClose instead of setVisible
+      >
         Please fill out both the title and text first.
       </Modal>
     </>

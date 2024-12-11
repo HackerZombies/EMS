@@ -18,7 +18,7 @@ export default function NewTicket() {
     const subject = formData.get("subject");
     const description = formData.get("description");
 
-    if (subject == "" || description == "") {
+    if (subject === "" || description === "") {
       setVisible(true);
       return;
     }
@@ -31,6 +31,7 @@ export default function NewTicket() {
 
     await Router.push("/help");
   }
+
   return (
     <>
       <Head>
@@ -53,7 +54,11 @@ export default function NewTicket() {
           </Button>
         </form>
       </div>
-      <Modal visible={visible} setVisible={setVisible} title="Oops...">
+      <Modal
+        visible={visible}
+        title="Oops..."
+        onClose={() => setVisible(false)} // Use onClose instead of setVisible
+      >
         Please fill out both the subject and description first.
       </Modal>
     </>

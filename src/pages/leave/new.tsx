@@ -123,7 +123,7 @@ export default function NewLeaveRequest() {
         <div className="absolute top-5 left-5">
           <BackButton />
         </div>
-        <h1 className="text-4xl font-bold text-white mb-6 animate-fade-in">New Leave Request</ h1>
+        <h1 className="text-4xl font-bold text-white mb-6 animate-fade-in">New Leave Request</h1>
         <div className="flex flex-col gap-5 w-full max-w-md">
           <div className="flex flex-col text-left text-white">
             <span className="mb-2">Reason:</span>
@@ -180,7 +180,12 @@ export default function NewLeaveRequest() {
           </Button>
         </div>
       </div>
-      <Modal visible={visible} setVisible={setVisible} title="Oops..." className="bg-gray-800 text-white">
+      <Modal
+        visible={visible}
+        title="Oops..."
+        onClose={() => setVisible(false)} // Use onClose instead of setVisible
+        className="bg-gray-800 text-white"
+      >
         {message}
       </Modal>
     </>

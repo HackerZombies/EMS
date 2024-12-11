@@ -12,8 +12,8 @@ import BackButton from "@/components/BackButton";
 import prisma from "@/lib/prisma";
 import Button from "@/components/Button";
 import Input from "@/components/Input";
-import ModalPopup from "@/components/Modal";
-import argon2 from 'argon2';
+import ModalPopup from "@/components/Modal"; // Importing Modal component
+import { motion, AnimatePresence } from "framer-motion";
 
 type Props = {
   user: User;
@@ -95,7 +95,7 @@ export default function EditUser ({ user }: Props) {
       qualifications: formData.qualifications,
       department: formData.department,
       position: formData.position,
-      password: formData.password, // Send the plain password
+      password: formData.password,
     };
 
     try {
@@ -107,12 +107,13 @@ export default function EditUser ({ user }: Props) {
             <p className="text-green-500 text-lg">
               User details have been successfully updated.
             </p>
-            <Button onClick={() => router.push("/manage/users")} className="bg-blue-500 text-white px-4 py-2 rounded">
+            <Button onClick={() => router.push("/manage/users")} className="bg-blue-500 bg-opacity-50 text-white px-4 py-2 rounded">
               Back to Users
             </Button>
           </div>
         );
         setModalVisible(true);
+        setTimeout(() => setModalVisible(false), 3000); // Auto-close after 3 seconds
       }
     } catch (error) {
       if (axios.isAxiosError(error)) {
@@ -125,6 +126,7 @@ export default function EditUser ({ user }: Props) {
           </p>
         );
         setModalVisible(true);
+        setTimeout(() => setModalVisible(false), 3000); // Auto-close after 3 seconds
       } else {
         console.error("Error updating user:", error);
         setModalTitle("Error");
@@ -132,6 +134,7 @@ export default function EditUser ({ user }: Props) {
           <p className="text-red-500">An unexpected error occurred. Please try again.</p>
         );
         setModalVisible(true);
+        setTimeout(() => setModalVisible(false), 3000); // Auto-close after 3 seconds
       }
     }
   };
@@ -156,6 +159,7 @@ export default function EditUser ({ user }: Props) {
           </p>
         );
         setModalVisible(true);
+        setTimeout(() => setModalVisible(false), 3000); // Auto-close after 3 seconds
       } else {
         console.error("Error deleting user:", error);
         setModalTitle("Error");
@@ -163,6 +167,7 @@ export default function EditUser ({ user }: Props) {
           <p className="text-red-500">An unexpected error occurred. Please try again.</p>
         );
         setModalVisible(true);
+        setTimeout(() => setModalVisible(false), 3000); // Auto-close after 3 seconds
       }
     }
   };
@@ -195,26 +200,26 @@ export default function EditUser ({ user }: Props) {
     <>
       <Head>
         <title>
-          EMS - Edit User - {user.firstName} {user.lastName}
+          {user.firstName} {user.lastName}
         </title>
       </Head>
-      <div className="flex flex-col gap-5 p-6 bg-gray-900 text-white rounded-lg shadow-lg">
+      <div className="flex flex-col gap-5 p-6 bg-black bg-opacity-10 text-white rounded-lg shadow-lg">
         <BackButton />
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold">
-            Edit User - {user.firstName} {user.lastName}
+            {user.firstName} {user.lastName}
           </h1>
           {userRole === "TECHNICIAN" && (
-            <Button onClick={handleDelete} className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded">
-              Delete User
+            <Button onClick={handleDelete} className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-xl">
+              Delete
             </Button>
           )}
         </div>
-        <div className="bg-gray-800 p-5 rounded-lg shadow-md">
+        <div className="bg-black bg-opacity-70 opacity-80 p-5 rounded-xl shadow-lg">
           <FormField label="User  ID" name="username" value={formData.username} onChange={handleInputChange} disabled />
           <FormField label="First Name" name="firstName" value={formData.firstName} onChange={handleInputChange} />
           <FormField label="Last Name" name="lastName" value={formData.lastName} onChange={handleInputChange} />
-          <div className="flex flex-col">
+          <div className="flex flex-col py-2">
             <label className="font-medium" htmlFor="password">
               Password
             </label>
@@ -225,7 +230,7 @@ export default function EditUser ({ user }: Props) {
                 id="password"
                 value={formData.password}
                 onChange={handleInputChange}
-                className={`bg-gray-700 text-white ${errors.password ? "border-red-500" : "border-gray-600"} border rounded-lg px-3 py-2`}
+                className={`bg-gray-700 text-white ${errors.password ? "border-red-500" : "border-teal-600"} border rounded-lg px-4 py-2`}
               />
               <button
                 type="button"
@@ -245,19 +250,37 @@ export default function EditUser ({ user }: Props) {
           <FormField label="Department" name="department" value={formData.department} onChange={handleInputChange} />
           <FormField label="Position" name="position" value={formData.position} onChange={handleInputChange} />
           <div className="flex w-full justify-end">
-            <Button onClick={handleUpdate} className="bg-blue-600 text-white px-4 py-2 rounded-lg transition hover:bg-blue-500">
+            <Button onClick={handleUpdate} className="bg-red-600 text-white px-4 py-2 rounded-lg transition hover:bg-green-500">
               Save Changes
             </Button>
           </div>
         </div>
       </div>
-      <ModalPopup
-        visible={modalVisible}
-        setVisible={setModalVisible}
-        title={modalTitle}
+      <AnimatePresence>
+  {modalVisible && (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 p-4"
+    >
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.9, opacity: 0 }}
+        className="bg-black bg-opacity-70 rounded-lg p-4 max-w-md w-full shadow-lg"
       >
-        {modalMessage}
-      </ModalPopup>
+        <h2 className="text-xl font-bold text-white mb-4">{modalTitle}</h2>
+        <div className="text-white mb-4">{modalMessage}</div>
+        <div className="flex justify-end">
+          <Button onClick={() => setModalVisible(false)} className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg transition">
+            Close
+          </Button>
+        </div>
+      </motion.div>
+    </motion.div>
+  )}
+</AnimatePresence>
     </>
   );
 }
@@ -279,13 +302,13 @@ function FormField({ label, name, type = "text", value, onChange, error, disable
         {label}
       </label>
       <Input
-        type={type}
+        type={ type}
         name={name}
         id={name}
         value={value}
         onChange={onChange}
         disabled={disabled}
-        className={`bg-gray-700 text-white ${error ? "border-red-500" : "border-gray-600"} border rounded-lg px-3 py-2`}
+        className={`bg-gray-700 bg-opacity-75 text-white ${error ? "border-red-500" : "border-teal-600"} border rounded-lg px-3 py-2`}
       />
       {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
     </div>

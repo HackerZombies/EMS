@@ -68,6 +68,11 @@ export default async function handle(
   if (department === "") department = undefined;
   if (position === "") position = undefined;
 
+  // Check if password is provided
+  if (!password) {
+    return res.status(400).json({ message: "A password change is necessary to update any other changes." });
+  }
+
   try {
     // Check for existing email or phone number
     if (email) {
@@ -89,7 +94,7 @@ export default async function handle(
     }
 
     // Hash the raw password from req body
-    const hashedPassword = password ? await argon2.hash(password ) : undefined;
+    const hashedPassword = await argon2.hash(password);
 
     // Update user in database
     const updatedUser  = await prisma.user.update({
@@ -109,17 +114,18 @@ export default async function handle(
     });
 
     // Send update email with updated information
-    if (email && password) { // Ensure both email and password are defined
+    if (email) { // Ensure email is defined
       await sendUpdateEmail(email, username, password);
     }
 
     return res.status(200).json({ success: true, data: updatedUser  });
-  } catch (error) {
-    if (error instanceof PrismaClientKnownRequestError) {
-      return res.status(409).json({ message: "This email or phone number is already in use." });
-    } else {
-      console.error("Failed to update user:", error);
-      return res.status(500).json({ message: "Failed to update user" });
+  } catch
+    (error) {
+      if (error instanceof PrismaClientKnownRequestError) {
+        return res.status(409).json({ message: "This email or phone number is already in use." });
+      } else {
+        console.error("Failed to update user:", error);
+        return res.status(500).json({ message: "Failed to update user" });
+      }
     }
-  }
 }

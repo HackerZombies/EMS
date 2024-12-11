@@ -126,6 +126,7 @@ const LeaveManagementPage = () => {
     },
     hidden: { opacity: 0, y: 10, filter: "blur(3px)" },
   };
+
   return (
     <>
       <Head>
@@ -185,8 +186,8 @@ const LeaveManagementPage = () => {
       </div>
       <Modal
         visible={visible}
-        setVisible={setVisible}
         title="Leave request updated"
+        onClose={() => setVisible(false)} // Use onClose instead of setVisible
       >
         {message}
       </Modal>

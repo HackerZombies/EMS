@@ -12,7 +12,7 @@ const getEnvVar = (name: string): string => {
 };
 
 // Ensure required environment variables are set for Gmail
-const gmailUser   = getEnvVar('GMAIL_USER');
+const gmailUser  = getEnvVar('GMAIL_USER');
 const gmailPass = getEnvVar('GMAIL_PASS');
 
 // Create a transporter object using Gmail service
@@ -27,7 +27,7 @@ const transporter = nodemailer.createTransport({
 });
 
 // Function to send leave request created email
-export const sendLeaveRequestCreatedEmail = async (to: string, username: string) => {
+const sendLeaveRequestCreatedEmail = async (to: string, username: string) => {
     const mailOptions = {
         from: gmailUser , // Sender address from environment variable
         to,
@@ -43,4 +43,4 @@ export const sendLeaveRequestCreatedEmail = async (to: string, username: string)
     }
 };
 
-export default { sendLeaveRequestCreatedEmail }; // Default export
+export default sendLeaveRequestCreatedEmail; // Default export

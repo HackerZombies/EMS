@@ -2,60 +2,105 @@ import { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/lib/prisma";
 import busboy from "busboy";
 
+// Set the config for bodyParser to false to handle file uploads
 export const config = { api: { bodyParser: false } };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
-    const { submittedBy } = req.query;
+    // Destructure query parameters for pagination
+    const { submittedBy, page = 1, perPage = 10 } = req.query;
 
     try {
+      // Convert page and perPage to integers
+      const pageNumber = parseInt(page as string, 10);
+      const perPageNumber = parseInt(perPage as string, 10);
+
+      // Validate pagination parameters
+      if (isNaN(pageNumber) || isNaN(perPageNumber)) {
+        return res.status(400).json({ error: "Invalid page or perPage parameter" });
+      }
+
+      // Calculate the pagination offset (skip) and limit (take)
+      const skip = (pageNumber - 1) * perPageNumber;
+      const take = perPageNumber;
+
+      // Fetch only metadata (excluding file data) for the documents
       const documents = await prisma.hrDocument.findMany({
         where: {
           submittedBy: String(submittedBy),
         },
+        skip: skip,
+        take: take,
         orderBy: {
           dateSubmitted: 'desc',
         },
+        select: {
+          id: true,
+          filename: true,
+          submittedBy: true,
+          dateSubmitted: true,
+          fileSize: true,
+          status: true,
+          rejectionReason: true, // Optionally include rejection reason
+        },
       });
 
-      return res.status(200).json(documents);
+      // Get total number of documents for pagination info
+      const totalDocuments = await prisma.hrDocument.count({
+        where: {
+          submittedBy: String(submittedBy),
+        },
+      });
+
+      // Calculate the total number of pages
+      const totalPages = Math.ceil(totalDocuments / perPageNumber);
+
+      // Send the response with metadata only and pagination info
+      return res.status(200).json({ documents, totalPages });
     } catch (error) {
+      console.error(error);
       return res.status(500).json({ error: 'Failed to fetch documents' });
     }
   } else if (req.method === 'POST') {
+    // Handling file upload logic (same as before)
+
     let submittedBy: string | undefined;
     let docData: Buffer[] = [];
     let filename: string | undefined;
     let fileSize = 0;
-    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB file size limit
 
-    const bb = busboy({ 
+    const bb = busboy({
       headers: req.headers,
       limits: {
-        fileSize: MAX_FILE_SIZE
-      }
+        fileSize: MAX_FILE_SIZE, // Setting the file size limit
+      },
     });
 
+    // Handle form fields (like submittedBy)
     bb.on("field", (name, val) => {
       if (name === "submittedBy") {
         submittedBy = val;
       }
     });
 
+    // Handle file uploads
     bb.on("file", (name, file, info) => {
       const allowedFileTypes = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.xls', '.xlsx', '.txt', '.csv'];
       const fileExt = info.filename.split('.').pop()?.toLowerCase();
 
+      // Validate the file type
       if (!fileExt || !allowedFileTypes.includes(`.${fileExt}`)) {
-        file.resume(); // Discard the file
+        file.resume(); // Discard the file if not allowed
         return res.status(400).json({ error: "Invalid file type" });
       }
 
+      // Accumulate file data and check the file size during upload
       file.on("data", (data: Buffer) => {
         fileSize += data.length;
-        
+
         if (fileSize > MAX_FILE_SIZE) {
-          file.destroy(); // Stop file upload
+          file.destroy(); // Stop the file upload if it exceeds the max size
           return res.status(413).json({ error: "File too large. Maximum 50MB allowed." });
         }
 
@@ -63,24 +108,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         filename = info.filename;
       });
 
+      // Handle file upload errors
       file.on("error", (err) => {
         console.error("File upload error:", err);
         res.status(500).json({ error: "File upload failed" });
       });
     });
 
+    // After the upload is complete
     bb.on("close", async () => {
       if (!submittedBy) {
         return res.status(400).json({ error: "Submitted By is required" });
       }
-    
+
       if (docData.length === 0 || !filename) {
         return res.status(400).json({ error: "No file uploaded" });
       }
-    
+
+      // Concatenate the file data into one buffer
       const concatenatedBuffer = Buffer.concat(docData);
-    
+
       try {
+        // Save the document to the database
         const hrDocument = await prisma.hrDocument.create({
           data: {
             filename: filename,
@@ -100,7 +149,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             fileSize: true,
           },
         });
-    
+
+        // Respond with the uploaded document data
         res.status(200).json(hrDocument);
       } catch (dbError) {
         console.error("Database error:", dbError);
@@ -108,6 +158,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     });
 
+    // Pipe the request into busboy to handle the upload
     req.pipe(bb);
   } else {
     return res.status(405).json({ error: "Method not allowed" });

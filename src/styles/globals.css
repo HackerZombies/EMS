@@ -25,8 +25,3 @@
   background-color: #ffffff; /* White background for selected option */
   color: #000000; /* Black text color for selected option */
 }
-
-/* styles.css or global.css */
-.backdrop-blur {
-  backdrop-filter: blur(90px); /* Adjust the blur amount as needed */
-}

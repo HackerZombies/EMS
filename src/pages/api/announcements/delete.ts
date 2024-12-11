@@ -1,8 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import prisma from "../../../lib/prisma";
+import { Prisma } from "@prisma/client"; // Import Prisma namespace
 
 // API endpoint for announcement deletion utilizing the announcement ID as the identifier for deletion
-// Utilised POST as NextAuth.js did not allow for DELETE method to work
+// Utilized POST as NextAuth.js did not allow for DELETE method to work
 // Ensures that it also deals with errors accordingly
 export default async function announcementDelete(
   req: NextApiRequest,
@@ -11,25 +12,34 @@ export default async function announcementDelete(
   if (req.method === "POST") {
     try {
       const { announcementID } = req.body;
-      if (!announcementID) {
-        return res
-          .status(400)
-          .json({ err: "Announcement ID not present in Announcements" });
+
+      // Validate the announcementID
+      if (!announcementID || typeof announcementID !== "string") {
+        return res.status(400).json({ error: "Invalid or missing announcement ID." });
       }
 
-      // Ensure the announcementID is treated as a string
+      // Attempt to delete the announcement
       const deletedAnnouncement = await prisma.announcement.delete({
         where: {
-          id: String(announcementID),
+          id: announcementID, // No need to convert to string if it's already a string
         },
       });
 
-      res.status(200).json(deletedAnnouncement);
+      // Return the deleted announcement along with a success message
+      res.status(200).json({ message: "Announcement deleted successfully.", deletedAnnouncement });
     } catch (err) {
       console.error(err);
-      res.status(500).json({ err: "Internal Server Error" });
+      if (err instanceof Prisma.PrismaClientKnownRequestError) {
+        // Check if the error is a Prisma error
+        if (err.code === 'P2025') {
+          // Record not found
+          return res.status(404).json({ error: "Announcement not found." });
+        }
+      }
+      res.status(500).json({ error: "Internal Server Error" });
     }
   } else {
-    res.status(405).json({ err: "Method not permitted" });
+    res.setHeader("Allow", ["POST"]);
+    res.status(405).json({ error: "Method not permitted" });
   }
 }

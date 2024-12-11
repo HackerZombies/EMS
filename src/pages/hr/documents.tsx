@@ -239,24 +239,33 @@ export default function HrDocuments({ hrDocuments }: Props) {
 
 export const getServerSideProps: GetServerSideProps<Props> = async (context) => {
   const session = await getServerSession(context.req, context.res, authOptions);
+  const page = parseInt((context.query.page as string) || '1', 10);
+  const pageSize = 10; // Number of documents per page
+  const skip = (page - 1) * pageSize;
+
   if (session && session.user.role === 'HR') {
-    const hrDocuments = await prisma.hrDocument.findMany({
-      include: {
-        user: {
-          select: {
-            firstName: true,
-            lastName: true,
-            department: true,
-            position: true,
-            username: true,
+    const [hrDocuments, totalDocuments] = await Promise.all([
+      prisma.hrDocument.findMany({
+        include: {
+          user: {
+            select: {
+              firstName: true,
+              lastName: true,
+              department: true,
+              position: true,
+              username: true,
+            },
           },
         },
-      },
-      orderBy: {
-        dateSubmitted: 'desc',
-      },
-    });
-    
+        orderBy: {
+          dateSubmitted: 'desc',
+        },
+        skip,
+        take: pageSize,
+      }),
+      prisma.hrDocument.count(), // Get total count for pagination
+    ]);
+
     const validStatuses = ["Approved", "Rejected", "Pending"] as const;
 
     const documents: HrDocument[] = hrDocuments.map(doc => ({
@@ -267,11 +276,11 @@ export const getServerSideProps: GetServerSideProps<Props> = async (context) => 
       department: doc.user.department || "N/A",
       position: doc.user.position || "N/A",
       dateSubmitted: doc.dateSubmitted.toISOString(),
-      status: (validStatuses.includes(doc.status as typeof validStatuses[number]) ? doc.status : "Pending") as HrDocument['status'], // Ensure status is of the correct type
-      rejectionReason: doc.rejectionReason || undefined, // Optional field for rejection reason
+      status: (validStatuses.includes(doc.status as typeof validStatuses[number]) ? doc.status : "Pending") as HrDocument['status'],
+      rejectionReason: doc.rejectionReason || undefined,
     }));
-    
-    return { props: { hrDocuments: documents } };
+
+    return { props: { hrDocuments: documents, totalDocuments } };
   } else {
     return {
       redirect: {

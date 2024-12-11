@@ -1,24 +1,22 @@
 import Head from "next/head";
 import { FormEvent, useState } from "react";
-import Input from "@/components/Input";
-import Button from "@/components/Button";
-import { Icon } from "@iconify/react";
+import Input from "@/components/Input"; // Assuming this is a styled input component
+import Button from "@/components/Button"; // Assuming this is a styled button component
 import Router from "next/router";
 import BackButton from "@/components/BackButton";
 import Modal from "@/components/Modal";
 
 export default function NewAnnouncement() {
   const [visible, setVisible] = useState(false);
+  const [role, setRole] = useState("EMPLOYEE"); // State for user type selection
 
   // Saving announcements utilizing the announcements/create.ts API endpoint
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const formData = new FormData(event.currentTarget);
-
     const title = formData.get("title");
     const text = formData.get("text");
-    const role = formData.get("role");
 
     if (title === "" || text === "") {
       setVisible(true);
@@ -44,34 +42,64 @@ export default function NewAnnouncement() {
       <Head>
         <title>EMS - New Announcement</title>
       </Head>
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-5 p-5 bg-gradient-to-b from-gray-800 to-black bg-opacity-50 min-h-screen">
         <BackButton />
-        <h1 className="text-4xl font-bold">New Announcement</h1>
-        <form onSubmit={onSubmit} className="flex flex-col gap-5">
-          <label className="flex flex-col text-left">
+        <h1 className="text-4xl font-bold text-white">New Announcement</h1>
+        <form onSubmit={onSubmit} className="flex flex-col gap-5 bg-gray-900 p-6 rounded-lg shadow-lg">
+          <label className="flex flex-col text-left text-white">
             Title
-            <Input name="title" type="text" />
+            <Input name="title" type="text" className="mt-1 p-2 rounded-lg bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-green-500" />
           </label>
-          <label className="flex flex-col text-left">
+          <label className="flex flex-col text-left text-white">
             Text
-            <Input name="text" type="text" />
+            <textarea
+              name="text"
+              rows={4} // Set initial rows
+              className="mt-1 p-2 rounded-lg bg-gray-800 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-green-500 resize-none" // Prevent resizing in both directions
+              placeholder="Write your announcement here..."
+              onInput={(e) => {
+                e.currentTarget.style.height = "auto"; // Reset height
+                e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`; // Set height to scrollHeight
+              }}
+            />
           </label>
-          <label className="flex flex-col text-left">
-            User Type
-            <select
-              defaultValue={"EMPLOYEE"}
-              id="role"
-              name="role"
-              required
-              className="rounded-xl bg-gray-200 bg-opacity-50 px-3 py-2 shadow-lg outline-none transition hover:bg-opacity-70"
-            >
-              <option value="EMPLOYEE">All Users</option>
-              <option value="HR">HR Employee</option>
-              <option value="TECHNICIAN">Technician</option>
-            </select>
-          </label>
-          <Button type="submit">
-            Submit <Icon icon="ph:arrow-right-bold"></Icon>
+          <fieldset className="flex flex-col text-left text-white">
+            <legend className="mb-2">User  Type</legend>
+            <div className="flex gap-4">
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  value="EMPLOYEE"
+                  checked={role === "EMPLOYEE"}
+                  onChange={() => setRole("EMPLOYEE")}
+                  className="mr-2 text-green-500 focus:ring-green-500"
+                />
+                All Users
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  value="HR"
+                  checked={role === "HR"}
+                  onChange={() => setRole("HR")}
+                  className="mr-2 text-green-500 focus:ring-green-500"
+                />
+                HR Employee
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  value="TECHNICIAN"
+                  checked={role === "TECHNICIAN"}
+                  onChange={() => setRole("TECHNICIAN")}
+                  className="mr-2 text-green-500 focus:ring-green-500"
+                />
+                Technician
+              </label>
+            </div>
+          </fieldset>
+          <Button type="submit" className="bg-gradient-to-r from-green-400 to-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-lg transition-transform transform hover:scale-105 hover :shadow-xl">
+            Submit
           </Button>
         </form>
       </div>

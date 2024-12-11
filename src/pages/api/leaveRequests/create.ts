@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/lib/prisma";
-import { sendLeaveRequestCreatedEmail } from "@/lib/sendLeaveRequestCreatedEmail"; // Import the sendLeaveRequestCreatedEmail function
+import sendLeaveRequestCreatedEmail from "@/lib/sendLeaveRequestCreatedEmail"; // Import the sendLeaveRequestCreatedEmail function
 
 export default async function handler(
   req: NextApiRequest,

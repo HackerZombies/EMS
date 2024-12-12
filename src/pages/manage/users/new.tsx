@@ -179,7 +179,6 @@ export default function CreateUser () {
               <option value="EMPLOYEE">Employee</option>
               <option value="HR">HR Employee</option>
               <option value="TECHNICIAN">Technician</option>
-              <option value="MANAGER">Manager</option>
             </select>
           </div>
           <div className="flex w-full justify-end">

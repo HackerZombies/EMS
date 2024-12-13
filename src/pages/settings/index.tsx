@@ -40,25 +40,25 @@ export default function Settings({ user }: Props) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#1a1a2e] to-[#16213e] py-12 px-4 sm:px-6 lg:px-8">
+    <div className="rounded-lg min-h-screen bg-gradient-to-br from-gray-900 to-black bg-opacity-20 py-12 px-4 sm:px-6 lg:px-8">
       <Head>
         <title>Profile Settings | EMS</title>
       </Head>
 
-      <div className="max-w-4xl mx-auto bg-[#0f3460] bg-opacity-50 backdrop-blur-lg rounded-2xl shadow-2xl overflow-hidden">
+      <div className="max-w-4xl mx-auto bg-black bg-opacity-20 backdrop-blur-lg rounded-2xl shadow-2xl overflow-hidden">
         {/* Profile Header */}
         <div className="relative p-8">
           <div className="absolute top-4 right-4 flex space-x-3">
             <button 
               onClick={() => router.push("/settings/edit")}
-              className="bg-[#e94560] text-white p-2 rounded-full hover:bg-opacity-80 transition-colors"
+              className="bg-teal-600 text-white p-2 rounded-full hover:bg-gray-500 transition-colors"
               title="Edit Profile"
             >
               <FaUserEdit className="text-2xl" />
             </button>
             <button 
               onClick={handleSignOut}
-              className="bg-red-600 text-white p-2 rounded-full hover:bg-opacity-80 transition-colors"
+              className="bg-red-600 text-white p-2 rounded-full hover:bg-gray-500 transition-colors"
               title="Sign Out"
             >
               <FaSignOutAlt className="text-2xl" />
@@ -72,14 +72,14 @@ export default function Settings({ user }: Props) {
                 alt="/default-avatar.png"
                 layout="fill" 
                 objectFit="cover" 
-                className="rounded-full border-4 border-[#e94560]"
+                className="rounded-full border-4 border-green-600 hover:border-green-500"
               />
             </div>
             <div>
-              <h1 className="text-4xl font-bold text-gray-100">
+              <h1 className="text-4xl font-bold text-white">
                 {user.firstName} {user.lastName}
               </h1>
-              <p className="text-xl text-gray-400">
+              <p className="text-xl text-gray-300">
                 {renderRoleLabel(user.role)}
               </p>
             </div>
@@ -88,32 +88,32 @@ export default function Settings({ user }: Props) {
           {/* Profile Details Grid */}
           <div className="grid md:grid-cols-2 gap-4">
             <ProfileDetailCard 
-              icon={<FaIdBadge className="text-[#e94560]" />}
-              label="User ID"
+              icon={<FaIdBadge className="text-teal-600" />}
+              label="User  ID"
               value={user.username}
             />
             <ProfileDetailCard 
-              icon={<FaEnvelope className="text-[#e94560]" />}
+              icon={<FaEnvelope className="text-green-600" />}
               label="Email"
               value={user.email}
             />
             <ProfileDetailCard 
-              icon={<FaPhone className="text-[#e94560]" />}
+              icon={<FaPhone className="text-teal-400" />}
               label="Phone Number"
               value={user.phoneNumber}
             />
             <ProfileDetailCard 
-              icon={<FaCalendarAlt className="text-[#e94560]" />}
+              icon={<FaCalendarAlt className="text-yellow-600" />}
               label="Account Created"
               value={new Date(user.dateCreated).toLocaleDateString()}
             />
             <ProfileDetailCard 
-              icon={<FaBuilding className="text-[#e94560]" />}
+              icon={<FaBuilding className="text-red-600" />}
               label="Department"
               value={user.department || "Not Specified"}
             />
             <ProfileDetailCard 
-              icon={<FaBriefcase className="text-[#e94560]" />}
+              icon={<FaBriefcase className="text-orange-600" />}
               label="Position"
               value={user.position || "Not Specified"}
             />
@@ -135,11 +135,11 @@ const ProfileDetailCard = ({
   value: string 
 }) => {
   return (
-    <div className="bg-[#16213e] bg-opacity-50 p-4 rounded-xl flex items-center space-x-4">
+    <div className="bg-gray-800 bg-opacity-60 p-4 rounded-xl flex items-center space-x-4">
       <div className="text-3xl">{icon}</div>
       <div>
         <p className="text-sm text-gray-400">{label}</p>
-        <p className="text-lg font-semibold text-gray-100">{value}</p>
+        <p className="text-lg font-semibold text-white">{value}</p>
       </div>
     </div>
   );

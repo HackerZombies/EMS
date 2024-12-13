@@ -83,7 +83,7 @@ export default function PersonalInfo({ user }: Props) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#1a1a2e] to-[#16213e] py-12 px-4 sm:px-6 lg:px-8">
+    <div className="rounded-lg min-h-screen bg-gradient-to-br from-gray-900 to-black bg-opacity-20 py-12 px-4 sm:px-6 lg:px-8">
       <Head>
         <title>Update Password | Secure Account</title>
       </Head>
@@ -97,32 +97,32 @@ export default function PersonalInfo({ user }: Props) {
         </div>
       )}
 
-      <div className="max-w-md mx-auto bg-[#0f000046] bg-opacity-10 backdrop-blur-lg shadow-2xl rounded-2xl overflow-hidden border border-[#235C91]/50">
+      <div className="max-w-md mx-auto bg-black bg-opacity-20 backdrop-blur-lg shadow-2xl rounded-2xl overflow-hidden">
         {/* Back Button Added Here */}
         <div className="absolute top-4 left-4">
           <button
             onClick={() => router.push('/settings')}
-            className="bg-[#16213e] bg-opacity-50 p-2 rounded-full hover:bg-opacity-70 transition-all duration-300 flex items-center justify-center"
+            className="bg-gray-600 bg-opacity-15 text-white p-2 rounded-full hover:bg-gray-500 transition-colors"
             aria-label="Go Back"
           >
-            <FaArrowLeft className="text-gray-200 text-xl" />
+            <FaArrowLeft className="text-2xl" />
           </button>
         </div>
 
         <div className="p-8">
           <div className="text-center mb-8">
-            <FaLock className="mx-auto text-5xl text-[#e94560] mb-4" />
-            <h2 className="text-3xl font-extrabold text-gray-100">
+            <FaLock className="mx-auto text-5xl text-teal-600 mb-4" />
+            <h2 className="text-3xl font-extrabold text-white">
               Update Password
             </h2>
-            <p className="mt-2 text-sm text-gray-400">
+            <p className="mt-2 text -sm text-gray-400">
               Enhance your account security
             </p>
           </div>
 
           <div className="space-y-6">
             {/* Personal Info Display (Read-Only) */}
-            <div className="bg-[#16213e] bg-opacity-50 p-4 rounded-lg">
+            <div className="bg-gray-800 bg-opacity-60 p-4 rounded-lg">
               <div className="flex justify-between items-center mb-2">
                 <span className="text-gray-400">Name</span>
                 <span className="font-semibold text-gray-200">{user?.firstName} {user?.lastName}</span>
@@ -147,7 +147,7 @@ export default function PersonalInfo({ user }: Props) {
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full pr-10 bg-[#16213e] border-[#535C91] text-gray-200 focus:ring-[#e94560] focus:border-[#e94560] rounded-md"
+                  className="block w-full pr-10 bg-gray-800 border-gray-600 text-gray-200 focus:ring-teal-600 focus:border-teal-600 rounded-md"
                   placeholder="Enter new password"
                 />
                 <div 
@@ -185,7 +185,7 @@ export default function PersonalInfo({ user }: Props) {
                   type={showConfirmPassword ? "text" : "password"}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="block w-full pr-10 bg-[#16213e] border-[#535C91] text-gray-200 focus:ring-[#e94560] focus:border-[#e94560] rounded-md"
+                  className="block w-full pr-10 bg-gray-800 border-gray-600 text-gray-200 focus:ring-teal-600 focus:border-teal-600 rounded-md"
                   placeholder="Confirm new password" />
                 <div 
                   className="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer text-gray-400"
@@ -203,7 +203,7 @@ export default function PersonalInfo({ user }: Props) {
             <button
               onClick={handleUpdate}
               disabled={isSubmitting}
-              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#e94560] hover:bg-[#d83d54] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#e94560] transition-colors duration-300"
+              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-600 transition-colors duration-300"
             >
               {isSubmitting ? "Updating..." : "Update Password"}
             </button>
@@ -227,7 +227,7 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
   }
   const user = await prisma.user.findUnique({
     where: {
-      username: session.user?.username,
+      username : session.user?.username,
     },
   });
   if (!user) {

@@ -34,7 +34,6 @@ export default function Settings({ user }: Props) {
       "EMPLOYEE": "Employee",
       "HR": "HR Professional",
       "TECHNICIAN": "Technician",
-      "ADMIN": "Administrator"
     };
     return roleLabels[role] || role;
   };
@@ -48,22 +47,20 @@ export default function Settings({ user }: Props) {
       <div className="max-w-4xl mx-auto bg-black bg-opacity-20 backdrop-blur-lg rounded-2xl shadow-2xl overflow-hidden">
         {/* Profile Header */}
         <div className="relative p-8">
-          <div className="absolute top-4 right-4 flex space-x-3 flex-wrap">
+          <div className="absolute top-4 right-4 flex space-x-3">
             <button 
               onClick={() => router.push("/settings/edit")}
-              className="bg-teal-600 text-white p-2 rounded-full hover:bg-gray-500 transition-colors w-32"
+              className="bg-teal-600 bg-opacity-10 text-white p-2 rounded-full"
               title="Edit Profile"
             >
               <FaUserEdit className="text-2xl" />
-              <span className="hidden md:inline"> Edit</span>
             </button>
             <button 
               onClick={handleSignOut}
-              className="bg-red-600 text-white p-2 rounded-full hover:bg-gray-500 transition-colors w-32"
+              className=" text-white p-2 rounded-full"
               title="Sign Out"
             >
               <FaSignOutAlt className="text-2xl" />
-              <span className="hidden md:inline"> Sign Out</span>
             </button>
           </div>
 
@@ -71,7 +68,7 @@ export default function Settings({ user }: Props) {
             <div className="w-32 h-32 relative">
               <Image 
                 src={"/default-avatar.png"}
-                alt="User  Avatar"
+                alt="/default-avatar.png"
                 layout="fill" 
                 objectFit="cover" 
                 className="rounded-full border-4 border-green-600 hover:border-green-500"

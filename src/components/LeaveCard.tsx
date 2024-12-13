@@ -37,18 +37,18 @@ const LeaveCard = ({ leaveData }: Props) => {
 
   return (
     <div
-      className="flex cursor-pointer flex-col items-start justify-between gap-3 rounded-2xl bg-gray-800 bg-opacity-80 p-4 text-white shadow-lg transition-transform transform hover:scale-105"
+      className="flex cursor-pointer flex-col items-start justify-between gap-4 rounded-2xl bg-gray-800 bg-opacity-80 p-5 text-white shadow-lg transition-transform transform hover:scale-105"
       onClick={handleClick}
     >
       <div className="flex w-full items-center justify-between">
         <div className="grid w-full grid-cols-3 items-center">
           <div className="flex flex-col">
-            <span className="text-lg">{formatDate(leaveData.startDate)}</span>
-            <span className="font-bold">{leaveData.reason}</span>
+            <span className="text-lg font-semibold">{formatDate(leaveData.startDate)}</span>
+            <span className="text-md">{leaveData.reason}</span>
           </div>
 
-          <div>
-            <span className="flex flex-col items-center text-2xl font-bold">
+          <div className="flex flex-col items-center">
+            <span className="text-2xl font-bold">
               {duration} {duration === 1 ? "day" : "days"}
             </span>
           </div>
@@ -73,13 +73,12 @@ const LeaveCard = ({ leaveData }: Props) => {
       </div>
 
       {expanded && (
-        <div className="mt-2 w-full border-t border-gray-600 text-sm">
-          <p className="my-5 text-lg font-bold">Leave Request Details:</p>
-          <p>Start Date: {formatDate(leaveData.startDate)}</p>
-          <p>End Date: {formatDate(leaveData.endDate)}</p>
-          <p>
-            Duration:{" "}
-            {calculateDuration(leaveData.startDate, leaveData.endDate)} days
+        <div className="mt-2 w-full border-t border-gray-600 text-sm pt-2">
+          <p className="my-1 text-lg font-bold">Leave Request Details:</p>
+          <p className="text-md">Start Date: {formatDate(leaveData.startDate)}</p>
+          <p className="text-md">End Date: {formatDate(leaveData.endDate)}</p>
+          <p className="text-md">
+            Duration: {calculateDuration(leaveData.startDate, leaveData.endDate)} days
           </p>
         </div>
       )}

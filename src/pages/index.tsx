@@ -1,100 +1,20 @@
-import Head from "next/head";
-import Link from "next/link";
-import prisma from "@/lib/prisma";
-import { GetServerSideProps } from "next";
+import { GetServerSideProps, GetServerSidePropsContext } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "./api/auth/[...nextauth]";
-import { motion } from "framer-motion";
-import { Icon } from "@iconify/react/dist/iconify.js";
-import { Announcement } from "@prisma/client";
-import TimeAgo from "javascript-time-ago";
+import prisma from "@/lib/prisma";
+import HomePage from "@/components/Home"; // Ensure this matches the file name
+import { Event, Announcement } from "@/types/events";
 
-type Event = {
-  type: string;
-  icon: string;
-  date: Date;
-  title: string;
-  text: string;
-  linkTo?: string;
-};
-
-type Props = {
-  events: Event[];
-};
-
-export default function Home({ events }: Props) {
-  const list = {
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.07,
-      },
-    },
-    hidden: {
-      opacity: 0,
-      transition: {
-        when: "afterChildren",
-      },
-    },
-  };
-
-  const item = {
-    visible: {
-      opacity: 1,
-      y: 0,
-      filter: "blur(0px)",
-      transition: { type: "tween" },
-    },
-    hidden: { opacity: 0, y: 10, filter: "blur(3px)" },
-  };
-
-  const timeAgo = new TimeAgo("en-US");
-
-  return (
-    <>
-      <Head>
-        <title>Home</title>
-      </Head>
-      <div className="flex flex-col gap-5">
-        <h1 className="text-4xl font-semibold">Home</h1>
-        <motion.div
-          className="flex flex-col gap-2"
-          initial="hidden"
-          animate="visible"
-          variants={list}
-        >
-          {events.map(({ type, icon, date, title, text, linkTo }, index) => (
-            <motion.div variants={item} key={index}>
-              <Link
-                scroll={false}
-                href={linkTo ? linkTo : ""}
-                className="flex flex-col gap-1 rounded-2xl bg-white bg-opacity-80 p-3 text-black"
-              >
-                <div className="flex flex-row items-center justify-between opacity-50">
-                  <div className="flex flex-row items-center gap-1 text-sm font-semibold uppercase">
-                    <Icon className="text-lg" icon={icon} />
-                    {type}
-                  </div>
-                  <div className="flex flex-row items-center gap-1 font-medium ">
-                    <Icon className="text-lg" icon="ph:clock" />
-                    {timeAgo.format(date)}
-                  </div>
-                </div>
-                <h1 className="text-2xl font-bold">{title}</h1>
-                <p>{text}</p>
-              </Link>
-            </motion.div>
-          ))}
-        </motion.div>
-      </div>
-    </>
-  );
+export default function Home({ events, user, currentPage, totalPages }: { events: Event[], user: any, currentPage: number, totalPages: number }) {
+  return <HomePage events={events} user={user} currentPage={currentPage} totalPages={totalPages} />;
 }
 
-export const getServerSideProps: GetServerSideProps = async (context) => {
+export const getServerSideProps: GetServerSideProps = async (context: GetServerSidePropsContext) => {
   const session = await getServerSession(context.req, context.res, authOptions);
-
   const events: Event[] = [];
+  const page = parseInt((context.query.page as string) || "1", 10);
+  const limit = 5; // Number of events per page
+  const skip = (page - 1) * limit; // Calculate how many events to skip
 
   if (session) {
     const user = await prisma.user.findUnique({
@@ -103,22 +23,8 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
       },
     });
 
-    // pull in events of all types
-
-    // welcome
-    if (user) {
-      events.push({
-        type: "welcome",
-        icon: "ph:hand-waving-bold",
-        date: user.dateCreated,
-        title: "Welcome to EMS!",
-        text: "This is the Home page. Here, you can stay informed about all current happenings at a glance. The left sidebar provides easy access to all of the functionality, including booking leave, document viewing, and accessing help.",
-      });
-    }
-
-    // announcements
-    var announcements: Announcement[];
-
+    // Fetch announcements
+    let announcements: Announcement[] = [];
     if (session?.user) {
       if (session.user.role === "HR") {
         announcements = await prisma.announcement.findMany();
@@ -127,8 +33,6 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
           where: { role: { in: [session.user.role, "EMPLOYEE"] } },
         });
       }
-    } else {
-      announcements = [];
     }
 
     announcements.forEach((announcement) => {
@@ -142,11 +46,14 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
       });
     });
 
-    // tickets
-    const tickets = await prisma.ticket.findMany({
+    // Fetch tickets
+    const
+    tickets = await prisma.ticket.findMany({
       where: {
         userUsername: session.user.username,
       },
+      skip,
+      take: limit,
     });
 
     tickets.forEach((ticket) => {
@@ -154,12 +61,13 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
         type: "help",
         icon: "ph:chats-circle-bold",
         date: ticket.dateCreated,
-        title: "You created a ticket (#" + ticket.id + ")",
+        title: `You created a ticket (#${ticket.id})`,
         text: ticket.subject,
-        linkTo: "/help/ticket/" + ticket.id,
+        linkTo: `/help/ticket/${ticket.id}`,
       });
     });
 
+    // Fetch messages
     const messages = await prisma.message.findMany({
       where: {
         Ticket: {
@@ -172,6 +80,8 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
       include: {
         User: true,
       },
+      skip,
+      take: limit,
     });
 
     messages.forEach((message) => {
@@ -179,23 +89,19 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
         type: "help",
         icon: "ph:chats-circle-bold",
         date: message.dateCreated,
-        title:
-          "Message recieved from " +
-          message.User.firstName +
-          " " +
-          message.User.lastName +
-          " on Ticket #" +
-          message.ticketId,
+        title: `Message received from ${message.User.firstName} ${message.User.lastName} on Ticket #${message.ticketId}`,
         text: message.text,
-        linkTo: "/help/ticket/" + message.ticketId,
+        linkTo: `/help/ticket/${message.ticketId}`,
       });
     });
 
-    // leave requests
+    // Fetch leave requests
     const leaveRequests = await prisma.leaveRequest.findMany({
       where: {
         userUsername: session.user.username,
       },
+      skip,
+      take: limit,
     });
 
     leaveRequests.forEach((leaveRequest) => {
@@ -204,13 +110,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
         icon: "ph:airplane-takeoff-bold",
         date: leaveRequest.dateCreated,
         title: "You submitted a leave request",
-        text:
-          leaveRequest.startDate.toDateString() +
-          " - " +
-          leaveRequest.endDate.toDateString() +
-          " (" +
-          leaveRequest.reason +
-          ")",
+        text: `${leaveRequest.startDate.toDateString()} - ${leaveRequest.endDate.toDateString()} (${leaveRequest.reason})`,
         linkTo: "/leave",
       });
 
@@ -218,24 +118,15 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
         events.push({
           type: "leave",
           icon: "ph:airplane-takeoff-bold",
-          date: leaveRequest.dateCreated,
-          title:
-            "Your leave request has been " +
-            leaveRequest.requestStatus.toLowerCase(),
-          text:
-            leaveRequest.startDate.toDateString() +
-            " - " +
-            leaveRequest.endDate.toDateString() +
-            " (" +
-            leaveRequest.reason +
-            ")",
+          date: leaveRequest.dateResponded,
+          title: `Your leave request has been ${leaveRequest.requestStatus.toLowerCase()}`,
+          text: `${leaveRequest.startDate.toDateString()} - ${leaveRequest.endDate.toDateString()} (${leaveRequest.reason})`,
           linkTo: "/leave",
         });
       }
     });
 
-    // documents
-
+    // Fetch documents
     const documents = await prisma.document.findMany({
       where: {
         userUsername: session.user.username,
@@ -246,6 +137,8 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
         userUsername: true,
         dateCreated: true,
       },
+      skip,
+      take: limit,
     });
 
     documents.forEach((document) => {
@@ -258,8 +151,16 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
         linkTo: "/documents",
       });
     });
-    events.sort((a, b) => a.date.getTime() - b.date.getTime()).reverse();
+
+    events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
 
-  return { props: { events } };
+  return { 
+    props: { 
+      events,
+      user: session?.user || null,
+      currentPage: page,
+      totalPages: Math.ceil(events.length / limit) // Calculate total pages
+    } 
+  };
 };

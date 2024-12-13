@@ -46,19 +46,19 @@ export default function Documents({ documents }: Props) {
       <Head>
         <title>EMS - Documents</title>
       </Head>
-      <div className="flex grow flex-col gap-3">
-        <h1 className="text-4xl font-semibold">Documents</h1>
-        {documentList.length == 0 ? (
+      <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black p-5">
+        <h1 className="text-4xl font-semibold text-gray-100 mb-5">Payslips</h1>
+        {documentList.length === 0 ? (
           <div className="flex grow flex-col items-center justify-center gap-2 text-center text-neutral-400">
             <Icon icon="ph:file-text-light" width="8em" />
-            <h1 className="text-2xl font-semibold">No documents</h1>
+            <h1 className="text-2xl font-semibold text-gray-100">No Payslip documents</h1>
             <p className="text-neutral-500">
               Check back later to see if any have been uploaded.
             </p>
           </div>
         ) : (
           <motion.div
-            className="flex flex-col gap-2"
+            className="flex flex-col gap-4"
             initial="hidden"
             animate="visible"
             variants={list}
@@ -66,16 +66,21 @@ export default function Documents({ documents }: Props) {
             {documentList.map((document) => (
               <motion.div
                 key={document.id}
-                className="document flex flex-row items-center justify-between gap-4 rounded-2xl bg-white bg-opacity-80 p-3 text-black"
+                className="flex flex-row items-center justify-between gap-4 rounded-2xl bg-gray-800 bg-opacity-90 p-4 text-white shadow-lg transition-transform transform hover:scale-105 hover:shadow-xl"
                 variants={item}
               >
                 <div>
-                  <h1 className="text-xl font-semibold">{document.filename}</h1>
-                  {document.dateCreated.toLocaleString()}
+                  <h1 className="text-xl font-semibold text-white">{document.filename}</h1>
+                  <p className="text-sm text-gray-400">
+                    {new Date(document.dateCreated).toLocaleString()}
+                  </p>
                 </div>
                 <div>
                   <a href={`/api/documents/retrieve?id=${document.id}`}>
-                    <Button>Download</Button>
+                    <Button className="flex items-center justify-center bg-gradient-to-r from-green-500 to-green-700 text-white rounded-lg px-4 py-2 shadow-md hover:shadow-lg transition-transform transform hover:scale-105">
+                      <Icon icon="ph:download" className="mr-2" />
+                      Download
+                    </Button>
                   </a>
                 </div>
               </motion.div>

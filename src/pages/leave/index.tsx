@@ -13,10 +13,11 @@ export default function Leave() {
 
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [totalLeaveDuration, setTotalLeaveDuration] = useState(0);
+  const [balance, setBalance] = useState(0);
 
   useEffect(() => {
     const fetchLeaveRequests = () => {
-      fetch (`/api/leaveRequests?userUsername=${session?.user?.username}`)
+      fetch(`/api/leaveRequests?userUsername=${session?.user?.username}`)
         .then((res) => res.json())
         .then((data: any) => {
           const sortedData = data.sort(
@@ -48,19 +49,6 @@ export default function Leave() {
     fetchLeaveRequests();
   }, [session]);
 
-  const calculateDurationInDays = (
-    startDate: string,
-    endDate: string,
-  ): number => {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const durationInMilliseconds = end.getTime() - start.getTime();
-    const durationInDays = durationInMilliseconds / (1000 * 60 * 60 * 24);
-    return Math.round(durationInDays);
-  };
-
-  const [balance, setBalance] = useState(0);
-
   useEffect(() => {
     const fetchBalance = async () => {
       try {
@@ -79,6 +67,17 @@ export default function Leave() {
 
     fetchBalance();
   }, [session]);
+
+  const calculateDurationInDays = (
+    startDate: string,
+    endDate: string,
+  ): number => {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const durationInMilliseconds = end.getTime() - start.getTime();
+    const durationInDays = durationInMilliseconds / (1000 * 60 * 60 * 24);
+    return Math.round(durationInDays);
+  };
 
   const list = {
     visible: {
@@ -99,10 +98,9 @@ export default function Leave() {
     visible: {
       opacity: 1,
       y: 0,
-      filter: "blur(0px)",
       transition: { type: "tween" },
     },
-    hidden: { opacity: 0, y: 10, filter: "blur(3px)" },
+    hidden: { opacity: 0, y: 10 },
   };
 
   return (
@@ -110,18 +108,18 @@ export default function Leave() {
       <Head>
         <title>EMS - Leave</title>
       </Head>
-      <div className="flex grow flex-col gap-5 bg-gray-900 p-5 rounded-lg shadow-lg">
-        <div className="flex justify-between">
-          <h1 className="text-4xl font-semibold text-white">Leave</h1>
+      <div className="flex flex-col gap-5 p-5 bg-gradient-to-b bg-opacity-20 from-gray-800 to-black min-h-screen rounded-lg">
+        <div className="flex flex-col md:flex-row justify-between items-center">
+          <h1 className="text-3xl md:text-4xl p-2 font-semibold text-white">Leave</h1>
           <Link scroll={false} href="/leave/new">
-            <GreenButton>New Leave Request</GreenButton>
+            <button className="bg-gradient-to-r from-green-400 to-green-600 text-white font-bold py-2 px-4 rounded-2xl shadow-lg transition-transform transform hover:scale-105 hover:shadow-xl mt-2 md:mt-0">
+              New Leave Request
+            </button>
           </Link>
         </div>
         <div>
-          <h1 className="text-white">
-            <b>Leave Balance:</b> Granted: {balance} days | Used:{" "}
-            {totalLeaveDuration} days | Remaining:{" "}
-            {balance - totalLeaveDuration} days
+          <h1 className="text-white text-bold">
+            <b>Leave Balance:</b> Granted: {balance} days | Used: {totalLeaveDuration} days | Remaining: {balance - totalLeaveDuration} days
           </h1>
         </div>
         {leaveRequests.length === 0 ? (
@@ -129,8 +127,7 @@ export default function Leave() {
             <Icon icon="ph:airplane-takeoff-light" width="8em" />
             <h1 className="text-2xl font-semibold text-white">No leave requests</h1>
             <p className="text-neutral-500">
-              Click &apos;New Leave Request&apos; in the top right to create
-              one.
+              Click &apos;New Leave Request&apos; in the top right to create one.
             </p>
           </div>
         ) : (

@@ -1,5 +1,4 @@
 import { Icon } from "@iconify/react";
-import { motion } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
 import NavItem from "./NavItem";
@@ -29,24 +28,16 @@ export default function MobileNavigation({
 }: MobileNavigationProps) {
   return (
     <>
-      {/* Overlay for full-screen navigation */}
+      {/* Overlay for half-screen navigation */}
       {navbarOpen && (
-        <motion.div
+        <div
           className="fixed inset-0 z-10 bg-black bg-opacity-50 backdrop-blur-sm"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
           onClick={() => setNavbarOpen(false)}
         />
       )}
       {/* Top Header for Mobile */}
       {!navbarOpen && (
-        <motion.div
-          key="menubar"
-          initial={{ opacity: 0, y: -30 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -30 }}
-          transition={{ ease: "easeInOut", duration: 0.2 }}
+        <div
           className={`fixed z-20 flex w-full items-center justify-between ${headerBgClass} p-4 shadow-md`}
         >
           <button onClick={() => setNavbarOpen(true)} className={textClass}>
@@ -59,17 +50,12 @@ export default function MobileNavigation({
           <Link href="/settings" className={textClass}>
             <Icon icon="ph:user" className="text-2xl" />
           </Link>
-        </motion.div>
+        </div>
       )}
-      {/* Full Navigation Overlay */}
+      {/* Half-Screen Navigation Overlay */}
       {navbarOpen && (
-        <motion.div
-          key="mobile-navbar"
-          initial={{ x: "-100%" }}
-          animate={{ x: 0 }}
-          exit={{ x: "-100%" }}
-          transition={{ type: "tween", duration: 0.3 }}
-          className={`fixed inset-0 z-30 w-full h-full ${navBgClass} transform transition-transform duration-300 ease-in-out overflow-y-auto`}
+        <div
+          className={`fixed top-0 left-0 z-30 w-1/2 h-full ${navBgClass} overflow-y-auto`}
         >
           {/* Mobile Navbar Header */}
           <header className={`flex items-center justify-between p-4 ${headerBgClass}`}>
@@ -116,9 +102,8 @@ export default function MobileNavigation({
               className={textClass}
             />
           </div>
-        </motion.div>
+        </div>
       )}
     </>
   );
 }
-

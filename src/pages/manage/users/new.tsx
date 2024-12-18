@@ -2,7 +2,6 @@ import Head from "next/head";
 import axios from "axios";
 import { SetStateAction, useState } from "react";
 import { useRouter } from "next/router";
-import { Eye, EyeOff } from 'lucide-react';
 import BackButton from "@/components/BackButton";
 import Input from "@/components/Input";
 import Button from "@/components/Button";
@@ -41,7 +40,7 @@ export default function CreateUser () {
     position: "",
     role: "EMPLOYEE",
   });
-  const [showPassword, setShowPassword] = useState(false);
+  const [passwordGenerated, setPasswordGenerated] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [visible, setVisible] = useState(false);
   const [title, setTitle] = useState("");
@@ -57,8 +56,24 @@ export default function CreateUser () {
     }));
   };
 
-  const togglePasswordVisibility = () => {
-    setShowPassword(!showPassword);
+  const generateSecurePassword = (length = 12) => {
+    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+";
+    let password = "";
+    for (let i = 0; i < length; i++) {
+      const randomIndex = Math.floor(Math.random() * charset.length);
+      password += charset[randomIndex];
+    }
+    return password;
+  };
+
+  const handleGeneratePassword = () => {
+    const newPassword = generateSecurePassword();
+    setFormData((prevData) => ({
+      ...prevData,
+      password: newPassword,
+    }));
+    setPasswordGenerated(true);
+    setTimeout(() => setPasswordGenerated(false), 3000); // Reset after 3 seconds
   };
 
   const handleCreate = async () => {
@@ -69,7 +84,7 @@ export default function CreateUser () {
       try {
         const response = await axios.post("/api/users/newUser ", formData);
         if (response.status === 200) {
-          setTitle("User  created");
+          setTitle("User  Created");
           setMessage(
             <div className="flex flex-col gap-3 text-center">
               <p className="text-green-500 text-lg">
@@ -100,7 +115,7 @@ export default function CreateUser () {
             setMessage(
               <div className="text-center">
                 <p className="text-red-500 text-lg">
-                  { data?.message || "An unexpected error occurred."}
+                  {data?.message || "An unexpected error occurred."}
                 </p>
               </div>
             );
@@ -109,7 +124,7 @@ export default function CreateUser () {
           setVisible(true);
         } else {
           console.error("Error creating user:", error);
-          setTitle("Error");
+          setTitle("Error ");
           setMessage(
             <div className="text-center">
               <p className="text-red-500 text-lg">An unexpected error occurred. Please try again.</p>
@@ -140,21 +155,19 @@ export default function CreateUser () {
               Password
             </label>
             <div className="relative">
-              <Input
-                type={showPassword ? "text" : "password"}
-                name="password"
-                id="password"
-                value={formData.password}
-                onChange={handleInputChange}
-                className={`bg-gray-700 text-white ${errors.password ? "border-red-500" : "border-gray-600"} border rounded-lg px-3 py-2`}
-              />
-              <button
-                type="button"
-                onClick={togglePasswordVisibility}
-                className="absolute right-2 top-1/2 transform -translate-y-1/2"
-              >
-                {showPassword ? <EyeOff size={20} color="white" /> : <Eye size={20} color="white" />}
-              </button>
+            <Input
+  type="password"
+  name="password"
+  id="password"
+  value={formData.password}
+  onChange={handleInputChange}
+  className={`bg-gray-700 text-white border rounded-lg px-3 py-2 ${errors.password ? "border-red-500" : "border-gray-600"}`}
+  onCopy={(e: React.ClipboardEvent<HTMLInputElement>) => e.preventDefault()} // Prevent copy
+  onPaste={(e: React.ClipboardEvent<HTMLInputElement>) => e.preventDefault()} // Prevent paste
+/>
+              <Button onClick={handleGeneratePassword} className="absolute right-0 top-1/2 transform -translate-y-1/2 bg-red-600 text-white px-4 py-2 rounded transition hover:bg-green-500">
+                {passwordGenerated ? "Password Generated!" : "Generate Password"}
+              </Button>
             </div>
             {errors.password && <p className="text-red-500 text-sm mt-1">{errors.password}</p>}
           </div>
@@ -189,13 +202,13 @@ export default function CreateUser () {
         </div>
       </div>
       <Modal
-  visible={visible}
-  onClose={() => setVisible(false)} // Use onClose instead of setVisible
-  title={title}
-  closeButton={closeButton}
->
-  {message}
-</Modal>
+        visible={visible}
+        onClose={() => setVisible(false)}
+        title={title}
+        closeButton={closeButton}
+      >
+        {message}
+      </Modal>
     </>
   );
 }

@@ -1,3 +1,5 @@
+// prisma/schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -29,6 +31,7 @@ model User {
   department     String?
   position       String?
   hrDocuments    HrDocument[]   @relation("UserHrDocuments")
+  otps           OTP[]          @relation("UserOTPs")
 }
 
 model LeaveRequest {
@@ -57,15 +60,15 @@ model Digilocker {
 model HrDocument {
   id                String   @id @default(auto()) @map("_id") @db.ObjectId
   filename          String
-  submittedBy       String // This should be the username of the user
+  submittedBy       String
   submitterFullName String
   department        String
   position          String
   dateSubmitted     DateTime
   fileSize          Int?
   data              Bytes?
-  status            String   @default("Pending") // Add status field
-  rejectionReason   String? // Optional field for rejection reason
+  status            String   @default("Pending")
+  rejectionReason   String?
   user              User     @relation("UserHrDocuments", fields: [submittedBy], references: [username], onDelete: Cascade)
 }
 
@@ -104,4 +107,12 @@ model Message {
   dateCreated  DateTime @default(now())
   userUsername String
   User         User     @relation("UserMessages", fields: [userUsername], references: [username], onDelete: Cascade)
+}
+
+model OTP {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @unique // Add @unique here
+  otp       String
+  createdAt DateTime @default(now())
+  user      User     @relation("UserOTPs", fields: [userId], references: [id], onDelete: Cascade)
 }

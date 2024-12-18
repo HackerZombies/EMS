@@ -67,8 +67,7 @@ export default function Settings({ user }: Props) {
           <div className="flex items-center space-x-6 mb-6">
             <div className="w-32 h-32 relative">
               <Image 
-                src={"/default-avatar.png"}
-                alt="/default-avatar.png"
+               src="/default-avatar.png" alt="Default Avatar" fill sizes="(max-width: 768px) 100vw, 50vw"
                 layout="fill" 
                 objectFit="cover" 
                 className="rounded-full border-4 border-green-600 hover:border-green-500"

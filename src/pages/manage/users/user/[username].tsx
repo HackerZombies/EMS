@@ -15,16 +15,31 @@ import Input from "@/components/Input";
 import ModalPopup from "@/components/Modal"; // Importing Modal component
 import { motion, AnimatePresence } from "framer-motion";
 
+// Define an interface for the user data
+interface UserData {
+  username: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phoneNumber: string;
+  dob?: string; // Optional if it can be undefined
+  address?: string;
+  qualifications?: string;
+  department?: string;
+  position?: string;
+  password?: string; // Optional if not always updated
+}
+
 type Props = {
   user: User;
 };
 
-export default function EditUser ({ user }: Props) {
+export default function EditUser  ({ user }: Props) {
   const { data: session } = useSession();
   const userRole = session?.user?.role;
   const router = useRouter();
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<UserData>({
     username: user.username,
     firstName: user.firstName,
     lastName: user.lastName,
@@ -39,6 +54,7 @@ export default function EditUser ({ user }: Props) {
   });
 
   const [showPassword, setShowPassword] = useState(false);
+  const [passwordGenerated, setPasswordGenerated] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [modalTitle, setModalTitle] = useState("");
   const [modalMessage, setModalMessage] = useState<React.ReactNode>(<></>);
@@ -53,6 +69,26 @@ export default function EditUser ({ user }: Props) {
     setShowPassword(!showPassword);
   };
 
+  const generateSecurePassword = (length = 12) => {
+    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+";
+    let password = "";
+    for (let i = 0; i < length; i++) {
+      const randomIndex = Math.floor(Math.random() * charset.length);
+      password += charset[randomIndex];
+    }
+    return password;
+  };
+
+  const handleGeneratePassword = () => {
+    const newPassword = generateSecurePassword();
+    setFormData(prev => ({
+      ...prev,
+      password: newPassword,
+    }));
+    setPasswordGenerated(true);
+    setTimeout(() => setPasswordGenerated(false), 3000); // Reset after 3 seconds
+  };
+
   const validate = () => {
     const newErrors: { [key: string]: string } = {};
 
@@ -61,7 +97,7 @@ export default function EditUser ({ user }: Props) {
       newErrors.email = "Invalid email format";
     }
 
-    const phonePattern = /^91[0-9]{10}$/;
+    const phonePattern = /^91[0-9]{10}$/
     if (formData.phoneNumber && !phonePattern.test(formData.phoneNumber)) {
       newErrors.phoneNumber = "Invalid phone number format. Please enter 91 followed by a 10-digit number.";
     }
@@ -84,7 +120,8 @@ export default function EditUser ({ user }: Props) {
       return;
     }
 
-    const dataToUpdate = {
+    // Explicitly define the type for dataToUpdate
+    const dataToUpdate: UserData = {
       username: formData.username,
       firstName: formData.firstName,
       lastName: formData.lastName,
@@ -183,8 +220,9 @@ export default function EditUser ({ user }: Props) {
           </p>
         </div>
         <div className="flex flex-row justify-end gap-2 max-md:flex-col">
+          ```typescript
           <button
-            onClick={deleteUser }
+            onClick={deleteUser  }
             className="flex items-center justify-center gap-1 rounded-full bg-red-600 px-3 py-2 font-medium text-white shadow-lg transition hover:bg-black active:bg-black active:bg-opacity-70"
           >
             Yes, delete this user
@@ -231,6 +269,8 @@ export default function EditUser ({ user }: Props) {
                 value={formData.password}
                 onChange={handleInputChange}
                 className={`bg-gray-700 text-white ${errors.password ? "border-red-500" : "border-teal-600"} border rounded-lg px-4 py-2`}
+                onCopy={(e: React.ClipboardEvent<HTMLInputElement>) => e.preventDefault()} // Prevent copy
+                onPaste={(e: React.ClipboardEvent<HTMLInputElement>) => e.preventDefault()} // Prevent paste
               />
               <button
                 type="button"
@@ -239,48 +279,48 @@ export default function EditUser ({ user }: Props) {
               >
                 {showPassword ? <EyeOff size={20} color="white" /> : <Eye size={20} color="white" />}
               </button>
+              <Button onClick={handleGeneratePassword} className="absolute right-0 top-1/2 transform -translate-y-1/2 bg-red-600 text-white px-4 py-2 rounded transition hover:bg-green-500">
+                {passwordGenerated ? "Password Generated!" : "Generate Password"}
+              </Button>
             </div>
             {errors.password && <p className="text-red-500 text-sm mt-1">{errors.password}</p>}
           </div>
-          <FormField label="Email Address" name="email" type="email" value={formData.email} onChange={handleInputChange} error={errors.email} />
-          <FormField label="Mobile Number" name="phoneNumber" type="tel" value={formData.phoneNumber} onChange={handleInputChange} error={errors.phoneNumber} />
-          <FormField label="Date of Birth" name="dob" type="date" value={formData.dob} onChange={handleInputChange} error={errors.dob} />
-          <FormField label="Address" name="address" value={formData.address} onChange={handleInputChange} />
-          <FormField label="Qualifications" name="qualifications" value={formData.qualifications} onChange={handleInputChange} />
-          <FormField label="Department" name="department" value={formData.department} onChange={handleInputChange} />
-          <FormField label="Position" name="position" value={formData.position} onChange={handleInputChange} />
+          <FormField label="Email Address" name="email" type="email" value={formData.email || ""} onChange={handleInputChange} error={errors.email} />
+          <FormField label="Mobile Number" name="phoneNumber" type="tel" value={formData.phoneNumber || ""} onChange={handleInputChange} error={errors.phoneNumber} />
+          <FormField label="Date of Birth" name="dob" type="date" value={formData.dob || ""} onChange={handleInputChange} error={errors.dob} />
+          <FormField label="Address" name="address" value={formData.address || ""} onChange={handleInputChange} />
+          <FormField label="Qualifications" name="qualifications" value={formData.qualifications || ""} onChange={handleInputChange} />
+          <FormField label="Department" name="department" value={formData.department || ""} onChange={handleInputChange} />
+          <FormField label="Position" name="position" value={formData.position || ""} onChange={handleInputChange} />
           <div className="flex w-full justify-end">
-            <Button onClick={handleUpdate} className="bg-red-600 text-white px-4 py-2 rounded-lg transition hover:bg-green-500">
+            <Button onClick={handleUpdate} className="bg-red-600 text-white px-4 py-2 rounded-lg transition hover:bg-green- ```typescript
+500">
               Save Changes
             </Button>
           </div>
         </div>
       </div>
       <AnimatePresence>
-  {modalVisible && (
-    <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 p-4"
-    >
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
-        className="bg-black bg-opacity-70 rounded-lg p-4 max-w-md w-full shadow-lg"
-      >
-        <h2 className="text-xl font-bold text-white mb-4">{modalTitle}</h2>
-        <div className="text-white mb-4">{modalMessage}</div>
-        <div className="flex justify-end">
-          <Button onClick={() => setModalVisible(false)} className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg transition">
-            Close
-          </Button>
-        </div>
-      </motion.div>
-    </motion.div>
-  )}
-</AnimatePresence>
+        {modalVisible && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-black bg-opacity-70 rounded-lg p-4 max-w-md w-full shadow-lg"
+            >
+              <h2 className="text-xl font-bold text-white mb-4">{modalTitle}</h2>
+              <div className="text-white mb-4">{modalMessage}</div>
+              <div className="flex justify-end"></div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }
@@ -302,7 +342,7 @@ function FormField({ label, name, type = "text", value, onChange, error, disable
         {label}
       </label>
       <Input
-        type={ type}
+        type={type}
         name={name}
         id={name}
         value={value}

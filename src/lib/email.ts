@@ -1,3 +1,5 @@
+// src/lib/email.ts
+
 import nodemailer from 'nodemailer';
 import * as dotenv from 'dotenv';
 dotenv.config();
@@ -12,7 +14,7 @@ const getEnvVar = (name: string): string => {
 };
 
 // Ensure required environment variables are set
-const gmailUser  = getEnvVar('GMAIL_USER');
+const gmailUser = getEnvVar('GMAIL_USER');
 const gmailPass = getEnvVar('GMAIL_PASS');
 
 // Create a transporter object using Gmail service
@@ -21,30 +23,45 @@ const transporter = nodemailer.createTransport({
   secure: true, // Use SSL
   port: 465,
   auth: {
-    user: gmailUser ,
+    user: gmailUser,
     pass: gmailPass,
   },
 });
 
-// Function to send delete email
-export const sendDeleteEmail = async (to: string, username: string) => {
+/**
+ * Sends an email.
+ * @param to Recipient's email address.
+ * @param subject Email subject.
+ * @param text Email body.
+ */
+export async function sendotpEmail({
+  to,
+  subject,
+  text,
+}: {
+  to: string;
+  subject: string;
+  text: string;
+}) {
   const mailOptions = {
-    from: gmailUser , // Sender address from environment variable
+    from: gmailUser, // Sender address from environment variable
     to,
-    subject: 'Your Account Has Been Removed', // Subject line
-    text: `Hey ${username},\n\nWe are sorry to inform you that your account has been removed from our system.\n\nSee you soon!\nThank You.`, // Plain text body
+    subject,
+    text,
   };
 
   try {
     await transporter.sendMail(mailOptions);
-    console.log('Delete email sent successfully');
+    console.log('Email sent successfully');
   } catch (error: unknown) {
     if (error instanceof Error) {
-      console.error('Error sending delete email:', error.message);
-      throw new Error(`Error sending delete email: ${error.message}`);
+      console.error('Error sending email:', error.message);
+      throw new Error(`Error sending email: ${error.message}`);
     } else {
-      console.error('Error sending delete email:', error);
-      throw new Error('Error sending delete email: Unknown error occurred');
+      console.error('Error sending email:', error);
+      throw new Error('Error sending email: Unknown error occurred');
     }
   }
-};
+}
+
+export default sendotpEmail; // Default export

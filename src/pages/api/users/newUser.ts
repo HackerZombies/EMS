@@ -6,9 +6,10 @@ import { authOptions } from "../auth/[...nextauth]";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { sendEmail } from "@/lib/sendEmail";
 
-function generateUsername(): string {
-  const randomNumber = Math.floor(Math.random() * 90000) + 10000;
-  return `${randomNumber}`;
+function generateUsername(firstName: string): string {
+  const randomNumber = Math.floor(Math.random() * 90000) + 10000; // Generates a random number between 10000 and 99999
+  const formattedFirstName = firstName.toLowerCase().replace(/\s+/g, ''); // Remove spaces and convert to lowercase
+  return `${formattedFirstName}${randomNumber}`; // Combine first name and random number
 }
 
 function validateEmail(email: string): boolean {
@@ -45,10 +46,10 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
   }
 
   try {
-    const username = generateUsername();
+    const username = generateUsername(firstName); // Pass firstName to the username generator
     const hashedPassword = await argon2.hash(password);
 
-    const newUser  = await prisma.user.create({
+    const newUser   = await prisma.user.create({
       data: {
         username,
         firstName,
@@ -66,7 +67,8 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       },
     });
 
-    await sendEmail(email, username, password); return res.status(200).json(newUser );
+    await sendEmail(email, username, password);
+    return res.status(200).json(newUser );
   } catch (error) {
     if (error instanceof PrismaClientKnownRequestError) {
       if (error.code === 'P2002') {

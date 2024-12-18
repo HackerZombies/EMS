@@ -1,6 +1,6 @@
-// pages/api/auth/[...nextauth].ts
+// src/pages/api/auth/[...nextauth].ts
+
 import NextAuth, { NextAuthOptions, Session, User } from "next-auth";
-import { AdapterUser } from "next-auth/adapters";
 import CredentialsProvider from "next-auth/providers/credentials";
 import argon2 from "argon2";
 import prisma from "@/lib/prisma";

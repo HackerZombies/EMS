@@ -1,21 +1,23 @@
 import { signIn } from "next-auth/react";
 import { FormEvent, useState } from "react";
-import Button from "../components/Button";
-import Input from "../components/Input";
 import Head from "next/head";
 import { Icon } from "@iconify/react";
 import { useRouter } from "next/router";
 import Image from "next/image";
 import fdmLogo from "../../public/fdm.svg";
-import Modal from "./Modal";
+import { CircularProgress } from "@mui/material";
+import { ForgotPasswordModal } from "../components/ForgotPasswordModal";
 
 export default function SignIn() {
   const router = useRouter();
   const [incorrectLogin, setIncorrectLogin] = useState(false);
-  const [popup, setPopup] = useState(false);
+  const [forgotPasswordPopup, setForgotPasswordPopup] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [passwordVisible, setPasswordVisible] = useState(false);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setLoading(true);
 
     const formData = new FormData(event.currentTarget);
     const result = await signIn("credentials", {
@@ -25,10 +27,12 @@ export default function SignIn() {
       redirect: false,
     });
 
+    setLoading(false);
+
     if (result) {
       if (result.ok) {
         setIncorrectLogin(false);
-        router.push(router.pathname);
+        router.push(result.url || '/');
       } else {
         setIncorrectLogin(true);
       }
@@ -40,76 +44,80 @@ export default function SignIn() {
       <Head>
         <title>Employee Management System - Sign in</title>
       </Head>
-      <div className="flex h-dvh flex-col items-center justify-center gap-10 font-medium">
-        <div className="flex flex-row items-center gap-3">
-          <Image src={fdmLogo} alt="FDM" className="mx-auto mb-1 w-24" />
-          <h1 className="flex gap-3 text-4xl font-bold text-white drop-shadow">
-            EMS
-          </h1>
-        </div>
-        <div className="flex flex-col gap-5 rounded-2xl bg-white bg-opacity-80 p-5 text-center shadow backdrop-blur-md">
-          <div className="text-left font-semibold">
-            <h1 className="flex items-center gap-2 text-3xl">
-              <Icon icon="ph:users-three-bold" />
-              Sign in
-            </h1>
-            <h2 className="pl-10 text-sm">Please enter your credentials</h2>
+      <div className="flex h-screen items-center justify-center bg-opacity-5 from-gray-800 to-black">
+        <div className="w-full max-w-md bg-black rounded-lg shadow-md p-8 bg-opacity-50">
+          <div className="text-center mb-8">
+            <div className="mx-auto w-24 mb-2">
+            <Image src={fdmLogo} alt="FDM" width={96} height={96} priority />
+            </div>
+            <h1 className="text-3xl font-bold text-white">EMS Sign In</h1>
           </div>
-          <form onSubmit={onSubmit} className="flex flex-col gap-5">
-            <label className="flex flex-col text-left">
-              <div className="flex flex-row items-center gap-1">
-                <Icon icon="ph:user-bold" />
+          <form onSubmit={onSubmit} className="space-y-6">
+            <div>
+              <label htmlFor="username" className="block text-sm font-medium text-white">
                 User ID
-              </div>
-              <Input name="username" type="text" placeholder="User  ID" />
-            </label>
-            <label className="flex flex-col text-left">
-              <div className="flex flex-row items-center gap-1">
-                <Icon icon="ph:key-bold" />
-                Password
-              </div>
-              <Input name="password" type="password" placeholder="Password" />
-            </label>
-            {incorrectLogin && (
-              <p className="text-sm text-red-700 drop-shadow-sm">
-                User ID or password incorrect
-              </p>
-            )}
-            <div className="flex flex-col gap-2">
-              <Button type="submit">
-                Sign in
-                <Icon
-                  icon="ph:arrow-right-bold"
-                  className="group-hover:ml-1"
-                ></Icon>
-              </Button>
-              <div
-                className="cursor-pointer text-sm text-neutral-600 underline transition-colors hover:text-neutral-500"
-                onClick={() => setPopup(true)}
-              >
-                Having trouble signing in?
+              </label>
+              <div className="mt-1 relative rounded-md shadow-sm">
+                <input
+                  id="username"
+                  name="username"
+                  type="text"
+                  required
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                />
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                  <Icon icon="ph:user-bold" className="h-5 w-5 text-gray-400" />
+                </div>
               </div>
             </div>
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-white">
+                Password
+              </label>
+              <div className="mt-1 relative rounded-md shadow-sm">
+                <input
+                  id="password"
+                  name="password"
+                  type={passwordVisible ? "text" : "password"}
+                  required
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                />
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                  <button
+                    type="button"
+                    className="text-gray-400 hover:text-gray-500 focus:outline-none focus:text-gray-500"
+                    onClick={() => setPasswordVisible(!passwordVisible)}
+                  >
+                    <Icon icon={passwordVisible ? "ph:eye-slash-bold" : "ph:eye-bold"} className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+            {incorrectLogin && <p className="text-sm text-red-600">Invalid username or password.</p>}
+            <div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              >
+                {loading ? <CircularProgress size={24} /> : "Sign In"}
+              </button>
+            </div>
           </form>
+          <div className="mt-6 text-center">
+            <button
+              onClick={() => setForgotPasswordPopup(true)}
+              className="text-sm text-blue-600 hover:text-blue-500"
+            >
+              Forgot Password?
+            </button>
+          </div>
         </div>
       </div>
-      <Modal
-        visible={popup}
-        title="Having trouble signing in?"
-        onClose={() => setPopup(false)} // Use onClose instead of setVisible
-      >
-        <div className="flex flex-col gap-2">
-          <p>
-            Your User ID is a 5 digit number which should have been provided to
-            you upon joining.
-          </p>
-          <p>
-            If you have forgotten or otherwise do not have access to your User
-            ID or Password, please contact your system administrator for further
-            guidance.
-          </p>
-        </div>
-      </Modal>
+      <ForgotPasswordModal
+        visible={forgotPasswordPopup}
+        onClose={() => setForgotPasswordPopup(false)}
+      />
     </>
   );
 }

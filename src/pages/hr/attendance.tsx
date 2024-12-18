@@ -1,6 +1,4 @@
-// pages/hr/attendance.tsx
-
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { useSession } from "next-auth/react";
 import Head from "next/head";
@@ -32,13 +30,7 @@ const HrAttendancePage: React.FC = () => {
     new Date().toISOString().split("T")[0]
   );
 
-  useEffect(() => {
-    if (status === "authenticated" && session?.user?.role === "HR") {
-      fetchAttendance();
-    }
-  }, [session, status, date]);
-
-  const fetchAttendance = async () => {
+  const fetchAttendance = useCallback(async () => {
     setLoading(true);
     try {
       const response = await axios.get<AttendanceRecord[]>("/api/hr/attendance", {
@@ -50,7 +42,13 @@ const HrAttendancePage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [date]);
+
+  useEffect(() => {
+    if (status === "authenticated" && session?.user?.role === "HR") {
+      fetchAttendance();
+    }
+  }, [fetchAttendance, session, status]);
 
   if (status === "loading") {
     return <p>Loading...</p>;
@@ -126,7 +124,7 @@ const HrAttendancePage: React.FC = () => {
         input[type="date"] {
           margin-bottom: 1rem;
           padding: 0.5rem;
-          font-size: 1rem;
+          font-size : 1rem;
         }
         table {
           width: 100%;

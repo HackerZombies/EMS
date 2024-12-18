@@ -4,6 +4,7 @@ import { useState } from "react";
 import axios from "axios";
 import { useSession } from "next-auth/react";
 import Head from "next/head";
+import { useGeolocated } from "react-geolocated";
 
 interface AttendanceResponse {
   id: string;
@@ -22,35 +23,39 @@ const AttendancePage: React.FC = () => {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
-  const getLocation = (): Promise<{ latitude: number; longitude: number }> => {
-    return new Promise((resolve, reject) => {
-      if (!navigator.geolocation) {
-        reject(new Error("Geolocation is not supported by your browser"));
-      } else {
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            resolve({
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude,
-            });
-          },
-          () => {
-            reject(new Error("Unable to retrieve your location"));
-          }
-        );
-      }
-    });
-  };
+  // Use the hook to get location data
+  const {
+    coords,
+    isGeolocationAvailable,
+    isGeolocationEnabled,
+    positionError,
+  } = useGeolocated({
+    positionOptions: {
+      enableHighAccuracy: true,
+    },
+    userDecisionTimeout: 10000,
+  });
 
   const handleCheckIn = async () => {
     setLoading(true);
     setStatusMessage(null);
+
     try {
-      const location = await getLocation();
-      const response = await axios.post<AttendanceResponse>(
-        "/api/attendance/checkin",
-        location
-      );
+      if (!isGeolocationAvailable) {
+        throw new Error("Geolocation is not supported by your browser.");
+      }
+      if (!isGeolocationEnabled) {
+        throw new Error("Geolocation is disabled. Please allow location access.");
+      }
+      if (!coords) {
+        throw new Error("Unable to retrieve your location at this time.");
+      }
+
+      const { latitude, longitude } = coords;
+      await axios.post<AttendanceResponse>("/api/attendance/checkin", {
+        latitude,
+        longitude,
+      });
       setStatusMessage("Checked in successfully!");
     } catch (error: any) {
       setStatusMessage(
@@ -64,12 +69,23 @@ const AttendancePage: React.FC = () => {
   const handleCheckOut = async () => {
     setLoading(true);
     setStatusMessage(null);
+
     try {
-      const location = await getLocation();
-      const response = await axios.post<AttendanceResponse>(
-        "/api/attendance/checkout",
-        location
-      );
+      if (!isGeolocationAvailable) {
+        throw new Error("Geolocation is not supported by your browser.");
+      }
+      if (!isGeolocationEnabled) {
+        throw new Error("Geolocation is disabled. Please allow location access.");
+      }
+      if (!coords) {
+        throw new Error("Unable to retrieve your location at this time.");
+      }
+
+      const { latitude, longitude } = coords;
+      await axios.post<AttendanceResponse>("/api/attendance/checkout", {
+        latitude,
+        longitude,
+      });
       setStatusMessage("Checked out successfully!");
     } catch (error: any) {
       setStatusMessage(
@@ -96,10 +112,15 @@ const AttendancePage: React.FC = () => {
       <div className="container">
         <h1>Attendance</h1>
         {statusMessage && <p>{statusMessage}</p>}
-        <button onClick={handleCheckIn} disabled={loading}>
+        {positionError && (
+           <p style={{ color: "red" }}>
+           Error getting location: Code {positionError.code}, Message: {positionError.message || "No message provided"}
+         </p>
+        )}
+        <button onClick={handleCheckIn} disabled={loading || !coords}>
           {loading ? "Processing..." : "Check In"}
         </button>
-        <button onClick={handleCheckOut} disabled={loading}>
+        <button onClick={handleCheckOut} disabled={loading || !coords}>
           {loading ? "Processing..." : "Check Out"}
         </button>
       </div>

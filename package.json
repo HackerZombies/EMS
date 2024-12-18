@@ -35,6 +35,7 @@
     "rate-limiter-flexible": "^5.0.4",
     "react": "^18",
     "react-dom": "^18",
+    "react-geolocated": "^4.3.0",
     "react-icons": "^5.4.0",
     "react-modal": "^3.16.1",
     "react-responsive": "^9.0.2",

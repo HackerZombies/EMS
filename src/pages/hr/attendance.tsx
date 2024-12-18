@@ -21,7 +21,6 @@ interface AttendanceRecord {
     firstName: string;
     lastName: string;
     email: string;
-    // Add other user fields as needed
   };
 }
 
@@ -42,16 +41,12 @@ const HrAttendancePage: React.FC = () => {
   const fetchAttendance = async () => {
     setLoading(true);
     try {
-      const response = await axios.get<AttendanceRecord[]>(
-        "/api/hr/attendance",
-        {
-          params: { date },
-        }
-      );
+      const response = await axios.get<AttendanceRecord[]>("/api/hr/attendance", {
+        params: { date },
+      });
       setAttendanceData(response.data);
     } catch (error) {
       console.error("Fetch Attendance Error:", error);
-      // Optionally set an error state here
     } finally {
       setLoading(false);
     }

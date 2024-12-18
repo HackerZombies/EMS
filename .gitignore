@@ -38,3 +38,8 @@ next-env.d.ts
 # prisma
 /prisma/migrations
 /prisma/dev.db
+.env
+combined.log
+README.md
+error.log
+README.md

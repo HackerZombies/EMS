@@ -8,9 +8,10 @@ type EventsSummaryProps = {
 };
 
 const routeMapping: Record<string, string> = {
-  announcements: "/announcements",
+  ALerts: "/announcements",
   leave: "/leave",
   documents: "/documents",
+  help:"/help"
   // Add more mappings as needed
 };
 

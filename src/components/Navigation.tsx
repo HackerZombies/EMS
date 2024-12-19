@@ -43,7 +43,7 @@ export default function Navigation() {
           { url: "/documents", title: "Get Payslips", icon: "ph:file-text" },
           { url: "/hr/submit", title: "HR Verification", icon: "ph:file-text" },
           { url: "/digilocker", title: "Digilocker", icon: "ph:files" },
-          { url: "/help", title: "Help", icon: "ph:chats-circle" },
+          { url: "/help", title: "Tickets", icon: "ph:chats-circle" },
         ],
       },
     ];

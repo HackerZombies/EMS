@@ -66,12 +66,15 @@ export default function Settings({ user }: Props) {
 
           <div className="flex items-center space-x-6 mb-6">
             <div className="w-32 h-32 relative">
-              <Image 
-               src="/default-avatar.png" alt="Default Avatar" fill sizes="(max-width: 768px) 100vw, 50vw"
-                layout="fill" 
-                objectFit="cover" 
-                className="rounded-full border-4 border-green-600 hover:border-green-500"
-              />
+            <Image 
+  src="/default-avatar.png" 
+  alt="Default Avatar" 
+  fill 
+  sizes="(max-width: 768px) 100vw, 50vw"
+  className="rounded-full border-4 border-green-600 hover:border-green-500"
+  style={{ objectFit: 'cover' }} // Use style for objectFit
+  priority // Add this line to indicate high priority
+/>
             </div>
             <div>
               <h1 className="text-4xl font-bold text-white">

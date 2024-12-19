@@ -41,10 +41,10 @@ export default async function handle(
     return res.status(400).json({ message: "Invalid email format" });
   }
 
-  // Validate phone number format
-  const phonePattern = /^91[0-9]{10}$/;
+  // Update phone number validation to allow just a 10-digit number
+  const phonePattern = /^[0-9]{10}$/; // Just 10-digit phone number
   if (phoneNumber && !phonePattern.test(phoneNumber)) {
-    return res.status(400).json({ message: "Invalid phone number format. Please enter 91 followed by a 10-digit number." });
+    return res.status(400).json({ message: "Invalid phone number format. Please enter a 10-digit number." });
   }
 
   // Validate date of birth
@@ -68,10 +68,12 @@ export default async function handle(
   if (department === "") department = undefined;
   if (position === "") position = undefined;
 
-  // Check if password is provided
-  if (!password) {
-    return res.status(400).json({ message: "A password change is necessary to update any other changes." });
+  const existingUser = await prisma.user.findUnique({ where: { username } });
+
+  if (email && email !== existingUser?.email && !password) {
+    return res.status(400).json({ message: "A password change is necessary to update the email." });
   }
+  
 
   try {
     // Check for existing email or phone number
@@ -93,39 +95,47 @@ export default async function handle(
       }
     }
 
-    // Hash the raw password from req body
-    const hashedPassword = await argon2.hash(password);
+    // Prepare update data
+    const updateData: any = {
+      firstName,
+      lastName,
+      email,
+      phoneNumber,
+      dob,
+      address,
+      qualifications,
+      department,
+      position,
+    };
 
-    // Update user in database
+    // If password is provided, hash it and include it in the update
+    if ( password) {
+      const hashedPassword = await argon2.hash(password);
+      updateData.password = hashedPassword;
+    }
+
+    // Ensure username is always defined for the update
+    if (!username) {
+      return res.status(400).json({ message: "Username is required for the update." });
+    }
+
     const updatedUser  = await prisma.user.update({
       where: { username },
-      data: {
-        firstName,
-        lastName,
-        password: hashedPassword,
-        email,
-        phoneNumber,
-        dob,
-        address,
-        qualifications,
-        department,
-        position,
-      },
+      data: updateData,
     });
 
-    // Send update email with updated information
-    if (email) { // Ensure email is defined
-      await sendUpdateEmail(email, username, password);
+    // Send update email with updated information if email is provided
+    if (email) {
+      await sendUpdateEmail(email, username, password!);
     }
 
     return res.status(200).json({ success: true, data: updatedUser  });
-  } catch
-    (error) {
-      if (error instanceof PrismaClientKnownRequestError) {
-        return res.status(409).json({ message: "This email or phone number is already in use." });
-      } else {
-        console.error("Failed to update user:", error);
-        return res.status(500).json({ message: "Failed to update user" });
-      }
+  } catch (error) {
+    if (error instanceof PrismaClientKnownRequestError) {
+      return res.status(409).json({ message: "This email or phone number is already in use." });
+    } else {
+      console.error("Failed to update user:", error);
+      return res.status(500).json({ message: "Failed to update user" });
     }
+  }
 }

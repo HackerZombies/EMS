@@ -12,29 +12,27 @@ import BackButton from "@/components/BackButton";
 import prisma from "@/lib/prisma";
 import Button from "@/components/Button";
 import Input from "@/components/Input";
-import ModalPopup from "@/components/Modal"; // Importing Modal component
 import { motion, AnimatePresence } from "framer-motion";
 
-// Define an interface for the user data
 interface UserData {
   username: string;
   firstName: string;
   lastName: string;
   email: string;
   phoneNumber: string;
-  dob?: string; // Optional if it can be undefined
+  dob?: string;
   address?: string;
   qualifications?: string;
   department?: string;
   position?: string;
-  password?: string; // Optional if not always updated
+  password?: string; 
 }
 
 type Props = {
   user: User;
 };
 
-export default function EditUser  ({ user }: Props) {
+export default function EditUser({ user }: Props) {
   const { data: session } = useSession();
   const userRole = session?.user?.role;
   const router = useRouter();
@@ -86,7 +84,7 @@ export default function EditUser  ({ user }: Props) {
       password: newPassword,
     }));
     setPasswordGenerated(true);
-    setTimeout(() => setPasswordGenerated(false), 3000); // Reset after 3 seconds
+    setTimeout(() => setPasswordGenerated(false), 3000);
   };
 
   const validate = () => {
@@ -97,9 +95,9 @@ export default function EditUser  ({ user }: Props) {
       newErrors.email = "Invalid email format";
     }
 
-    const phonePattern = /^91[0-9]{10}$/
+    const phonePattern = /^[0-9]{10}$/;
     if (formData.phoneNumber && !phonePattern.test(formData.phoneNumber)) {
-      newErrors.phoneNumber = "Invalid phone number format. Please enter 91 followed by a 10-digit number.";
+      newErrors.phoneNumber = "Invalid phone number. Please enter a 10-digit valid number.";
     }
 
     if (formData.dob) {
@@ -111,16 +109,34 @@ export default function EditUser  ({ user }: Props) {
       }
     }
 
+    // If email changed, ensure password is provided
+    if (formData.email !== user.email && !formData.password) {
+      newErrors.password = "A password change is necessary to update the email.";
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleUpdate = async () => {
+    // Check if any changes have been made
+    const isChanged = isFormDataChanged(user, formData);
+    if (!isChanged) {
+      setModalTitle("No Changes");
+      setModalMessage(
+        <p className="text-yellow-500 text-lg text-center">
+          No changes were made to the employee details.
+        </p>
+      );
+      setModalVisible(true);
+      setTimeout(() => setModalVisible(false), 3000);
+      return;
+    }
+
     if (!validate()) {
       return;
     }
 
-    // Explicitly define the type for dataToUpdate
     const dataToUpdate: UserData = {
       username: formData.username,
       firstName: formData.firstName,
@@ -136,7 +152,7 @@ export default function EditUser  ({ user }: Props) {
     };
 
     try {
-      const response = await axios.post("/api/users/updateUser ", dataToUpdate);
+      const response = await axios.post("/api/users/updateUser", dataToUpdate);
       if (response.status === 200) {
         setModalTitle("Success");
         setModalMessage(
@@ -150,11 +166,10 @@ export default function EditUser  ({ user }: Props) {
           </div>
         );
         setModalVisible(true);
-        setTimeout(() => setModalVisible(false), 3000); // Auto-close after 3 seconds
+        setTimeout(() => setModalVisible(false), 3000);
       }
-    } catch (error) {
+    } catch (error: any) {
       if (axios.isAxiosError(error)) {
-        const status = error.response?.status;
         const data = error.response?.data;
         setModalTitle("Error");
         setModalMessage(
@@ -163,7 +178,7 @@ export default function EditUser  ({ user }: Props) {
           </p>
         );
         setModalVisible(true);
-        setTimeout(() => setModalVisible(false), 3000); // Auto-close after 3 seconds
+        setTimeout(() => setModalVisible(false), 3000);
       } else {
         console.error("Error updating user:", error);
         setModalTitle("Error");
@@ -171,15 +186,15 @@ export default function EditUser  ({ user }: Props) {
           <p className="text-red-500">An unexpected error occurred. Please try again.</p>
         );
         setModalVisible(true);
-        setTimeout(() => setModalVisible(false), 3000); // Auto-close after 3 seconds
+        setTimeout(() => setModalVisible(false), 3000);
       }
     }
   };
 
-  const deleteUser  = async () => {
+  const deleteUser = async () => {
     setModalVisible(false);
     try {
-      const response = await axios.delete("/api/users/deleteUser ", {
+      const response = await axios.delete("/api/users/deleteUser", {
         data: { username: formData.username },
       });
       if (response.status === 200) {
@@ -187,7 +202,6 @@ export default function EditUser  ({ user }: Props) {
       }
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        const status = error.response?.status;
         const data = error.response?.data;
         setModalTitle("Error");
         setModalMessage(
@@ -196,7 +210,7 @@ export default function EditUser  ({ user }: Props) {
           </p>
         );
         setModalVisible(true);
-        setTimeout(() => setModalVisible(false), 3000); // Auto-close after 3 seconds
+        setTimeout(() => setModalVisible(false), 3000);
       } else {
         console.error("Error deleting user:", error);
         setModalTitle("Error");
@@ -204,7 +218,7 @@ export default function EditUser  ({ user }: Props) {
           <p className="text-red-500">An unexpected error occurred. Please try again.</p>
         );
         setModalVisible(true);
-        setTimeout(() => setModalVisible(false), 3000); // Auto-close after 3 seconds
+        setTimeout(() => setModalVisible(false), 3000);
       }
     }
   };
@@ -220,9 +234,8 @@ export default function EditUser  ({ user }: Props) {
           </p>
         </div>
         <div className="flex flex-row justify-end gap-2 max-md:flex-col">
-          ```typescript
           <button
-            onClick={deleteUser  }
+            onClick={deleteUser}
             className="flex items-center justify-center gap-1 rounded-full bg-red-600 px-3 py-2 font-medium text-white shadow-lg transition hover:bg-black active:bg-black active:bg-opacity-70"
           >
             Yes, delete this user
@@ -269,8 +282,8 @@ export default function EditUser  ({ user }: Props) {
                 value={formData.password}
                 onChange={handleInputChange}
                 className={`bg-gray-700 text-white ${errors.password ? "border-red-500" : "border-teal-600"} border rounded-lg px-4 py-2`}
-                onCopy={(e: React.ClipboardEvent<HTMLInputElement>) => e.preventDefault()} // Prevent copy
-                onPaste={(e: React.ClipboardEvent<HTMLInputElement>) => e.preventDefault()} // Prevent paste
+                onCopy={(e: React.ClipboardEvent<HTMLInputElement>) => e.preventDefault()}
+                onPaste={(e: React.ClipboardEvent<HTMLInputElement>) => e.preventDefault()}
               />
               <button
                 type="button"
@@ -293,8 +306,7 @@ export default function EditUser  ({ user }: Props) {
           <FormField label="Department" name="department" value={formData.department || ""} onChange={handleInputChange} />
           <FormField label="Position" name="position" value={formData.position || ""} onChange={handleInputChange} />
           <div className="flex w-full justify-end">
-            <Button onClick={handleUpdate} className="bg-red-600 text-white px-4 py-2 rounded-lg transition hover:bg-green- ```typescript
-500">
+            <Button onClick={handleUpdate} className="bg-red-600 text-white px-4 py-2 rounded-lg transition hover:bg-green-500">
               Save Changes
             </Button>
           </div>
@@ -353,6 +365,27 @@ function FormField({ label, name, type = "text", value, onChange, error, disable
       {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
     </div>
   );
+}
+
+// Helper function to determine if form data has changed
+function isFormDataChanged(originalUser: User, formData: UserData): boolean {
+  const originalDob = originalUser.dob ? new Date(originalUser.dob).toISOString().split('T')[0] : "";
+
+  const fieldsToCheck = [
+    { original: originalUser.firstName, current: formData.firstName },
+    { original: originalUser.lastName, current: formData.lastName },
+    { original: originalUser.email, current: formData.email },
+    { original: originalUser.phoneNumber, current: formData.phoneNumber },
+    { original: originalDob, current: formData.dob || "" },
+    { original: originalUser.address || "", current: formData.address || "" },
+    { original: originalUser.qualifications || "", current: formData.qualifications || "" },
+    { original: originalUser.department || "", current: formData.department || "" },
+    { original: originalUser.position || "", current: formData.position || "" },
+    // If password is provided, that counts as a change (if email changed, password is mandatory anyway)
+    { original: "", current: formData.password || "" }
+  ];
+
+  return fieldsToCheck.some(field => field.original !== field.current);
 }
 
 export const getServerSideProps: GetServerSideProps = async (context) => {

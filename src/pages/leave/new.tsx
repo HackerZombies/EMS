@@ -42,7 +42,9 @@ export default function NewLeaveRequest() {
       }
     };
 
-    fetchBalance();
+    if (session?.user?.username) {
+      fetchBalance();
+    }
   }, [session]);
 
   const calculateDaysRequested = () => {
@@ -54,7 +56,8 @@ export default function NewLeaveRequest() {
     const difference = end.getTime() - start.getTime();
     const days = Math.ceil(difference / (1000 * 60 * 60 * 24));
 
-    return days > 0 ? days : 0;
+    // Ensure that if the start date is the same as the end date, it counts as 1 day
+    return days >= 0 ? days + 1 : 0; // Add 1 to include the end date
   };
 
   const handleSubmit = async () => {
@@ -71,22 +74,20 @@ export default function NewLeaveRequest() {
       return;
     }
 
-    const formattedStartDate1 = new Date(startDate);
-    const formattedEndDate1 = new Date(endDate);
-    if (formattedStartDate1 >= formattedEndDate1) {
+    const formattedStartDate = new Date(startDate + "T00:00:00");
+    const formattedEndDate = new Date(endDate + "T00:00:00");
+    if (formattedStartDate >= formattedEndDate) {
       setMessage("Start date must be before end date.");
       setVisible(true);
       return;
     }
 
-    if (formattedStartDate1 < new Date()) {
+    if (formattedStartDate < new Date()) {
       setMessage("Start date must not be in the past.");
       setVisible(true);
       return;
     }
 
-    const formattedStartDate = new Date(startDate + "T00:00:00");
-    const formattedEndDate = new Date(endDate + "T00:00:00");
     const requestData = {
       reason,
       startDate: formattedStartDate.toISOString(),
@@ -183,7 +184,7 @@ export default function NewLeaveRequest() {
       <Modal
         visible={visible}
         title="Oops..."
-        onClose={() => setVisible(false)} // Use onClose instead of setVisible
+        onClose={() => setVisible(false)}
         className="bg-gray-800 text-white"
       >
         {message}

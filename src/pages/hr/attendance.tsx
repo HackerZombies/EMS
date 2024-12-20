@@ -1,151 +1,150 @@
-import { useEffect, useState, useCallback } from "react";
-import axios from "axios";
-import { useSession } from "next-auth/react";
-import Head from "next/head";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/router";
+import { io, Socket } from "socket.io-client";
+import Link from "next/link";
 
-interface AttendanceRecord {
+type AttendanceRecord = {
   id: string;
-  userId: string;
-  checkIn: string;
-  checkOut?: string;
-  checkInLat: number;
-  checkInLng: number;
-  checkOutLat?: number;
-  checkOutLng?: number;
   date: string;
+  checkInTime: string | null;
+  checkOutTime: string | null;
+  checkInLatitude: number | null;
+  checkInLongitude: number | null;
+  checkOutLatitude: number | null;
+  checkOutLongitude: number | null;
   user: {
-    id: string;
     username: string;
     firstName: string;
     lastName: string;
-    email: string;
+    role: string;
   };
-}
+  checkInAddress?: string | null;
+  checkOutAddress?: string | null;
+};
 
-const HrAttendancePage: React.FC = () => {
-  const { data: session, status } = useSession();
+let socket: Socket;
+
+export default function AllAttendancePage() {
   const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [date, setDate] = useState<string>(
-    new Date().toISOString().split("T")[0]
-  );
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
-  const fetchAttendance = useCallback(async () => {
-    setLoading(true);
+  // Function to convert latitude and longitude into a human-readable address
+  const convertToAddress = async (latitude: number, longitude: number): Promise<string | null> => {
     try {
-      const response = await axios.get<AttendanceRecord[]>("/api/hr/attendance", {
-        params: { date },
-      });
-      setAttendanceData(response.data);
+      const response = await fetch(`/api/geocode?latitude=${latitude}&longitude=${longitude}`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch address from backend.");
+      }
+
+      const data = await response.json();
+      return data.address || null;
     } catch (error) {
-      console.error("Fetch Attendance Error:", error);
-    } finally {
-      setLoading(false);
+      console.error("Error converting coordinates to address:", error);
+      return null;
     }
-  }, [date]);
+  };
 
   useEffect(() => {
-    if (status === "authenticated" && session?.user?.role === "HR") {
-      fetchAttendance();
-    }
-  }, [fetchAttendance, session, status]);
+    const fetchSessionAndRole = async () => {
+      try {
+        // Fetch session details to validate the user's role
+        const response = await fetch("/api/auth/session");
+        const session = await response.json();
 
-  if (status === "loading") {
-    return <p>Loading...</p>;
-  }
+        if (!session || session.user.role !== "HR") {
+          // Redirect if the user is not HR
+          alert("Access denied: This page is restricted to HR personnel.");
+          router.push("/unauthorized");
+          return;
+        }
 
-  if (!session) {
-    return <p>Please sign in to view attendance.</p>;
-  }
+        // Connect to the Socket.IO server
+        socket = io("/", { path: "/api/socket" });
 
-  if (session.user.role !== "HR") {
-    return <p>Unauthorized Access</p>;
-  }
+        // Listen for attendance updates
+        socket.on("attendance-update", async (data: AttendanceRecord[]) => {
+          const updatedData = await Promise.all(
+            data.map(async (record) => ({
+              ...record,
+              checkInAddress:
+                record.checkInLatitude && record.checkInLongitude
+                  ? await convertToAddress(record.checkInLatitude, record.checkInLongitude)
+                  : "N/A",
+              checkOutAddress:
+                record.checkOutLatitude && record.checkOutLongitude
+                  ? await convertToAddress(record.checkOutLatitude, record.checkOutLongitude)
+                  : "N/A",
+            }))
+          );
+          setAttendanceData(updatedData);
+          setLoading(false);
+        });
+
+        // Request initial data
+        socket.emit("refresh-attendance");
+      } catch (error) {
+        console.error("Error checking user role:", error);
+        router.push("/unauthorized");
+      }
+    };
+
+    fetchSessionAndRole();
+
+    // Clean up the connection on unmount
+    return () => {
+      socket.disconnect();
+    };
+  }, [router]);
 
   return (
-    <>
-      <Head>
-        <title>HR - Daily Attendance</title>
-      </Head>
-      <div className="container">
-        <h1>Daily Attendance</h1>
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-        />
-        {loading ? (
-          <p>Loading...</p>
-        ) : attendanceData.length === 0 ? (
-          <p>No attendance records found for this date.</p>
-        ) : (
-          <table>
+    <div className="min-h-screen bg-opacity-10 bg-gray-100 p-8">
+      <h1 className="text-2xl font-bold mb-6">Daily Attendance (Real-Time)</h1>
+      {loading && <p>Loading attendance data...</p>}
+      {!loading && attendanceData.length === 0 && <p>No attendance data available.</p>}
+      {!loading && attendanceData.length > 0 && (
+        <div className="overflow-x-auto bg-opacity-15 bg-white shadow-lg rounded-lg p-4">
+          <table className="min-w-full table-auto">
             <thead>
-              <tr>
-                <th>Username</th>
-                <th>Full Name</th>
-                <th>Check-In Time</th>
-                <th>Check-Out Time</th>
-                <th>Check-In Location</th>
-                <th>Check-Out Location</th>
+              <tr className="bg-gray-200 text-gray-700">
+                <th className="px-4 py-2">Date</th>
+                <th className="px-4 py-2">User</th>
+                <th className="px-4 py-2">Check-In Time</th>
+                <th className="px-4 py-2">Check-In Address</th>
+                <th className="px-4 py-2">Check-Out Time</th>
+                <th className="px-4 py-2">Check-Out Address</th>
               </tr>
             </thead>
             <tbody>
               {attendanceData.map((record) => (
-                <tr key={record.id}>
-                  <td>{record.user.username}</td>
-                  <td>
-                    {record.user.firstName} {record.user.lastName}
+                <tr key={record.id} className="border-b border-gray-200">
+                  <td className="px-4 py-2">{new Date(record.date).toLocaleDateString()}</td>
+                  <td className="px-4 py-2">
+                    <Link
+                      href={`/manage/users/user/${record.user.username}`}
+                      className="text-blue-500 hover:underline"
+                    >
+                      {record.user.firstName} {record.user.lastName} ({record.user.username})
+                    </Link>
                   </td>
-                  <td>{new Date(record.checkIn).toLocaleString()}</td>
-                  <td>
-                    {record.checkOut
-                      ? new Date(record.checkOut).toLocaleString()
-                      : "Not Checked Out"}
-                  </td>
-                  <td>
-                    {record.checkInLat.toFixed(5)}, {record.checkInLng.toFixed(5)}
-                  </td>
-                  <td>
-                    {record.checkOutLat && record.checkOutLng
-                      ? `${record.checkOutLat.toFixed(5)}, ${record.checkOutLng.toFixed(5)}`
+                  <td className="px-4 py-2">
+                    {record.checkInTime
+                      ? new Date(record.checkInTime).toLocaleTimeString()
                       : "N/A"}
                   </td>
+                  <td className="px-4 py-2">{record.checkInAddress || "N/A"}</td>
+                  <td className="px-4 py-2">
+                    {record.checkOutTime
+                      ? new Date(record.checkOutTime).toLocaleTimeString()
+                      : "N/A"}
+                  </td>
+                  <td className="px-4 py-2">{record.checkOutAddress || "N/A"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-        )}
-      </div>
-      <style jsx>{`
-        .container {
-          padding: 2rem;
-        }
-        input[type="date"] {
-          margin-bottom: 1rem;
-          padding: 0.5rem;
-          font-size : 1rem;
-        }
-        table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-top: 1rem;
-        }
-        th,
-        td {
-          border: 1px solid #ddd;
-          padding: 0.5rem;
-          text-align: left;
-        }
-        th {
-          background-color: #f2f2f2;
-        }
-        tr:nth-child(even) {
-          background-color: #f9f9f9;
-        }
-      `}</style>
-    </>
+        </div>
+      )}
+    </div>
   );
-};
-
-export default HrAttendancePage;
+}

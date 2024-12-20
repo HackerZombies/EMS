@@ -32,20 +32,7 @@ model User {
   position       String?
   hrDocuments    HrDocument[]   @relation("UserHrDocuments")
   otps           OTP[]          @relation("UserOTPs")
-  attendances    Attendance[]   @relation("UserAttendances")
-}
-
-model Attendance {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  user        User     @relation("UserAttendances", fields: [userId], references: [id], onDelete: Cascade)
-  userId      String   @db.ObjectId
-  checkIn     DateTime
-  checkOut    DateTime?
-  checkInLat  Float
-  checkInLng  Float
-  checkOutLat Float?
-  checkOutLng Float?
-  date        DateTime @default(now())
+  attendances    Attendance[]   @relation("UserAttendances") // New relation field
 }
 
 model LeaveRequest {
@@ -129,4 +116,19 @@ model OTP {
   otp       String
   createdAt DateTime @default(now())
   user      User     @relation("UserOTPs", fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Attendance {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  date              DateTime?
+  checkInTime       DateTime?
+  checkOutTime      DateTime?
+  checkInLatitude   Float?
+  checkInLongitude  Float?
+  checkOutLatitude  Float?
+  checkOutLongitude Float?
+  userUsername      String
+  user              User     @relation("UserAttendances", fields: [userUsername], references: [username], onDelete: Cascade)
+
+  @@unique([userUsername, date])
 }

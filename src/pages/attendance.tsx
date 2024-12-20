@@ -1,142 +1,212 @@
-// pages/attendance.tsx
-
-import { useState } from "react";
-import axios from "axios";
-import { useSession } from "next-auth/react";
+import { useEffect, useState } from "react";
+import { GetServerSideProps } from "next";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "./api/auth/[...nextauth]";
+import prisma from "@/lib/prisma";
 import Head from "next/head";
-import { useGeolocated } from "react-geolocated";
+import { io, Socket } from "socket.io-client";
 
-interface AttendanceResponse {
-  id: string;
-  userId: string;
-  checkIn: string;
-  checkOut?: string;
-  checkInLat: number;
-  checkInLng: number;
-  checkOutLat?: number;
-  checkOutLng?: number;
+type AttendanceRecord = {
   date: string;
-}
+  checkInTime: string | null;
+  checkOutTime: string | null;
+};
 
-const AttendancePage: React.FC = () => {
-  const { data: session, status } = useSession();
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(false);
+type Props = {
+  username?: string;
+};
 
-  // Use the hook to get location data
-  const {
-    coords,
-    isGeolocationAvailable,
-    isGeolocationEnabled,
-    positionError,
-  } = useGeolocated({
-    positionOptions: {
-      enableHighAccuracy: true,
-    },
-    userDecisionTimeout: 10000,
-  });
+let socket: Socket;
+
+export default function AttendancePage({ username }: Props) {
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([]);
+
+  const fetchAttendance = async () => {
+    try {
+      const response = await fetch(`/api/attendance/history?username=${username}&days=30`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch attendance history.");
+      }
+      const data = await response.json();
+      setAttendanceData(data);
+    } catch (error) {
+      console.error("Error fetching attendance history:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (!username) return;
+
+    fetchAttendance();
+
+    // Connect to the Socket.IO server
+    socket = io("/", { path: "/api/socket" });
+
+    // Listen for real-time updates
+    socket.on("attendance-update", (updatedAttendance: AttendanceRecord[]) => {
+      setAttendanceData(updatedAttendance);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [username]);
+
+  const markAttendance = async (action: "checkin" | "checkout") => {
+    if (!username) {
+      setMessage("You must be logged in to mark attendance.");
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      setMessage("Geolocation is not supported by your browser.");
+      return;
+    }
+
+    setLoading(true);
+    setMessage(null);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        const date = new Date().toISOString().split("T")[0];
+        const time = new Date().toISOString();
+
+        const payload =
+          action === "checkin"
+            ? {
+                username,
+                date,
+                checkInTime: time,
+                checkInLatitude: latitude,
+                checkInLongitude: longitude,
+              }
+            : {
+                username,
+                date,
+                checkOutTime: time,
+                checkOutLatitude: latitude,
+                checkOutLongitude: longitude,
+              };
+
+        try {
+          const response = await fetch(`/api/attendance/${action}`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || "Failed to mark attendance.");
+          }
+
+          setMessage(`Attendance ${action === "checkin" ? "checked in" : "checked out"} successfully!`);
+          fetchAttendance(); // Refresh attendance data
+        } catch (error) {
+          console.error("Error marking attendance:", error);
+          setMessage(error instanceof Error ? error.message : "Failed to mark attendance.");
+        } finally {
+          setLoading(false);
+        }
+      },
+      (error) => {
+        console.error("Geolocation error:", error);
+        setMessage("Failed to retrieve your location.");
+        setLoading(false);
+      }
+    );
+  };
 
   const handleCheckIn = async () => {
-    setLoading(true);
-    setStatusMessage(null);
-
-    try {
-      if (!isGeolocationAvailable) {
-        throw new Error("Geolocation is not supported by your browser.");
-      }
-      if (!isGeolocationEnabled) {
-        throw new Error("Geolocation is disabled. Please allow location access.");
-      }
-      if (!coords) {
-        throw new Error("Unable to retrieve your location at this time.");
-      }
-
-      const { latitude, longitude } = coords;
-      await axios.post<AttendanceResponse>("/api/attendance/checkin", {
-        latitude,
-        longitude,
-      });
-      setStatusMessage("Checked in successfully!");
-    } catch (error: any) {
-      setStatusMessage(
-        error.response?.data?.message || error.message || "Check-In Failed"
-      );
-    } finally {
-      setLoading(false);
-    }
+    await markAttendance("checkin");
   };
 
   const handleCheckOut = async () => {
-    setLoading(true);
-    setStatusMessage(null);
-
-    try {
-      if (!isGeolocationAvailable) {
-        throw new Error("Geolocation is not supported by your browser.");
-      }
-      if (!isGeolocationEnabled) {
-        throw new Error("Geolocation is disabled. Please allow location access.");
-      }
-      if (!coords) {
-        throw new Error("Unable to retrieve your location at this time.");
-      }
-
-      const { latitude, longitude } = coords;
-      await axios.post<AttendanceResponse>("/api/attendance/checkout", {
-        latitude,
-        longitude,
-      });
-      setStatusMessage("Checked out successfully!");
-    } catch (error: any) {
-      setStatusMessage(
-        error.response?.data?.message || error.message || "Check-Out Failed"
-      );
-    } finally {
-      setLoading(false);
-    }
+    await markAttendance("checkout");
   };
 
-  if (status === "loading") {
-    return <p>Loading...</p>;
-  }
-
-  if (!session) {
-    return <p>Please sign in to mark attendance.</p>;
-  }
-
   return (
-    <>
+    <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center">
       <Head>
         <title>Attendance</title>
       </Head>
-      <div className="container">
-        <h1>Attendance</h1>
-        {statusMessage && <p>{statusMessage}</p>}
-        {positionError && (
-           <p style={{ color: "red" }}>
-           Error getting location: Code {positionError.code}, Message: {positionError.message || "No message provided"}
-         </p>
+      <div className="max-w-lg w-full p-6 bg-gray-800 shadow-lg rounded-lg mb-8">
+        <h1 className="text-3xl font-bold mb-4">Attendance System</h1>
+        {username ? (
+          <>
+            <p className="mb-4">Welcome, {username}!</p>
+            <div className="flex gap-4 mb-4">
+              <button
+                onClick={handleCheckIn}
+                className="bg-green-600 text-white px-4 py-2 rounded hover:bg green-700 transition"
+                disabled={loading}
+              >
+                {loading ? "Checking In..." : "Check In"}
+              </button>
+              <button
+                onClick={handleCheckOut}
+                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition"
+                disabled={loading}
+              >
+                {loading ? "Checking Out..." : "Check Out"}
+              </button>
+            </div>
+          </>
+        ) : (
+          <p className="text-red-400">You must log in to mark attendance.</p>
         )}
-        <button onClick={handleCheckIn} disabled={loading || !coords}>
-          {loading ? "Processing..." : "Check In"}
-        </button>
-        <button onClick={handleCheckOut} disabled={loading || !coords}>
-          {loading ? "Processing..." : "Check Out"}
-        </button>
+        {message && <p className="mt-4 text-sm">{message}</p>}
       </div>
-      <style jsx>{`
-        .container {
-          padding: 2rem;
-          text-align: center;
-        }
-        button {
-          margin: 1rem;
-          padding: 0.5rem 1rem;
-          font-size: 1rem;
-        }
-      `}</style>
-    </>
+      <div className="max-w-3xl w-full p-6 bg-gray-800 shadow-lg rounded-lg">
+        <h2 className="text-2xl font-bold mb-4">Last 30 Days Attendance</h2>
+        {attendanceData.length === 0 ? (
+          <p>No attendance records found.</p>
+        ) : (
+          <table className="min-w-full table-auto border-collapse border border-gray-600">
+            <thead>
+              <tr className="bg-gray-700">
+                <th className="border border-gray-600 px-4 py-2">Date</th>
+                <th className="border border-gray-600 px-4 py-2">Check-In Time</th>
+                <th className="border border-gray-600 px-4 py-2">Check-Out Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {attendanceData.map((record) => (
+                <tr key={record.date} className="hover:bg-gray-600">
+                  <td className="border border-gray-600 px-4 py-2">
+                    {new Date(record.date).toLocaleDateString()}
+                  </td>
+                  <td className="border border-gray-600 px-4 py-2">
+                    {record.checkInTime
+                      ? new Date(record.checkInTime).toLocaleTimeString()
+                      : "N/A"}
+                  </td>
+                  <td className="border border-gray-600 px-4 py-2">
+                    {record.checkOutTime
+                      ? new Date(record.checkOutTime).toLocaleTimeString()
+                      : "N/A"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
   );
-};
+}
 
-export default AttendancePage;
+// Fetch session and pass username as a prop
+export const getServerSideProps: GetServerSideProps = async (context) => {
+  const session = await getServerSession(context.req, context.res, authOptions);
+  if (session) {
+    return { props: { username: session.user.username } };
+  } else {
+    return { props: { username: null } };
+  }
+};

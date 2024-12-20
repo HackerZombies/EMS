@@ -1,4 +1,3 @@
-// pages/api/users/[username]/leaveBalance.ts
 import { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/lib/prisma";
 
@@ -18,7 +17,7 @@ export default async function handler(
       if (balance) {
         res.status(200).json(balance);
       } else {
-        res.status(404).json({ message: "User not found" });
+        res.status(404).json({ message: "User  not found" });
       }
     } catch (error) {
       res.status(500).json({ message: "Internal server error", error });

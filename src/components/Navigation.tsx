@@ -39,7 +39,7 @@ export default function Navigation() {
         items: [
           { url: "/", title: "Home", icon: "ph:house" },
           { url: "/attendance", title: "Attendance", icon: "ph:check-circle" },
-          { url: "/announcements", title: "Announcements", icon: "ph:megaphone" },
+          { url: "/announcements", title: "Alerts", icon: "ph:megaphone" },
           { url: "/leave", title: "Leave", icon: "ph:airplane-takeoff" },
           { url: "/documents", title: "Get Payslips", icon: "ph:file-text" },
           { url: "/hr/submit", title: "HR Verification", icon: "ph:file-text" },

@@ -44,6 +44,7 @@ export default function HomePage({ events, user, currentPage, totalPages }: Home
             >
               <h2 className="mb-4 text-2xl font-bold">Quick Actions</h2>
               <div className="grid grid-cols-2 gap-4">
+                <QuickActionButton icon="ph:clock" text="Attendance" href="/attendance" />
                 <QuickActionButton icon="ph:airplane-takeoff-bold" text="Request Leave" href="/leave" />
                 <QuickActionButton icon="ph:file-text-bold" text="Get Payslips" href="/documents" />
                 <QuickActionButton icon="ph:chats-circle-bold" text="CreateTicket" href="/help" />

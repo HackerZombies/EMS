@@ -38,6 +38,7 @@ export default function Navigation() {
         category: "",
         items: [
           { url: "/", title: "Home", icon: "ph:house" },
+          { url: "/attendance", title: "Attendance", icon: "ph:check-circle" },
           { url: "/announcements", title: "Announcements", icon: "ph:megaphone" },
           { url: "/leave", title: "Leave", icon: "ph:airplane-takeoff" },
           { url: "/documents", title: "Get Payslips", icon: "ph:file-text" },
@@ -60,6 +61,7 @@ export default function Navigation() {
       const hrItems: NavCategoryType = {
         category: "HR Employees",
         items: [
+          { url: "/hr/attendance", title: "Manage Attendance", icon:"ph:calendar"  },
           { url: "/manage/leave", title: "Manage Leave", icon: "ph:calendar-check" },
           { url: "/manage/documents", title: "Upload Payslips", icon: "ph:files" },
           { url: "/hr/documents", title: "Approve Documents", icon: "ph:files" },

@@ -61,7 +61,7 @@ model Digilocker {
 model HrDocument {
   id                String   @id @default(auto()) @map("_id") @db.ObjectId
   filename          String
-  submittedBy       String
+  submittedBy       String   @db.String
   submitterFullName String
   department        String
   position          String
@@ -70,8 +70,10 @@ model HrDocument {
   data              Bytes?
   status            String   @default("Pending")
   rejectionReason   String?
-  user              User     @relation("UserHrDocuments", fields: [submittedBy], references: [username], onDelete: Cascade)
+  user              User?    @relation("UserHrDocuments", fields: [submittedBy], references: [username], onDelete: Cascade)
 }
+
+
 
 model Document {
   id           String   @id @default(auto()) @map("_id") @db.ObjectId

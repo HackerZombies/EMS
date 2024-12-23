@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { GetServerSideProps } from "next";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from '../api/auth/[...nextauth]'; // Correct the path if needed
+import { authOptions } from "../api/auth/[...nextauth]";
 import prisma from "@/lib/prisma";
 import Head from "next/head";
 
@@ -15,6 +15,13 @@ type HrDocument = {
   dateSubmitted: Date | string;
   status: "Pending" | "Rejected" | "Approved"; // Add status field with specific values
   rejectionReason?: string; // Optional field for rejection reason
+  user?: {
+    firstName: string;
+    lastName: string;
+    department?: string;
+    position?: string;
+    username: string;
+  };
 };
 
 type Props = {
@@ -56,7 +63,7 @@ export default function HrDocuments({ hrDocuments }: Props) {
         if (!response.ok) {
           throw new Error("Failed to delete document");
         }
-        window.location.reload(); // Refresh the page to see the changes
+        window.location.reload();
       } catch (error) {
         console.error("Error deleting document:", error);
       }
@@ -71,7 +78,7 @@ export default function HrDocuments({ hrDocuments }: Props) {
       if (!response.ok) {
         throw new Error("Failed to approve document");
       }
-      window.location.reload(); // Refresh the page to see the changes
+      window.location.reload();
     } catch (error) {
       console.error("Error approving document:", error);
     }
@@ -92,7 +99,7 @@ export default function HrDocuments({ hrDocuments }: Props) {
       }
       setRejectionReason("");
       setSelectedDocId(null);
-      window.location.reload(); // Refresh the page to see the changes
+      window.location.reload();
     } catch (error) {
       console.error("Error rejecting document:", error);
     }
@@ -102,7 +109,6 @@ export default function HrDocuments({ hrDocuments }: Props) {
     setExpandedDocId(expandedDocId === id ? null : id);
   };
 
-  // Sort documents: pending first, then approved/rejected, and by date
   const sortedDocuments = hrDocuments.sort((a, b) => {
     const statusOrder = { Pending: 1, Rejected: 2, Approved: 3 };
     const statusComparison = statusOrder[a.status] - statusOrder[b.status];
@@ -110,7 +116,6 @@ export default function HrDocuments({ hrDocuments }: Props) {
     return new Date(b.dateSubmitted).getTime() - new Date(a.dateSubmitted).getTime();
   });
 
-  // Group documents by department and user
   const groupedDocuments = sortedDocuments.reduce((acc, doc) => {
     const key = `${doc.department} - ${doc.submitterFullName}`;
     if (!acc[key]) {
@@ -121,8 +126,7 @@ export default function HrDocuments({ hrDocuments }: Props) {
   }, {} as Record<string, HrDocument[]>);
 
   return (
-    <div className=
-    "min-h-screen bg-black bg-opacity-50 opacity-80 text-white p-8 rounded-2xl shadow-lg">
+    <div className="min-h-screen bg-black bg-opacity-50 opacity-80 text-white p-8 rounded-2xl shadow-lg">
       <Head>
         <title>HR Documents</title>
       </Head>
@@ -135,18 +139,37 @@ export default function HrDocuments({ hrDocuments }: Props) {
             <div key={group} className="mb-4">
               <h2 className="text-xl font-semibold text-gray-300">{group}</h2>
               {docs.map((doc) => (
-                <div key={doc.id} className="bg-gray-800 rounded-2xl shadow-lg p-4 mb-2 transition-transform transform hover:scale-105">
-                  <div className="flex justify-between items-center cursor-pointer" onClick={() => toggleExpand(doc.id)}>
+                <div
+                  key={doc.id}
+                  className="bg-gray-800 rounded-2xl shadow-lg p-4 mb-2 transition-transform transform hover:scale-105"
+                >
+                  <div
+                    className="flex justify-between items-center cursor-pointer"
+                    onClick={() => toggleExpand(doc.id)}
+                  >
                     <h3 className="text-lg font-semibold">{doc.filename}</h3>
-                    <span className={`text-${doc.status === 'Approved' ? 'green' : doc.status === 'Rejected' ? 'red' : 'yellow'}-400`}>{doc.status}</span>
+                    <span
+                      className={`text-${
+                        doc.status === "Approved"
+                          ? "green"
+                          : doc.status === "Rejected"
+                          ? "red"
+                          : "yellow"
+                      }-400`}
+                    >
+                      {doc.status}
+                    </span>
                   </div>
                   {expandedDocId === doc.id && (
                     <div className="mt-2">
-                      <p className="text-gray-400">Submitted By: {doc.submitterFullName} ({doc.submittedBy})</p>
+                      <p className="text-gray-400">
+                        Submitted By: {doc.submitterFullName} ({doc.submittedBy})
+                      </p>
                       <p className="text-gray-400">Department: {doc.department}</p>
                       <p className="text-gray-400">Position: {doc.position}</p>
                       <p className="text-gray-400">
-                        Submission Date: {typeof doc.dateSubmitted === 'string'
+                        Submission Date:{" "}
+                        {typeof doc.dateSubmitted === "string"
                           ? new Date(doc.dateSubmitted).toLocaleDateString()
                           : doc.dateSubmitted.toLocaleDateString()}
                       </p>
@@ -167,7 +190,9 @@ export default function HrDocuments({ hrDocuments }: Props) {
                           Approve
                         </button>
                         <button
-                          onClick={() => { setSelectedDocId(doc.id); }}
+                          onClick={() => {
+                            setSelectedDocId(doc.id);
+                          }}
                           className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-2 rounded transition duration-200"
                         >
                           Reject
@@ -213,7 +238,7 @@ export default function HrDocuments({ hrDocuments }: Props) {
           <div className="bg-black bg-opacity-50 p-6 rounded-lg shadow-lg">
             <h2 className="text-lg font-bold text-white py-2">Reject Document</h2>
             <textarea
-              value={ rejectionReason}
+              value={rejectionReason}
               onChange={(e) => setRejectionReason(e.target.value)}
               placeholder="Enter reason for rejection"
               className="w-full p-2 border border-gray-600 rounded bg-black bg-opacity-20 text-white"
@@ -239,52 +264,44 @@ export default function HrDocuments({ hrDocuments }: Props) {
 
 export const getServerSideProps: GetServerSideProps<Props> = async (context) => {
   const session = await getServerSession(context.req, context.res, authOptions);
-  const page = parseInt((context.query.page as string) || '1', 10);
+  const page = parseInt((context.query.page as string) || "1", 10);
   const pageSize = 10; // Number of documents per page
   const skip = (page - 1) * pageSize;
 
-  if (session && session.user.role === 'HR') {
+  if (session && session.user.role === "HR") {
     const [hrDocuments, totalDocuments] = await Promise.all([
       prisma.hrDocument.findMany({
         include: {
-          user: {
-            select: {
-              firstName: true,
-              lastName: true,
-              department: true,
-              position: true,
-              username: true,
-            },
-          },
+          user: true,
         },
         orderBy: {
-          dateSubmitted: 'desc',
+          dateSubmitted: "desc",
         },
         skip,
         take: pageSize,
       }),
-      prisma.hrDocument.count(), // Get total count for pagination
+      prisma.hrDocument.count(),
     ]);
 
-    const validStatuses = ["Approved", "Rejected", "Pending"] as const;
-
-    const documents: HrDocument[] = hrDocuments.map(doc => ({
+    const documents: HrDocument[] = hrDocuments.map((doc) => ({
       id: doc.id,
       filename: doc.filename,
-      submittedBy: doc.user.username,
-      submitterFullName: `${doc.user.firstName} ${doc.user.lastName}`,
-      department: doc.user.department || "N/A",
-      position: doc.user.position || "N/A",
+      submittedBy: doc.user?.username || "Unknown",
+      submitterFullName: doc.user
+        ? `${doc.user.firstName} ${doc.user.lastName}`
+        : "Unknown User",
+      department: doc.user?.department || "N/A",
+      position: doc.user?.position || "N/A",
       dateSubmitted: doc.dateSubmitted.toISOString(),
-      status: (validStatuses.includes(doc.status as typeof validStatuses[number]) ? doc.status : "Pending") as HrDocument['status'],
+      status: doc.status as "Pending" | "Rejected" | "Approved",
       rejectionReason: doc.rejectionReason || undefined,
     }));
 
-    return { props: { hrDocuments: documents, totalDocuments } };
+    return { props: { hrDocuments: documents } };
   } else {
     return {
       redirect: {
-        destination: '/unauthorized',
+        destination: "/unauthorized",
         permanent: false,
       },
     };

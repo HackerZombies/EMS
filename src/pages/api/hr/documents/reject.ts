@@ -48,6 +48,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(404).json({ error: 'Document not found' });
       }
 
+      // Check if the user exists before sending the email
+      if (!document.user) {
+        return res.status(404).json({ error: 'User  not found for this document' });
+      }
+
       // Update the document status to 'Rejected'
       await prisma.hrDocument.update({
         where: { id: String(id) },
@@ -55,7 +60,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
 
       // Send rejection email to the user
-      await sendRejectionEmail(document.user.email, reason); // Assuming the user has an email field
+      await sendRejectionEmail(document.user.email, reason); // Now safe to access email
 
       return res.status(200).json({ message: 'Document rejected successfully' });
     } catch (error) {

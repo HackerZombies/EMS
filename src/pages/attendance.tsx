@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { GetServerSideProps } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "./api/auth/[...nextauth]";
@@ -16,14 +16,15 @@ type Props = {
   username?: string;
 };
 
-let socket: Socket;
-
 export default function AttendancePage({ username }: Props) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([]);
+  const [socket, setSocket] = useState<Socket | null>(null);
 
-  const fetchAttendance = async () => {
+  // Memoize fetchAttendance to prevent unnecessary re-creations
+  const fetchAttendance = useCallback(async () => {
+    if (!username) return;
     try {
       const response = await fetch(`/api/attendance/history?username=${username}&days=30`);
       if (!response.ok) {
@@ -34,23 +35,27 @@ export default function AttendancePage({ username }: Props) {
     } catch (error) {
       console.error("Error fetching attendance history:", error);
     }
-  };
+  }, [username]);
+
+  useEffect(() => {
+    fetchAttendance();
+  }, [fetchAttendance]);
 
   useEffect(() => {
     if (!username) return;
 
-    fetchAttendance();
-
-    // Connect to the Socket.IO server
-    socket = io("/", { path: "/api/socket" });
+    // Initialize Socket.IO connection
+    const newSocket = io("/", { path: "/api/socket" });
+    setSocket(newSocket);
 
     // Listen for real-time updates
-    socket.on("attendance-update", (updatedAttendance: AttendanceRecord[]) => {
+    newSocket.on("attendance-update", (updatedAttendance: AttendanceRecord[]) => {
       setAttendanceData(updatedAttendance);
     });
 
+    // Cleanup on unmount
     return () => {
-      socket.disconnect();
+      newSocket.disconnect();
     };
   }, [username]);
 
@@ -105,7 +110,9 @@ export default function AttendancePage({ username }: Props) {
             throw new Error(errorData.message || "Failed to mark attendance.");
           }
 
-          setMessage(`Attendance ${action === "checkin" ? "checked in" : "checked out"} successfully!`);
+          setMessage(
+            `Attendance ${action === "checkin" ? "checked in" : "checked out"} successfully!`
+          );
           fetchAttendance(); // Refresh attendance data
         } catch (error) {
           console.error("Error marking attendance:", error);
@@ -143,7 +150,7 @@ export default function AttendancePage({ username }: Props) {
             <div className="flex gap-4 mb-4">
               <button
                 onClick={handleCheckIn}
-                className="bg-green-600 text-white px-4 py-2 rounded hover:bg green-700 transition"
+                className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition"
                 disabled={loading}
               >
                 {loading ? "Checking In..." : "Check In"}

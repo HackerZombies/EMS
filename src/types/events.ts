@@ -1,18 +1,11 @@
-export type Event = {
-    type: string;
-    icon: string;
-    date: Date;
-    title: string;
-    text: string;
-    linkTo?: string;
-  };
-  
-  export type Announcement = {
-    id: string;
-    title: string;
-    text: string;
-    dateCreated: Date;
-    role: string;
-  };
-  
-  
+// src/types/events.ts
+
+export interface Event {
+  id: string;
+  type: "Announcements" | "Help" | "Leave" | "Documents" | "Attendance";
+  icon: string;
+  date: string; // ISO string
+  title: string;
+  text: string;
+  linkTo: string;
+}

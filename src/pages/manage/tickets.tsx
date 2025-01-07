@@ -27,7 +27,7 @@ export default function ManageTickets({ tickets }: Props) {
       <Head>
         <title>EMS - Manage Tickets</title>
       </Head>
-      <div className="flex grow flex-col gap-5">
+      <div className="flex grow flex-col gap-5 pt-4">
         <div className="flex flex-row justify-between gap-2 max-md:flex-col">
           <h1 className="text-4xl font-semibold">Manage Tickets</h1>
           <select
@@ -67,12 +67,20 @@ export default function ManageTickets({ tickets }: Props) {
 export const getServerSideProps: GetServerSideProps = async (context) => {
   const session = await getServerSession(context.req, context.res, authOptions);
 
-  if (session) {
-    // Fetch tickets only for authenticated users
-    const tickets = await prisma.ticket.findMany();
-    return { props: { tickets } };
-  } else {
-    // Redirect to login or return an empty prop
-    return { props: {} };
+  // Role-based access control
+  if (!session || session.user.role !== "HR") {
+    return {
+      redirect: {
+        destination: "/unauthorized",
+        permanent: false,
+      },
+    };
   }
+
+  // Fetch tickets for users with the HR role
+  const tickets = await prisma.ticket.findMany();
+
+  return {
+    props: { tickets },
+  };
 };

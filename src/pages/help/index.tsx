@@ -19,7 +19,7 @@ export default function Help({ tickets }: Props) {
       <Head>
         <title>EMS - Help</title>
       </Head>
-      <div className="flex grow flex-col gap-5">
+      <div className="flex grow flex-col gap-5 pt-6">
         <div className="flex justify-between">
           <h1 className="text-4xl font-semibold">Help</h1>
           <Link scroll={false} href="/help/new">

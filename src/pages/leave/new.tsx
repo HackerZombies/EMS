@@ -2,7 +2,6 @@ import Head from "next/head";
 import { SetStateAction, useEffect, useState } from "react";
 import Input from "@/components/Input";
 import Button from "@/components/Button";
-import { Icon } from "@iconify/react";
 import Router from "next/router";
 import BackButton from "@/components/BackButton";
 import { useSession } from "next-auth/react";

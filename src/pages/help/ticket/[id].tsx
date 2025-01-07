@@ -15,7 +15,7 @@ import TicketStatus from "@/components/TicketStatus";
 import Modal from "@/components/Modal";
 
 const messageWithUser  = Prisma.validator<Prisma.MessageDefaultArgs>()({
-  include: { User: true },
+  include: { user: true },
 });
 
 type MessageWithUser  = Prisma.MessageGetPayload<typeof messageWithUser >;
@@ -32,7 +32,7 @@ export default function UserTicket({ ticket: initialTicket, messages }: Props) {
   const [commentList, setCommentList] = useState(messages);
   const [visible, setVisible] = useState(false);
   const [isTicketSolved, setIsTicketSolved] = useState(ticket.status === "Resolved");
-  const isAdmin = session?.data?.user?.role === "HR" || session?.data?.user?.role === "TECHNICIAN";
+  const isAdmin = session?.data?.user?.role === "HR" || session?.data?.user?.role === "HR";
 
   useEffect(() => {
     setIsTicketSolved(ticket.status === "Resolved");
@@ -138,7 +138,7 @@ export default function UserTicket({ ticket: initialTicket, messages }: Props) {
                     <div className="flex flex-row items-center gap-1 font-semibold">
                       {comment.userUsername === session.data?.user?.username
                         ? "You"
-                        : comment.User.firstName + " " + comment.User.lastName}
+                        : comment.user.firstName + " " + comment.user.lastName}
                     </div>
                   </div>
                 </div>
@@ -197,7 +197,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
 
     const messages = await prisma.message.findMany({
       where: { ticketId: ticketId }, // Use ticketId directly as a string
-      include: { User: true },
+      include: { user: true },
     });
 
     return {

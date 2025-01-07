@@ -1,6 +1,9 @@
+// backend/pages/api/hr/documents.ts
 import { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/lib/prisma";
 import busboy from "busboy";
+import path from 'path';
+import fs from 'fs';
 
 // Set the config for bodyParser to false to handle file uploads
 export const config = { api: { bodyParser: false } };
@@ -62,8 +65,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(500).json({ error: 'Failed to fetch documents' });
     }
   } else if (req.method === 'POST') {
-    // Handling file upload logic (same as before)
-
     let submittedBy: string | undefined;
     let docData: Buffer[] = [];
     let filename: string | undefined;
@@ -77,25 +78,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
     });
 
-    // Handle form fields (like submittedBy)
     bb.on("field", (name, val) => {
       if (name === "submittedBy") {
         submittedBy = val;
       }
     });
 
-    // Handle file uploads
     bb.on("file", (name, file, info) => {
+      filename = info.filename; // Get the filename here
       const allowedFileTypes = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.xls', '.xlsx', '.txt', '.csv'];
-      const fileExt = info.filename.split('.').pop()?.toLowerCase();
+      const fileExt = path.extname(info.filename).toLowerCase();
 
       // Validate the file type
-      if (!fileExt || !allowedFileTypes.includes(`.${fileExt}`)) {
+      if (!allowedFileTypes.includes(fileExt)) {
         file.resume(); // Discard the file if not allowed
         return res.status(400).json({ error: "Invalid file type" });
       }
 
-      // Accumulate file data and check the file size during upload
       file.on("data", (data: Buffer) => {
         fileSize += data.length;
 
@@ -105,17 +104,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         docData.push(data);
-        filename = info.filename;
       });
 
-      // Handle file upload errors
       file.on("error", (err) => {
         console.error("File upload error:", err);
         res.status(500).json({ error: "File upload failed" });
       });
     });
 
-    // After the upload is complete
     bb.on("close", async () => {
       if (!submittedBy) {
         return res.status(400).json({ error: "Submitted By is required" });
@@ -125,11 +121,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ error: "No file uploaded" });
       }
 
-      // Concatenate the file data into one buffer
       const concatenatedBuffer = Buffer.concat(docData);
 
       try {
-        // Save the document to the database
         const hrDocument = await prisma.hrDocument.create({
           data: {
             filename: filename,
@@ -150,7 +144,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           },
         });
 
-        // Respond with the uploaded document data
         res.status(200).json(hrDocument);
       } catch (dbError) {
         console.error("Database error:", dbError);
@@ -158,7 +151,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     });
 
-    // Pipe the request into busboy to handle the upload
     req.pipe(bb);
   } else {
     return res.status(405).json({ error: "Method not allowed" });

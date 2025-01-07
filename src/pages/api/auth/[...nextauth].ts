@@ -39,8 +39,8 @@ export const authOptions: NextAuthOptions = {
         }
 
         if (await argon2.verify(user.password, credentials.password)) {
-          return { 
-            id: user.id, 
+          return {
+            id: user.id,
             username: user.username,
             role: user.role,
             firstName: user.firstName,
@@ -95,6 +95,10 @@ export const authOptions: NextAuthOptions = {
         };
       }
       return session;
+    },
+    async redirect({ url, baseUrl }) {
+      // Always redirect to the homepage after sign in
+      return `${baseUrl}`;
     },
   },
   // Configure session settings

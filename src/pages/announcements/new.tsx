@@ -1,12 +1,32 @@
 import Head from "next/head";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { FormEvent, useState } from "react";
 import Input from "@/components/Input"; // Assuming this is a styled input component
 import Button from "@/components/Button"; // Assuming this is a styled button component
-import Router from "next/router";
 import BackButton from "@/components/BackButton";
 import Modal from "@/components/Modal";
 
 export default function NewAnnouncement() {
+  const router = useRouter();
+  const { data: session, status } = useSession(); // Access session info
+
+
+  // Authorization logic
+  const allowedRoles = ["HR"];
+  if (status === "loading") {
+    return (
+      <div className="flex justify-center items-center h-screen bg-gray-900">
+        <span className="text-white text-xl">Loading...</span>
+      </div>
+    );
+  }
+
+  if (!session || !session.user || !allowedRoles.includes(session.user.role)) {
+    // Redirect unauthorized users
+    router.push("/404");
+    return null; // Prevent rendering any content
+  }
   const [visible, setVisible] = useState(false);
   const [role, setRole] = useState("EMPLOYEE"); // State for user type selection
 
@@ -34,7 +54,7 @@ export default function NewAnnouncement() {
       throw new Error(response.statusText);
     }
 
-    await Router.push("/announcements");
+    await router.push("/announcements");
   }
 
   return (
@@ -85,16 +105,6 @@ export default function NewAnnouncement() {
                   className="mr-2 text-green-500 focus:ring-green-500"
                 />
                 HR Employee
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  value="TECHNICIAN"
-                  checked={role === "TECHNICIAN"}
-                  onChange={() => setRole("TECHNICIAN")}
-                  className="mr-2 text-green-500 focus:ring-green-500"
-                />
-                Technician
               </label>
             </div>
           </fieldset>

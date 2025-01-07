@@ -6,16 +6,47 @@ import { useRouter } from "next/router";
 import { GetServerSidePropsContext } from "next";
 import { getSession } from "next-auth/react";
 import prisma from "@/lib/prisma";
-import { 
-  FaUserEdit, 
-  FaSignOutAlt, 
-  FaIdBadge, 
-  FaEnvelope, 
-  FaPhone, 
-  FaCalendarAlt, 
-  FaBriefcase, 
-  FaBuilding 
+import {
+  FaUserEdit,
+  FaSignOutAlt,
+  FaIdBadge,
+  FaEnvelope,
+  FaPhone,
+  FaCalendarAlt,
+  FaBriefcase,
+  FaBuilding,
+  FaTrash,
 } from "react-icons/fa";
+import { useState } from "react";
+import axios from "axios";
+
+type Role = "EMPLOYEE" | "HR";
+
+const renderRoleLabel = (role: Role): string => {
+  const roleLabels: { [key in Role]: string } = {
+    EMPLOYEE: "Employee",
+    HR: "HR Professional",
+  };
+  return roleLabels[role] || role;
+};
+
+type ProfileDetailCardProps = {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+};
+
+const ProfileDetailCard: React.FC<ProfileDetailCardProps> = ({ icon, label, value }) => {
+  return (
+    <div className="flex items-center bg-dark-secondary p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow">
+      <div className="p-3 bg-gray-800 rounded-full mr-4">{icon}</div>
+      <div>
+        <p className="text-sm text-gray-400">{label}</p>
+        <p className="text-md font-medium text-white">{value}</p>
+      </div>
+    </div>
+  );
+};
 
 type Props = {
   user: User;
@@ -23,128 +54,144 @@ type Props = {
 
 export default function Settings({ user }: Props) {
   const router = useRouter();
+  const [profileImage, setProfileImage] = useState(
+    user.avatarImageUrl || user.profileImageUrl || "/default-avatar.png"
+  );
 
   const handleSignOut = async () => {
     const data = await signOut({ redirect: false, callbackUrl: "/" });
     router.push(data.url);
   };
 
-  const renderRoleLabel = (role: string) => {
-    const roleLabels: { [key: string]: string } = {
-      "EMPLOYEE": "Employee",
-      "HR": "HR Professional",
-      "TECHNICIAN": "Technician",
-    };
-    return roleLabels[role] || role;
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!event.target.files || event.target.files.length === 0) return;
+    const file = event.target.files[0];
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const response = await axios.post("/api/users/updateProfileImage", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const updatedUser = response.data.user;
+      setProfileImage(updatedUser.avatarImageUrl || "/default-avatar.png");
+    } catch (error) {
+      console.error("Error uploading image:", error);
+    }
+  };
+
+  const handleImageDelete = async () => {
+    const formData = new FormData();
+    formData.append("avatarImageUrl", "");
+    try {
+      const response = await axios.post("/api/users/updateProfileImage", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const updatedUser = response.data.user;
+      setProfileImage(updatedUser.avatarImageUrl || "/default-avatar.png");
+    } catch (error) {
+      console.error("Error deleting profile image:", error);
+    }
   };
 
   return (
-    <div className="rounded-lg min-h-screen bg-gradient-to-br from-gray-900 to-black bg-opacity-20 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-dark-primary">
       <Head>
         <title>Profile Settings | EMS</title>
       </Head>
 
-      <div className="max-w-4xl mx-auto bg-black bg-opacity-20 backdrop-blur-lg rounded-2xl shadow-2xl overflow-hidden">
-        {/* Profile Header */}
-        <div className="relative p-8">
-          <div className="absolute top-4 right-4 flex space-x-3">
-            <button 
+      <main className="max-w-4xl mx-auto p-8">
+        {/* Header Section */}
+        <div className="bg-gradient-to-r from-indigo-700 to-purple-700 rounded-lg p-6 relative">
+          <div className="absolute top-4 right-4 space-x-4">
+            <button
               onClick={() => router.push("/settings/edit")}
-              className="bg-teal-600 bg-opacity-10 text-white p-2 rounded-full"
+              className="text-white hover:text-gray-300"
               title="Edit Profile"
             >
-              <FaUserEdit className="text-2xl" />
+              <FaUserEdit size={20} />
             </button>
-            <button 
+            <button
               onClick={handleSignOut}
-              className=" text-white p-2 rounded-full"
+              className="text-white hover:text-gray-300"
               title="Sign Out"
             >
-              <FaSignOutAlt className="text-2xl" />
+              <FaSignOutAlt size={20} />
             </button>
           </div>
 
-          <div className="flex items-center space-x-6 mb-6">
-            <div className="w-32 h-32 relative">
-            <Image 
-  src="/default-avatar.png" 
-  alt="Default Avatar" 
-  fill 
-  sizes="(max-width: 768px) 100vw, 50vw"
-  className="rounded-full border-4 border-green-600 hover:border-green-500"
-  style={{ objectFit: 'cover' }} // Use style for objectFit
-  priority // Add this line to indicate high priority
-/>
+          <div className="flex items-center space-x-6">
+            <div className="relative w-32 h-32">
+            <Image
+    src={profileImage}
+    alt="Profile Avatar"
+    fill
+    className="rounded-full border-4 border-white object-cover"
+    style={{
+      objectFit: 'cover',
+      objectPosition: 'center', // Ensures the center of the image is visible
+    }}
+    priority
+  />
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black bg-opacity-50 rounded-full">
+                <label className="cursor-pointer text-white bg-green-500 p-2 rounded-full hover:bg-green-600">
+                  <input type="file" className="hidden" onChange={handleImageUpload} />
+                  <FaUserEdit />
+                </label>
+                <button
+                  onClick={handleImageDelete}
+                  className="text-white bg-red-500 p-2 rounded-full hover:bg-red-600"
+                  title="Delete Profile Image"
+                >
+                  <FaTrash />
+                </button>
+              </div>
             </div>
-            <div>
-              <h1 className="text-4xl font-bold text-white">
+            <div className="text-white">
+              <h1 className="text-3xl font-semibold">
                 {user.firstName} {user.lastName}
               </h1>
-              <p className="text-xl text-gray-300">
-                {renderRoleLabel(user.role)}
-              </p>
+              <p className="text-lg text-gray-200">{renderRoleLabel(user.role as Role)}</p>
             </div>
           </div>
-
-          {/* Profile Details Grid */}
-          <div className="grid md:grid-cols-2 gap-4">
-            <ProfileDetailCard 
-              icon={<FaIdBadge className="text-teal-600" />}
-              label="User  ID"
-              value={user.username}
-            />
-            <ProfileDetailCard 
-              icon={<FaEnvelope className="text-green-600" />}
-              label="Email"
-              value={user.email}
-            />
-            <ProfileDetailCard 
-              icon={<FaPhone className="text-teal-400" />}
-              label="Phone Number"
-              value={user.phoneNumber}
-            />
-            <ProfileDetailCard 
-              icon={<FaCalendarAlt className="text-yellow-600" />}
-              label="Account Created"
-              value={new Date(user.dateCreated).toLocaleDateString()}
-            />
-            <ProfileDetailCard 
-              icon={<FaBuilding className="text-red-600" />}
-              label="Department"
-              value={user.department || "Not Specified"}
-            />
-            <ProfileDetailCard 
-              icon={<FaBriefcase className="text-orange-600" />}
-              label="Position"
-              value={user.position || "Not Specified"}
-            />
-          </div>
         </div>
-      </div>
+
+        {/* Details Section */}
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <ProfileDetailCard
+            icon={<FaIdBadge className="text-blue-500" />}
+            label="User ID"
+            value={user.username}
+          />
+          <ProfileDetailCard
+            icon={<FaEnvelope className="text-green-500" />}
+            label="Email"
+            value={user.email}
+          />
+          <ProfileDetailCard
+            icon={<FaPhone className="text-purple-500" />}
+            label="Phone Number"
+            value={user.phoneNumber}
+          />
+          <ProfileDetailCard
+            icon={<FaCalendarAlt className="text-yellow-500" />}
+            label="Account Created"
+            value={new Date(user.dateCreated).toLocaleDateString()}
+          />
+          <ProfileDetailCard
+            icon={<FaBuilding className="text-red-500" />}
+            label="Department"
+            value={user.department || "Not Specified"}
+          />
+          <ProfileDetailCard
+            icon={<FaBriefcase className="text-orange-500" />}
+            label="Position"
+            value={user.position || "Not Specified"}
+          />
+        </div>
+      </main>
     </div>
   );
 }
-
-// Profile Detail Card Component
-const ProfileDetailCard = ({ 
-  icon, 
-  label, 
-  value 
-}: { 
-  icon: React.ReactNode, 
-  label: string, 
-  value: string 
-}) => {
-  return (
-    <div className="bg-gray-800 bg-opacity-60 p-4 rounded-xl flex items-center space-x-4">
-      <div className="text-3xl">{icon}</div>
-      <div>
-        <p className="text-sm text-gray-400">{label}</p>
-        <p className="text-lg font-semibold text-white">{value}</p>
-      </div>
-    </div>
-  );
-};
 
 export async function getServerSideProps(context: GetServerSidePropsContext) {
   const session = await getSession(context);
@@ -152,22 +199,20 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
   if (!session) {
     return {
       redirect: {
-        destination: '/login',
+        destination: "/login",
         permanent: false,
       },
     };
   }
 
   const user = await prisma.user.findUnique({
-    where: {
-      username: session.user?.username,
-    },
+    where: { username: session.user?.username },
   });
 
   if (!user) {
     return {
       redirect: {
-        destination: '/login',
+        destination: "/login",
         permanent: false,
       },
     };

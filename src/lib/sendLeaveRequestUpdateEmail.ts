@@ -11,18 +11,25 @@ const getEnvVar = (name: string): string => {
   return value;
 };
 
-// Ensure required environment variables are set for Gmail
-const gmailUser  = getEnvVar('GMAIL_USER');
-const gmailPass = getEnvVar('GMAIL_PASS');
+// Ensure required environment variables are set for SMTP
+const smtpHost = getEnvVar('SMTP_HOST');
+const smtpPort = parseInt(getEnvVar('SMTP_PORT'), 10);
+const smtpSecure = getEnvVar('SMTP_SECURE') === 'true';
+const smtpUser = getEnvVar('SMTP_USER');
+const smtpPass = getEnvVar('SMTP_PASS');
 
-// Create a transporter object using Gmail service
+// Create a transporter object using the custom SMTP server
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  secure: true, // Use SSL
-  port: 465,
+  host: smtpHost,
+  port: smtpPort,
+  secure: smtpSecure, // true for 465, false for other ports
   auth: {
-    user: gmailUser ,
-    pass: gmailPass,
+    user: smtpUser,
+    pass: smtpPass,
+  },
+  tls: {
+    // Use this option if your SMTP server uses self-signed certificates
+    rejectUnauthorized: false,
   },
 });
 
@@ -34,7 +41,7 @@ export const sendLeaveRequestUpdateEmail = async (to: string, username: string, 
     : `Hey ${username},\n\nYour leave request has been declined. Please contact your manager for more information.\n\nThank You.`;
 
   const mailOptions = {
-    from: gmailUser , // Sender address from environment variable
+    from: smtpUser, // Sender address from environment variable
     to,
     subject, // Subject line
     text, // Plain text body
@@ -43,11 +50,14 @@ export const sendLeaveRequestUpdateEmail = async (to: string, username: string, 
   try {
     await transporter.sendMail(mailOptions);
     console.log('Leave request update email sent successfully');
-  } catch (error) {
-    console.error('Error sending leave request update email:', error);
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      console.error('Error sending leave request update email:', error.message);
+      throw new Error(`Error sending email: ${error.message}`);
+    } else {
+      console.error('Error sending leave request update email:', error);
+      throw new Error('Error sending email: Unknown error occurred');
+    }
   }
 };
 
-// Verify the environment variables
-console.log('Gmail User:', gmailUser );
-console.log('Gmail Pass:', gmailPass);

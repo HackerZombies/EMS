@@ -3,7 +3,6 @@ import LeaveCard from "@/components/LeaveCard";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { LeaveRequest } from "@prisma/client";
-import GreenButton from "@/components/GreenButton";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { Icon } from "@iconify/react";

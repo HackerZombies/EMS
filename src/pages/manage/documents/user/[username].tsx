@@ -169,8 +169,14 @@ export default function UserDocuments({ user, documents }: Props) {
 export const getServerSideProps: GetServerSideProps = async (context) => {
   const session = await getServerSession(context.req, context.res, authOptions);
 
-  if (!session) {
-    return { props: {} };
+  // Authorization check
+  if (!session || session.user.role !== "HR") {
+    return {
+      redirect: {
+        destination: "/unauthorized",
+        permanent: false,
+      },
+    };
   }
 
   try {
@@ -181,6 +187,12 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
         username: username,
       },
     });
+
+    if (!user) {
+      return {
+        notFound: true,
+      };
+    }
 
     const documents = await prisma.document.findMany({
       where: {

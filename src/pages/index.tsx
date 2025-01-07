@@ -1,166 +1,206 @@
+// src/pages/index.tsx
+
 import { GetServerSideProps, GetServerSidePropsContext } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "./api/auth/[...nextauth]";
 import prisma from "@/lib/prisma";
-import HomePage from "@/components/Home"; // Ensure this matches the file name
-import { Event, Announcement } from "@/types/events";
+import { Event } from "@/types/events";
+import useSWR from 'swr';
+import { formatToIST } from "@/lib/timezone";
 
-export default function Home({ events, user, currentPage, totalPages }: { events: Event[], user: any, currentPage: number, totalPages: number }) {
-  return <HomePage events={events} user={user} currentPage={currentPage} totalPages={totalPages} />;
+import RecentActivityList from "@/components/RecentActivity";
+
+interface HomeProps {
+  initialEvents: Event[];
+  userName: string;
 }
 
-export const getServerSideProps: GetServerSideProps = async (context: GetServerSidePropsContext) => {
+const fetcher = (url: string) => fetch(url).then(res => res.json());
+
+export default function Home({ initialEvents, userName }: HomeProps) {
+  const { data, error } = useSWR('/api/events', fetcher, { refreshInterval: 5000 });
+  const events = data?.events || initialEvents;
+  const displayedUserName = data?.userName || userName;
+
+  if (error) return <div>Failed to load events.</div>;
+  if (!events) return <div>Loading...</div>;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-zinc-900 to-black text-white">
+      <header className="py-6 px-8 shadow-md bg-zinc-800">
+        <h1 className="text-3xl font-bold">Dashboard</h1>
+        <p className="mt-2 text-lg">Welcome, {displayedUserName}</p>
+      </header>
+
+      <main className="p-6 space-y-8">
+        <section>
+          <RecentActivityList events={events} userName={displayedUserName} />
+        </section>
+      </main>
+    </div>
+  );
+}
+
+export const getServerSideProps: GetServerSideProps<HomeProps> = async (
+  context: GetServerSidePropsContext
+) => {
   const session = await getServerSession(context.req, context.res, authOptions);
   const events: Event[] = [];
-  const page = parseInt((context.query.page as string) || "1", 10);
-  const limit = 5; // Number of events per page
-  const skip = (page - 1) * limit; // Calculate how many events to skip
+  let userName = "Unknown User";
 
   if (session) {
     const user = await prisma.user.findUnique({
-      where: {
-        username: session.user.username,
-      },
+      where: { username: session.user.username },
     });
 
-    // Fetch announcements
-    let announcements: Announcement[] = [];
-    if (session?.user) {
-      if (session.user.role === "HR") {
-        announcements = await prisma.announcement.findMany();
-      } else {
-        announcements = await prisma.announcement.findMany({
-          where: { role: { in: [session.user.role, "EMPLOYEE"] } },
-        });
-      }
-    }
+    if (user) {
+      userName = [
+        user.firstName,
+        user.middleName,
+        user.lastName,
+      ]
+        .filter(Boolean)
+        .join(" ") || "Unknown User";
 
-    announcements.forEach((announcement) => {
-      events.push({
-        type: "announcements",
-        icon: "ph:megaphone-bold",
-        date: announcement.dateCreated,
-        title: announcement.title,
-        text: announcement.text,
-        linkTo: "/announcements",
-      });
-    });
+      // Fetch the latest four events, similar to the API route
+      const limit = 4;
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-    // Fetch tickets
-    const
-    tickets = await prisma.ticket.findMany({
-      where: {
-        userUsername: session.user.username,
-      },
-      skip,
-      take: limit,
-    });
+      const [announcements, tickets, leaves, documents, attendanceRecords] =
+        await Promise.all([
+          prisma.announcement.findMany({
+            where:
+              user.role === "HR"
+                ? {
+                    dateCreated: {
+                      gte: twentyFourHoursAgo,
+                    },
+                  }
+                : {
+                    role: { in: [user.role, "EMPLOYEE"] },
+                    dateCreated: {
+                      gte: twentyFourHoursAgo,
+                    },
+                  },
+            orderBy: { dateCreated: "desc" },
+          }),
+          prisma.ticket.findMany({
+            where: {
+              userUsername: user.username,
+              dateCreated: {
+                gte: twentyFourHoursAgo,
+              },
+            },
+            orderBy: { dateCreated: "desc" },
+          }),
+          prisma.leaveRequest.findMany({
+            where: {
+              userUsername: user.username,
+              dateCreated: {
+                gte: twentyFourHoursAgo,
+              },
+            },
+            orderBy: { dateCreated: "desc" },
+          }),
+          prisma.document.findMany({
+            where: {
+              userUsername: user.username,
+              dateCreated: {
+                gte: twentyFourHoursAgo,
+              },
+            },
+            orderBy: { dateCreated: "desc" },
+          }),
+          prisma.attendance.findMany({
+            where: {
+              userUsername: user.username,
+              date: {
+                gte: twentyFourHoursAgo,
+              },
+            },
+            orderBy: { date: "desc" },
+          }),
+        ]);
 
-    tickets.forEach((ticket) => {
-      events.push({
-        type: "help",
-        icon: "ph:chats-circle-bold",
-        date: ticket.dateCreated,
-        title: `You created a ticket (#${ticket.id})`,
-        text: ticket.subject,
-        linkTo: `/help/ticket/${ticket.id}`,
-      });
-    });
-
-    // Fetch messages
-    const messages = await prisma.message.findMany({
-      where: {
-        Ticket: {
-          userUsername: session.user.username,
-        },
-        NOT: {
-          userUsername: session.user.username,
-        },
-      },
-      include: {
-        User: true,
-      },
-      skip,
-      take: limit,
-    });
-
-    messages.forEach((message) => {
-      events.push({
-        type: "help",
-        icon: "ph:chats-circle-bold",
-        date: message.dateCreated,
-        title: `Message received from ${message.User.firstName} ${message.User.lastName} on Ticket #${message.ticketId}`,
-        text: message.text,
-        linkTo: `/help/ticket/${message.ticketId}`,
-      });
-    });
-
-    // Fetch leave requests
-    const leaveRequests = await prisma.leaveRequest.findMany({
-      where: {
-        userUsername: session.user.username,
-      },
-      skip,
-      take: limit,
-    });
-
-    leaveRequests.forEach((leaveRequest) => {
-      events.push({
-        type: "leave",
-        icon: "ph:airplane-takeoff-bold",
-        date: leaveRequest.dateCreated,
-        title: "You submitted a leave request",
-        text: `${leaveRequest.startDate.toDateString()} - ${leaveRequest.endDate.toDateString()} (${leaveRequest.reason})`,
-        linkTo: "/leave",
-      });
-
-      if (leaveRequest.dateResponded) {
-        events.push({
-          type: "leave",
-          icon: "ph:airplane-takeoff-bold",
-          date: leaveRequest.dateResponded,
-          title: `Your leave request has been ${leaveRequest.requestStatus.toLowerCase()}`,
-          text: `${leaveRequest.startDate.toDateString()} - ${leaveRequest.endDate.toDateString()} (${leaveRequest.reason})`,
+        const transformedAnnouncements = announcements.map((announcement) => ({
+          id: `announcement-${announcement.id}`,
+          type: "Announcements" as const,
+          icon: "ph:megaphone-bold",
+          date: formatToIST(new Date(announcement.dateCreated)), // Ensure Date object
+          title: announcement.title,
+          text: announcement.text,
+          linkTo: "/announcements",
+        }));
+        
+        const transformedTickets = tickets.map((ticket) => ({
+          id: `ticket-${ticket.id}`,
+          type: "Help" as const,
+          icon: "ph:chats-circle-bold",
+          date: formatToIST(new Date(ticket.dateCreated)), // Ensure Date object
+          title: `You created a ticket (#${ticket.id})`,
+          text: ticket.subject,
+          linkTo: `/help/ticket/${ticket.id}`,
+        }));
+        
+        const transformedLeaves = leaves.map((leave) => ({
+          id: `leave-${leave.id}`,
+          type: "Leave" as const,
+          icon: "ph:calendar-check",
+          date: formatToIST(new Date(leave.dateCreated)), // Ensure Date object
+          title: `Leave request (${leave.requestStatus})`,
+          text: leave.reason,
           linkTo: "/leave",
-        });
-      }
-    });
+        }));
+        
+        const transformedDocuments = documents.map((document) => ({
+          id: `document-${document.id}`,
+          type: "Documents" as const,
+          icon: "ph:folder-open",
+          date: formatToIST(new Date(document.dateCreated)), // Ensure Date object
+          title: `Document uploaded (${document.filename})`,
+          text: "Document available for review.",
+          linkTo: "/documents",
+        }));
+        
+        const transformedAttendance = attendanceRecords.map((record) => ({
+          id: `attendance-${record.id}`,
+          type: "Attendance" as const,
+          icon: "ph:clock",
+          date: formatToIST(new Date(record.date)), // Ensure Date object
+          title: "Attendance recorded",
+          text: `Check-in: ${
+            record.checkInTime ? formatToIST(new Date(record.checkInTime)) : "N/A"
+          } | Check-out: ${
+            record.checkOutTime ? formatToIST(new Date(record.checkOutTime)) : "N/A"
+          }`,
+          linkTo: "/attendance",
+        }));        
 
-    // Fetch documents
-    const documents = await prisma.document.findMany({
-      where: {
-        userUsername: session.user.username,
-      },
-      select: {
-        id: true,
-        filename: true,
-        userUsername: true,
-        dateCreated: true,
-      },
-      skip,
-      take: limit,
-    });
+      // Combine all transformed events
+      const allEvents: Event[] = [
+        ...transformedAnnouncements,
+        ...transformedTickets,
+        ...transformedLeaves,
+        ...transformedDocuments,
+        ...transformedAttendance,
+      ];
 
-    documents.forEach((document) => {
-      events.push({
-        type: "documents",
-        icon: "ph:file-text-bold",
-        date: document.dateCreated,
-        title: "A document was uploaded to your account",
-        text: document.filename,
-        linkTo: "/documents",
-      });
-    });
+      // Sort all events by date descending
+      allEvents.sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
 
-    events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      // Take only the latest four events
+      const latestEvents = allEvents.slice(0, limit);
+
+      events.push(...latestEvents);
+    }
   }
 
-  return { 
-    props: { 
-      events,
-      user: session?.user || null,
-      currentPage: page,
-      totalPages: Math.ceil(events.length / limit) // Calculate total pages
-    } 
+  return {
+    props: {
+      initialEvents: events,
+      userName,
+    },
   };
 };

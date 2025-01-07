@@ -1,27 +1,175 @@
-@import "tailwindcss/base";
-@import "tailwindcss/components";
-@import "tailwindcss/utilities";
+/* 
+  1) Import Tailwind directives just once 
+     (no need to do @import "tailwindcss/..." 
+     AND @tailwind base/components/utilities).
+*/
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* -------------------------------------------
+   CUSTOM BASE LAYER & VARIABLES
+   -------------------------------------------
+   We keep your color variables and dark mode 
+   overrides. Also ensure the body is 
+   transparent or your desired color to avoid 
+   any pink flash.
+*/
 
 @layer base {
   :root {
+    /* Light mode (default) CSS variables */
     --bg-primary: 30 30 30;
-    --primary: 197 255 0;
+    --primary: 240 5.9% 10%;
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 10% 3.9%;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --radius: 0.5rem;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  /* Dark mode overrides */
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  /*
+    Body & global elements
+    - Force the background to use your Tailwind variable color 
+      (or transparent) to avoid any pink flash.
+    - We apply `text-foreground` and `bg-background`
+      from your theme so we don't see pink or white or 
+      any intermediate color. 
+  */
+  body {
+    @apply bg-background text-foreground !important;
+    margin: 0; /* Ensure no default margin */
+    padding: 0;
+  }
+
+  /*
+    #__next or *: 
+    Remove any leftover default styling 
+    that might show pink or any other color
+  */
+  #__next {
+    /* 
+      If you want scrolling, do NOT hide overflow-y.
+      If you do not want scrolling in general, keep hidden. 
+      Possibly remove if you see layout issues.
+    */
+    overflow-y: auto; 
+  }
+
+  * {
+    @apply border-border;
+    box-sizing: border-box;
   }
 }
 
-#__next {
-  overflow-y: hidden;
-}
-
+/* 
+  Extra custom classes 
+  (Combining your custom-select styles)
+*/
 .custom-select {
   color: #ffffff; /* White text color */
 }
-
 .custom-select option {
-  color: #094f2d; /* White text color for options */
+  color: #094f2d; 
+}
+.custom-select option:checked {
+  background-color: #ffffff; 
+  color: #000000; 
 }
 
-.custom-select option:checked {
-  background-color: #ffffff; /* White background for selected option */
-  color: #000000; /* Black text color for selected option */
+/* Glass effect */
+.backdrop-blur-md {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Blob Animation */
+@keyframes blob {
+  0% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+  100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+}
+
+.animate-blob {
+  animation: blob 7s infinite;
+}
+
+.animation-delay-2000 {
+  animation-delay: 2s;
+}
+
+.animation-delay-4000 {
+  animation-delay: 4s;
 }

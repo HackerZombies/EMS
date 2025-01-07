@@ -1,64 +1,101 @@
 // @/lib/formValidation.ts
 
-interface FormData {
-    firstName: string;
-    lastName: string;
-    password: string;
-    email: string;
-    phoneNumber: string;
-    dob: string;
-    address: string;
-    qualifications: string;
-    department: string;
-    position: string;
+export interface FormData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phoneNumber: string;
+  dob: string;
+  address: string;
+  qualifications: string;
+  department: string;
+  position: string;
+  role: string;
+}
+
+interface FormErrors {
+  [key: string]: string;
+}
+
+export function validateForm(formData: FormData): FormErrors {
+  const errors: FormErrors = {};
+
+  // First Name Validation
+  if (!formData.firstName.trim()) {
+    errors.firstName = "First name is required.";
+  } else if (formData.firstName.length < 2) {
+    errors.firstName = "First name must be at least 2 characters.";
   }
-  
-  export function validateForm(formData: FormData): { [key: string]: string } {
-    const errors: { [key: string]: string } = {};
-  
-    if (!formData.firstName.trim()) {
-      errors.firstName = "First name is required";
-    }
-    if (!formData.lastName.trim()) {
-      errors.lastName = "Last name is required";
-    }
-    if (!formData.password) {
-      errors.password = "Password is required";
-    } else if (formData.password.length < 8) {
-      errors.password = "Password must be at least 8 characters long";
-    }
-    if (!formData.email) {
-      errors.email = "Email is required";
-    } else if (!/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(formData.email)) {
-      errors.email = "Invalid email address";
-    }
-    if (!formData.phoneNumber) {
-      errors.phoneNumber = "Phone number is required";
-    } else if (!/^\d{10}$/.test(formData.phoneNumber)) {
-      errors.phoneNumber = "Invalid phone number (should be 10 digits)";
-    }
-    if (!formData.dob) {
-      errors.dob = "Date of birth is required";
-    } else {
-      const dobDate = new Date(formData.dob);
-      const today = new Date();
-      const age = today.getFullYear() - dobDate.getFullYear();
-      if (age < 18) {
-        errors.dob = "Employee must be at least 18 years old";
-      }
-    }
-    if (!formData.address.trim()) {
-      errors.address = "Address is required";
-    }
-    if (!formData.qualifications.trim()) {
-      errors.qualifications = "Qualifications are required";
-    }
-    if (!formData.department.trim()) {
-      errors.department = "Department is required";
-    }
-    if (!formData.position.trim()) {
-      errors.position = "Position is required";
-    }
-  
-    return errors;
+
+  // Last Name Validation
+  if (!formData.lastName.trim()) {
+    errors.lastName = "Last name is required.";
+  } else if (formData.lastName.length < 2) {
+    errors.lastName = "Last name must be at least 2 characters.";
   }
+
+  // Email Validation
+  if (!formData.email.trim()) {
+    errors.email = "Email is required.";
+  } else if (!validateEmail(formData.email)) {
+    errors.email = "Invalid email format.";
+  }
+
+  // Mobile Number Validation
+  if (!formData.phoneNumber.trim()) {
+    errors.phoneNumber = "Mobile number is required.";
+  } else if (!validatePhoneNumber(formData.phoneNumber)) {
+    errors.phoneNumber = "Invalid mobile number format.";
+  }
+
+  // Date of Birth Validation
+  if (!formData.dob.trim()) {
+    errors.dob = "Date of birth is required.";
+  } else if (!validateDate(formData.dob)) {
+    errors.dob = "Invalid date format.";
+  }
+
+  // Address Validation
+  if (!formData.address.trim()) {
+    errors.address = "Address is required.";
+  }
+
+  // Qualifications Validation
+  if (!formData.qualifications.trim()) {
+    errors.qualifications = "Qualifications are required.";
+  }
+
+  // Department Validation
+  if (!formData.department.trim()) {
+    errors.department = "Department is required.";
+  }
+
+  // Position Validation
+  if (!formData.position.trim()) {
+    errors.position = "Position is required.";
+  }
+
+  // Role Validation
+  if (!formData.role.trim()) {
+    errors.role = "User role is required.";
+  }
+
+  return errors;
+}
+
+// Helper Functions
+
+function validateEmail(email: string): boolean {
+  const re = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  return re.test(String(email).toLowerCase());
+}
+
+function validatePhoneNumber(phone: string): boolean {
+  const re = /^\+?[1-9]\d{1,14}$/; // E.164 format
+  return re.test(phone);
+}
+
+function validateDate(date: string): boolean {
+  const timestamp = Date.parse(date);
+  return !isNaN(timestamp);
+}

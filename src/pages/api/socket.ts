@@ -1,79 +1,102 @@
-import { Server } from "socket.io";
-import prisma from "@/lib/prisma";
+// src/pages/api/socket.ts
 
-let io: Server | undefined;
+import WebSocket, { WebSocketServer } from 'ws'; // Corrected import
+import { NextApiRequest, NextApiResponse } from 'next';
+import prisma from '@/lib/prisma'; // Import Prisma client
+import { Server as HTTPServer } from 'http';
 
-const SocketHandler = (req: any, res: any) => {
-  if (res.socket.server.io) {
-    console.log("Socket.IO server is already running");
-    io = res.socket.server.io as Server; // Explicitly assign the existing instance
+// 2. Initialize WebSocketServer only once
+let wss: WebSocketServer | undefined;
+
+// 3. WebSocket handler
+const wsHandler = (req: NextApiRequest, res: NextApiResponse) => {
+  const server = req.socket.server as HTTPServer; // Type assertion with augmented properties
+
+  if (server.wss) {
+    console.log('WebSocket server already running');
     res.end();
     return;
   }
 
-  console.log("Starting Socket.IO server...");
-  io = new Server(res.socket.server, {
-    path: "/api/socket",
-    cors: {
-      origin: "*", // Adjust for production
-      methods: ["GET", "POST"],
-    },
-  });
+  console.log('Initializing WebSocket server');
 
-  res.socket.server.io = io;
+  // 4. Initialize the WebSocket server with the HTTP server
+  wss = new WebSocketServer({ server });
 
-  io.on("connection", (socket) => {
-    console.log("Client connected:", socket.id);
+  server.wss = wss; // Attach the WebSocketServer instance to the HTTP server
 
-    // Emit attendance data on connection
-    const sendAttendanceData = async () => {
+  // 5. Handle new client connections
+  wss.on('connection', async (ws: WebSocket) => {
+    console.log('Client connected');
+    ws.send(JSON.stringify({ type: 'serverReady' })); // Send serverReady message
+
+    // 6. Handle incoming messages from clients
+    ws.on('message', async (message: WebSocket.Data) => { // No more TypeScript error
+      let parsedMessage: any;
+
       try {
-        const attendanceData = await prisma.attendance.findMany({
-          include: {
-            user: {
-              select: { username: true, firstName: true, lastName: true, role: true },
-            },
-          },
-        });
-        io?.emit("attendance-update", attendanceData); // Use optional chaining
+        // Ensure the message is a string before parsing
+        const messageStr = typeof message === 'string' ? message : message.toString();
+        parsedMessage = JSON.parse(messageStr);
       } catch (error) {
-        console.error("Error fetching attendance data:", error);
+        console.error('Invalid JSON received:', error);
+        ws.send(JSON.stringify({ type: 'error', message: 'Invalid JSON format' }));
+        return;
       }
-    };
 
-    sendAttendanceData();
-
-    // Listen for manual data refresh requests
-    socket.on("refresh-attendance", () => {
-      sendAttendanceData();
+      // Handle different message types
+      if (parsedMessage.type === 'request-all-attendance') {
+        console.log('Received request for all attendance data');
+        try {
+          const allAttendance = await prisma.attendance.findMany({
+            include: {
+              user: {
+                select: { username: true, firstName: true, lastName: true, role: true },
+              },
+            },
+            orderBy: { date: 'desc' },
+          });
+          ws.send(JSON.stringify({ type: 'allAttendanceData', payload: allAttendance }));
+        } catch (error) {
+          console.error('Error fetching all attendance data:', error);
+          ws.send(JSON.stringify({ type: 'error', message: 'Failed to fetch attendance data' }));
+        }
+      }
     });
 
-    socket.on("disconnect", () => {
-      console.log("Client disconnected:", socket.id);
+    // 7. Handle client disconnections
+    ws.on('close', () => {
+      console.log('Client disconnected');
+    });
+
+    // 8. Handle WebSocket errors
+    ws.on('error', (error: Error) => {
+      console.error('WebSocket error:', error);
     });
   });
 
+  console.log('WebSocket server started');
   res.end();
 };
 
-// Utility function to emit attendance updates
-export const emitAttendanceUpdate = async () => {
-  if (!io) {
-    console.error("Socket.IO server is not initialized");
-    return; // Exit gracefully
+// 9. Broadcast attendance updates to all connected clients
+export const broadcastAttendanceUpdate = (attendanceData: any) => {
+  if (!wss) {
+    console.log('WebSocket server not initialized');
+    return;
   }
-  try {
-    const attendanceData = await prisma.attendance.findMany({
-      include: {
-        user: {
-          select: { username: true, firstName: true, lastName: true, role: true },
-        },
-      },
-    });
-    io.emit("attendance-update", attendanceData); // No error here since io is checked above
-  } catch (error) {
-    console.error("Error emitting attendance update:", error);
-  }
+  wss.clients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify({ type: 'attendanceUpdate', payload: attendanceData }));
+    }
+  });
 };
 
-export default SocketHandler;
+// 10. Disable Next.js body parsing for this API route
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
+
+export default wsHandler;

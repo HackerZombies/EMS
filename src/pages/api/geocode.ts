@@ -1,3 +1,5 @@
+//pages/api/geocode.ts
+
 import { NextApiRequest, NextApiResponse } from "next";
 
 export default async function geocodeHandler(req: NextApiRequest, res: NextApiResponse) {

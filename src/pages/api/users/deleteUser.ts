@@ -9,7 +9,7 @@ export default async function handle(
   res: NextApiResponse,
 ) {
   const session = await getServerSession(req, res, authOptions);
-  if (!session || session.user.role !== "TECHNICIAN") {
+  if (!session || session.user.role !== "HR") {
     return res.status(401).json({ message: "Unauthorized" });
   }
   if (req.method !== "DELETE") {

@@ -81,8 +81,6 @@ export default function UserList({ users, query }: Props) {
                       ? "Employee"
                       : user.role === "HR"
                       ? "HR Employee"
-                      : user.role === "TECHNICIAN"
-                      ? "Technician"
                       : ""}
                   </p>
                 </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import ManageLeaveCards from "@/components/ManageLeaveCards";
 import { useRouter } from "next/router";
@@ -9,13 +9,22 @@ import Head from "next/head";
 import Button from "@/components/Button";
 import Modal from "@/components/Modal";
 
+type LeaveRequestWithUser = LeaveRequest & {
+  user: {
+    firstName: string;
+    lastName: string;
+    department: string;
+    position: string;
+  };
+};
+
 const LeaveManagementPage = () => {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequestWithUser[]>([]);
   const [filter, setFilter] = useState("Pending");
   const [visible, setVisible] = useState(false);
-  const [message, setMessage] = useState(<></>);
+  const [message, setMessage] = useState<React.ReactNode>(null);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -31,36 +40,38 @@ const LeaveManagementPage = () => {
         if (!response.ok) {
           throw new Error("Failed to fetch leave requests");
         }
-        let data = await response.json();
+        const data: LeaveRequestWithUser[] = await response.json();
+
         if (session?.user?.username) {
-          data = data.filter(
-            (request: LeaveRequest) =>
-              request.userUsername !== session.user?.username,
+          const filteredData = data.filter(
+            (request) => request.userUsername !== session.user.username
           );
+
+          const sortedData = filteredData.sort((a, b) => {
+            const statusPriority = { Pending: 1, Accepted: 2, Declined: 3 };
+            const priorityA = statusPriority[a.requestStatus as keyof typeof statusPriority] || 99;
+            const priorityB = statusPriority[b.requestStatus as keyof typeof statusPriority] || 99;
+
+            if (priorityA !== priorityB) return priorityA - priorityB;
+
+            const dateA = new Date(a.startDate);
+            const dateB = new Date(b.startDate);
+            return dateA.getTime() - dateB.getTime();
+          });
+
+          setLeaveRequests(sortedData);
+        } else {
+          setLeaveRequests(data);
         }
-        const sortedData = data.sort((a: any, b: any) => {
-          const statusPriority: { [key: string]: number } = {
-            Pending: 1,
-            Accepted: 2,
-            Declined: 3,
-          };
-          const priorityA = statusPriority[a.requestStatus] || 99;
-          const priorityB = statusPriority[b.requestStatus] || 99;
-          if (priorityA < priorityB) return -1;
-          if (priorityA > priorityB) return 1;
-          const dateA = new Date(a.startDate);
-          const dateB = new Date(b.startDate);
-          return dateA.getTime() - dateB.getTime();
-        });
-        setLeaveRequests(sortedData);
       } catch (error) {
         console.error("Error fetching leave requests:", error);
       }
     };
+
     fetchAllLeaveRequests();
   }, [session]);
 
-  const handleStatusUpdate = async (id: any, newStatus: string) => {
+  const handleStatusUpdate = async (id: string, newStatus: string) => {
     try {
       const response = await fetch(
         `/api/leaveRequests/updateleavestatus?id=${id}`,
@@ -70,7 +81,7 @@ const LeaveManagementPage = () => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ requestStatus: newStatus }),
-        },
+        }
       );
       if (!response.ok) {
         throw new Error("Failed to update leave request status");
@@ -88,7 +99,7 @@ const LeaveManagementPage = () => {
         <div className="flex flex-col gap-3">
           <p>Leave request has been {newStatus.toLowerCase()} successfully.</p>
           <Button onClick={() => setVisible(false)}>OK</Button>
-        </div>,
+        </div>
       );
       setVisible(true);
     } catch (error) {
@@ -100,7 +111,9 @@ const LeaveManagementPage = () => {
   const filteredRequests =
     filter === "all"
       ? leaveRequests
-      : leaveRequests.filter((request: LeaveRequest) => request.requestStatus === filter);
+      : leaveRequests.filter(
+          (request) => request.requestStatus === filter
+        );
 
   const list = {
     visible: {
@@ -138,9 +151,7 @@ const LeaveManagementPage = () => {
           <select
             className="flex items-center justify-center rounded-md bg-gray-800 border border-gray-600 text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-150 ease-in-out px-4 py-2"
             value={filter}
-            onChange={(e) => {
-              setFilter(e.target.value);
-            }}
+            onChange={(e) => setFilter(e.target.value)}
           >
             <option value="all">All Requests</option>
             <option value="Pending">Pending Requests</option>
@@ -156,8 +167,12 @@ const LeaveManagementPage = () => {
         ) : filteredRequests.length === 0 ? (
           <div className="flex grow flex-col items-center justify-center gap-2 text-center text-gray-400">
             <Icon icon="ph:funnel-light" width="8em" />
-            <h1 className="text-2xl font-semibold">No requests matching filter</h1>
-            <p className="text-gray-500">Try selecting a different filter in the dropdown.</p>
+            <h1 className="text-2xl font-semibold">
+              No requests matching filter
+            </h1>
+            <p className="text-gray-500">
+              Try selecting a different filter in the dropdown.
+            </p>
           </div>
         ) : (
           <motion.div
@@ -171,13 +186,13 @@ const LeaveManagementPage = () => {
                 <ManageLeaveCards
                   leaveData={{
                     ...request,
-                    userFirstName: request.User.firstName,
-                    userLastName: request.User.lastName,
-                    department: request.User.department,
-                    position: request.User.position,
+                    userFirstName: request.user.firstName,
+                    userLastName: request.user.lastName,
+                    department: request.user.department,
+                    position: request.user.position,
                   }}
-                  onAccept={(id: any) => handleStatusUpdate(id, "Accepted")}
-                  onDecline={(id: any) => handleStatusUpdate(id, "Declined")}
+                  onAccept={(id) => handleStatusUpdate(id, "Accepted")}
+                  onDecline={(id) => handleStatusUpdate(id, "Declined")}
                 />
               </motion.div>
             ))}
@@ -187,7 +202,7 @@ const LeaveManagementPage = () => {
       <Modal
         visible={visible}
         title="Leave request updated"
-        onClose={() => setVisible(false)} // Use onClose instead of setVisible
+        onClose={() => setVisible(false)}
       >
         {message}
       </Modal>

@@ -5,15 +5,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method === "GET") {
     try {
       const { userUsername } = req.query;
-      let whereClause;
-      if (userUsername) {
-        whereClause = Array.isArray(userUsername) ? { userUsername: userUsername[0] } : { userUsername };
-      }
+      const whereClause = userUsername
+        ? { userUsername: String(userUsername) }
+        : {}; // Fetch all leave requests if no username is provided.
 
       const leaveRequests = await prisma.leaveRequest.findMany({
         where: whereClause,
         include: {
-          User: { // Include user details
+          user: {
             select: {
               firstName: true,
               lastName: true,

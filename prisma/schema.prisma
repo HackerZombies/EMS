@@ -1,5 +1,3 @@
-// prisma/schema.prisma
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,31 +7,171 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id             String         @id @default(auto()) @map("_id") @db.ObjectId
-  username       String         @unique
-  password       String
-  firstName      String
-  lastName       String
-  email          String         @unique
-  phoneNumber    String         @unique
-  dateCreated    DateTime       @default(now())
-  leaveBalance   Int
-  leaveRequests  LeaveRequest[] @relation("UserLeaveRequests")
-  digilocker     Digilocker[]   @relation("UserDigilocker")
-  documents      Document[]     @relation("UserDocuments")
-  tickets        Ticket[]       @relation("UserTickets")
-  messages       Message[]      @relation("UserMessages")
-  role           String         @default("EMPLOYEE")
-  dob            DateTime?
-  address        String?
-  qualifications String?
-  department     String?
-  position       String?
-  hrDocuments    HrDocument[]   @relation("UserHrDocuments")
-  otps           OTP[]          @relation("UserOTPs")
-  attendances    Attendance[]   @relation("UserAttendances") // New relation field
+enum QualificationLevel {
+  Schooling
+  Graduate
+  Masters
+  Doctorate
+  Other
 }
+
+enum UserRole {
+  EMPLOYEE
+  HR
+}
+
+enum Gender {
+  M
+  F
+  Other
+}
+
+enum MaritalStatus {
+  Married
+  Unmarried
+}
+
+enum BloodGroup {
+  A_POSITIVE
+  A_NEGATIVE
+  B_POSITIVE
+  B_NEGATIVE
+  AB_POSITIVE
+  AB_NEGATIVE
+  O_POSITIVE
+  O_NEGATIVE
+  UNKNOWN
+}
+
+enum EmploymentType { // Added EmploymentType enum
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERN
+  OTHER
+}
+
+enum DocumentCategory {
+  resume
+  education
+  identity
+  certifications
+  skills
+  others
+}
+
+model User {
+  id                 String             @id @default(auto()) @map("_id") @db.ObjectId
+  username           String             @unique
+  password           String
+  firstName          String
+  middleName         String?
+  lastName           String
+  email              String             @unique
+  phoneNumber        String             @unique
+  dateCreated        DateTime           @default(now())
+  leaveBalance       Int                @default(28) // Default leave balance
+  role               UserRole           @default(EMPLOYEE)
+  dob                DateTime?
+  residentialAddress String?
+  permanentAddress   String?
+  department         String?
+  position           String?
+  nationality        String?
+  gender             Gender?
+  maritalStatus      MaritalStatus?
+  bloodGroup         BloodGroup?          @default(UNKNOWN)
+  joiningDate        DateTime?          // Added Joining Date
+  employmentType     EmploymentType?    // Added Employment Type
+  workLocation       String?            // Added Work Location
+  profileImageUrl    String?            // Add this field for profile image
+  avatarImageUrl     String?  
+
+  // Relations
+  leaveRequests      LeaveRequest[]     @relation("UserLeaveRequests")
+  digilocker         Digilocker[]       @relation("UserDigilocker")
+  documents          Document[]         @relation("UserDocuments")
+  tickets            Ticket[]           @relation("UserTickets")
+  messages           Message[]          @relation("UserMessages")
+  hrDocuments        HrDocument[]       @relation("UserHrDocuments")
+  otps               OTP[]              @relation("UserOTPs")
+  qualifications     Qualification[]    @relation("UserQualifications")
+  employeeDocuments  EmployeeDocument[] @relation("UserEmployeeDocuments")
+  attendances        Attendance[]       @relation("UserAttendances") 
+  experiences        Experience[]       @relation("UserExperiences")
+  certifications     Certification[]    @relation("UserCertifications")
+  auditLogs          AuditLog[]         @relation("UserAuditLogs") // New relation for audit logs
+  emergencyContacts  EmergencyContact[] @relation("UserEmergencyContacts")
+
+
+  @@index([email, phoneNumber], name: "user_contact_index") // Combined index
+}
+
+
+model EmergencyContact {
+    id          String    @id @default(auto()) @map("_id") @db.ObjectId
+    name        String
+    relationship String
+    phoneNumber String
+    email       String?
+    userUsername String
+    user  User      @relation("UserEmergencyContacts", fields: [userUsername], references: [username], onDelete: Cascade)
+}
+
+model Qualification {
+  id            String             @id @default(auto()) @map("_id") @db.ObjectId
+  level         QualificationLevel
+  name          String?
+  specializations String[]         // Renamed and made an array for multiple specializations
+  institution   String?
+  username      String
+  user          User               @relation("UserQualifications", fields: [username], references: [username], onDelete: Cascade)
+
+  @@index([username])
+}
+
+model Experience {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  jobTitle    String
+  company     String
+  startDate   DateTime
+  endDate     DateTime? // Null if currently employed
+  description String?
+  username    String
+  user        User     @relation("UserExperiences", fields: [username], references: [username], onDelete: Cascade)
+
+  @@index([username])
+}
+
+model Certification {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  name            String   // Certification Name (Mandatory)
+  issuingAuthority String   // Issuing Authority (Mandatory)
+  licenseNumber   String?  // License Number (Optional, but recommended)
+  expiryDate      DateTime? // Expiry Date (Optional, but recommended)
+  username        String
+  user            User     @relation("UserCertifications", fields: [username], references: [username], onDelete: Cascade)
+  issueDate       DateTime? // Optional: Date Issued
+
+  @@index([username])
+}
+
+
+
+model EmployeeDocument {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  filename      String
+  fileType      String? 
+  data          Bytes
+  size          Int
+  dateUploaded  DateTime @default(now())
+  userUsername  String
+
+  category      DocumentCategory?  // <--- use the enum
+
+  user          User @relation("UserEmployeeDocuments", fields: [userUsername], references: [username], onDelete: Cascade)
+}
+
 
 model LeaveRequest {
   id            String    @id @default(auto()) @map("_id") @db.ObjectId
@@ -43,25 +181,25 @@ model LeaveRequest {
   requestStatus String    @default("Pending")
   dateCreated   DateTime  @default(now())
   dateResponded DateTime?
-  User          User      @relation("UserLeaveRequests", fields: [userUsername], references: [username], onDelete: Cascade)
   userUsername  String
+  user          User      @relation("UserLeaveRequests", fields: [userUsername], references: [username], onDelete: Cascade)
 }
 
 model Digilocker {
-  id           String   @id @default(auto()) @map("_id") @db.ObjectId
-  filename     String?
-  size         Int?
-  mimetype     String?
-  data         Bytes?
-  dateCreated  DateTime @default(now())
-  userUsername String
-  user         User     @relation("UserDigilocker", fields: [userUsername], references: [username], onDelete: Cascade)
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  filename      String?
+  size          Int?
+  mimetype      String?
+  data          Bytes?
+  dateCreated   DateTime @default(now())
+  userUsername  String
+  user          User     @relation("UserDigilocker", fields: [userUsername], references: [username], onDelete: Cascade)
 }
 
 model HrDocument {
   id                String   @id @default(auto()) @map("_id") @db.ObjectId
   filename          String
-  submittedBy       String   @db.String
+  submittedBy       String
   submitterFullName String
   department        String
   position          String
@@ -73,15 +211,13 @@ model HrDocument {
   user              User?    @relation("UserHrDocuments", fields: [submittedBy], references: [username], onDelete: Cascade)
 }
 
-
-
 model Document {
-  id           String   @id @default(auto()) @map("_id") @db.ObjectId
-  filename     String
-  data         Bytes
-  dateCreated  DateTime @default(now())
-  userUsername String
-  User         User     @relation("UserDocuments", fields: [userUsername], references: [username], onDelete: Cascade)
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  filename      String
+  data          Bytes
+  dateCreated   DateTime @default(now())
+  userUsername  String
+  user          User     @relation("UserDocuments", fields: [userUsername], references: [username], onDelete: Cascade)
 }
 
 model Announcement {
@@ -99,22 +235,22 @@ model Ticket {
   messages     Message[] @relation("TicketMessages")
   dateCreated  DateTime  @default(now())
   userUsername String
-  User         User      @relation("UserTickets", fields: [userUsername], references: [username], onDelete: Cascade)
+  user         User      @relation("UserTickets", fields: [userUsername], references: [username], onDelete: Cascade)
 }
 
 model Message {
   id           String   @id @default(auto()) @map("_id") @db.ObjectId
   ticketId     String   @db.ObjectId
-  Ticket       Ticket   @relation("TicketMessages", fields: [ticketId], references: [id], onDelete: Cascade)
+  ticket       Ticket   @relation("TicketMessages", fields: [ticketId], references: [id], onDelete: Cascade)
   text         String
   dateCreated  DateTime @default(now())
   userUsername String
-  User         User     @relation("UserMessages", fields: [userUsername], references: [username], onDelete: Cascade)
+  user         User     @relation("UserMessages", fields: [userUsername], references: [username], onDelete: Cascade)
 }
 
 model OTP {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId    String   @unique // Add @unique here
+  userId    String   @unique @db.ObjectId
   otp       String
   createdAt DateTime @default(now())
   user      User     @relation("UserOTPs", fields: [userId], references: [id], onDelete: Cascade)
@@ -122,7 +258,7 @@ model OTP {
 
 model Attendance {
   id                String   @id @default(auto()) @map("_id") @db.ObjectId
-  date              DateTime?
+  date              DateTime
   checkInTime       DateTime?
   checkOutTime      DateTime?
   checkInLatitude   Float?
@@ -133,4 +269,13 @@ model Attendance {
   user              User     @relation("UserAttendances", fields: [userUsername], references: [username], onDelete: Cascade)
 
   @@unique([userUsername, date])
+}
+
+model AuditLog {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  action       String
+  details      String
+  datePerformed DateTime @default(now())
+  performedBy   String
+  user          User     @relation("UserAuditLogs", fields: [performedBy], references: [username], onDelete: Cascade)
 }

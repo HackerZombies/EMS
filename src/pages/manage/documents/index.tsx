@@ -1,5 +1,6 @@
 import { Prisma, User } from "@prisma/client";
 import { GetServerSideProps } from "next";
+import { getSession } from "next-auth/react";
 import prisma from "@/lib/prisma";
 import Link from "next/link";
 import Head from "next/head";
@@ -123,6 +124,20 @@ export default function ManageDocuments({ users }: Props) {
 }
 
 export const getServerSideProps: GetServerSideProps = async (context) => {
+
+   // Get user session
+   const session = await getSession(context);
+
+   // Check if the user is logged in and has the HR role
+   if (!session || !session.user || session.user.role !== "HR") {
+     return {
+       redirect: {
+         destination: "/unauthorized",
+         permanent: false,
+       },
+     };
+   }
+ 
   const users = await prisma.user.findMany({
     include: {
       _count: {

@@ -28,9 +28,9 @@ export default function ManageUsers({ users }: Props) {
       <div className="flex grow flex-col gap-5 p-5 bg-black bg-opacity-50 opacity-80 rounded-2xl text-white">
         <div className="flex justify-between">
           <h1 className="text-3xl font-semibold py--2 px-2">Manage Employees</h1>
-          {userRole === "TECHNICIAN" && (
-            <Link scroll={false} href="/manage/users/new">
-              <GreenButton>Add User</GreenButton>
+          {userRole === "HR" && (
+            <Link scroll={false} href="/add-New-Employee">
+              <GreenButton>Add Employee</GreenButton>
             </Link>
           )}
         </div>

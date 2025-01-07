@@ -14,7 +14,7 @@ export default async function handle(
     const result = await prisma.ticket.create({
       data: {
         subject: subject,
-        User: { connect: { username: session.user.username } },
+        user: { connect: { username: session.user.username } },
         messages: {
           create: [{ userUsername: session.user.username, text: description }],
         },

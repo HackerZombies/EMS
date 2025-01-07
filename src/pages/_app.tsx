@@ -6,7 +6,7 @@ import Head from "next/head";
 import TimeAgo from "javascript-time-ago";
 import en from "javascript-time-ago/locale/en";
 
-const App = ({ Component, pageProps, ...appProps }: AppProps) => {
+const App = ({ Component, pageProps }: AppProps) => {
   TimeAgo.addLocale(en);
 
   return (

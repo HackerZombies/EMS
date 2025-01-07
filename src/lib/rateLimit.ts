@@ -7,21 +7,16 @@ const rateLimiter = new RateLimiterMemory({
 });
 
 /**
- * Middleware to enforce rate limiting.
+ * Enforces rate limiting for Next.js API routes.
  * @param req Next.js API request object
  * @param res Next.js API response object
- * @param next Function to proceed to the next middleware or handler
  */
-export default async function rateLimit(
-  req: NextApiRequest,
-  res: NextApiResponse,
-  next: () => void
-) {
+export default async function rateLimit(req: NextApiRequest, res: NextApiResponse) {
   try {
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
     await rateLimiter.consume(ip.toString()); // Consume a point for this IP
-    next(); // Proceed to the next middleware or API handler
   } catch (err) {
     res.status(429).json({ message: 'Too many requests. Please try again later.' });
+    throw err; // Ensures the calling code knows rate limiting has failed
   }
 }

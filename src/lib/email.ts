@@ -1,5 +1,3 @@
-// src/lib/email.ts
-
 import nodemailer from 'nodemailer';
 import * as dotenv from 'dotenv';
 dotenv.config();
@@ -14,22 +12,38 @@ const getEnvVar = (name: string): string => {
 };
 
 // Ensure required environment variables are set
-const gmailUser = getEnvVar('GMAIL_USER');
-const gmailPass = getEnvVar('GMAIL_PASS');
+const smtpHost = getEnvVar('SMTP_HOST');
+const smtpPort = parseInt(getEnvVar('SMTP_PORT'), 10);
+const smtpSecure = getEnvVar('SMTP_SECURE') === 'true';
+const smtpUser = getEnvVar('SMTP_USER');
+const smtpPass = getEnvVar('SMTP_PASS');
 
-// Create a transporter object using Gmail service
+// Create a transporter object using the custom SMTP server
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  secure: true, // Use SSL
-  port: 465,
+  host: smtpHost,
+  port: smtpPort,
+  secure: smtpSecure, // true for 465, false for other ports
   auth: {
-    user: gmailUser,
-    pass: gmailPass,
+    user: smtpUser,
+    pass: smtpPass,
+  },
+  tls: {
+    // This is optional. Use it if your SMTP server uses self-signed certificates.
+    rejectUnauthorized: false,
   },
 });
 
+// Verify the transporter configuration (optional but recommended)
+transporter.verify(function (error, success) {
+  if (error) {
+    console.error('Error with SMTP configuration:', error);
+  } else {
+    console.log('SMTP configuration is correct. Ready to send emails.');
+  }
+});
+
 /**
- * Sends an email.
+ * Sends an OTP email.
  * @param to Recipient's email address.
  * @param subject Email subject.
  * @param text Email body.
@@ -44,7 +58,7 @@ export async function sendotpEmail({
   text: string;
 }) {
   const mailOptions = {
-    from: gmailUser, // Sender address from environment variable
+    from: smtpUser, // Sender address from environment variable
     to,
     subject,
     text,
@@ -52,14 +66,14 @@ export async function sendotpEmail({
 
   try {
     await transporter.sendMail(mailOptions);
-    console.log('Email sent successfully');
+    console.log('OTP email sent successfully');
   } catch (error: unknown) {
     if (error instanceof Error) {
-      console.error('Error sending email:', error.message);
-      throw new Error(`Error sending email: ${error.message}`);
+      console.error('Error sending OTP email:', error.message);
+      throw new Error(`Error sending OTP email: ${error.message}`);
     } else {
-      console.error('Error sending email:', error);
-      throw new Error('Error sending email: Unknown error occurred');
+      console.error('Error sending OTP email:', error);
+      throw new Error('Error sending OTP email: Unknown error occurred');
     }
   }
 }

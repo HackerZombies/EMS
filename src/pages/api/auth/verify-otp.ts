@@ -9,31 +9,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    await rateLimit(req, res, async () => {
-      const { username, otp } = req.body;
+    await rateLimit(req, res); // Enforce rate limiting
+  } catch (rateLimitError) {
+    // Rate limiting error is handled inside rateLimit
+    return; // Exit early if rate limiting fails
+  }
 
-      if (!username || !otp) {
-        return res.status(400).json({ message: 'Username and OTP are required.' });
-      }
+  const { username, otp } = req.body;
 
-      try {
-        const isValid = await verifyUserOtp(username, otp);
-        if (isValid) {
-          return res.status(200).json({ message: 'OTP verified successfully.' });
-        } else {
-          return res.status(400).json({ message: 'Invalid or expired OTP.' });
-        }
-      } catch (error) {
-        // Cast error to known type (Error) or use a type guard
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred.';
-        console.error('Error verifying OTP:', errorMessage);
-        return res.status(500).json({ message: 'Failed to verify OTP. Please try again.' });
-      }
-    });
-  } catch (error) {
-    // Handle unexpected errors, ensuring 'error' is properly typed
-    const errorMessage = error instanceof Error ? error.message : 'Unexpected error occurred.';
-    console.error('Unexpected error in verify-otp handler:', errorMessage);
-    return res.status(500).json({ message: 'An unexpected error occurred.' });
+  if (!username || !otp) {
+    return res.status(400).json({ message: 'Username and OTP are required.' });
+  }
+
+  try {
+    const isValid = await verifyUserOtp(username, otp);
+    if (isValid) {
+      return res.status(200).json({ message: 'OTP verified successfully.' });
+    } else {
+      return res.status(400).json({ message: 'Invalid or expired OTP.' });
+    }
+  } catch (error: any) {
+    console.error('Error verifying OTP:', error.message || error);
+    return res.status(500).json({ message: 'Failed to verify OTP. Please try again.' });
   }
 }

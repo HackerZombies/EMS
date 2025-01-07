@@ -17,28 +17,37 @@ export default function SignIn() {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setLoading(true);
-
     const formData = new FormData(event.currentTarget);
-    const result = await signIn("credentials", {
-      username: formData.get("username"),
-      password: formData.get("password"),
-      callbackUrl: "/",
-      redirect: false,
-    });
-
-    setLoading(false);
-
-    if (result) {
-      if (result.ok) {
+    const username = formData.get("username")?.toString().trim();
+    const password = formData.get("password")?.toString().trim();
+  
+    if (!username || !password) {
+      setIncorrectLogin(true);
+      return;
+    }
+  
+    setLoading(true);
+    try {
+      const result = await signIn("credentials", {
+        username,
+        password,
+        callbackUrl: "/",
+        redirect: false,
+      });
+      setLoading(false);
+  
+      if (result?.ok) {
         setIncorrectLogin(false);
         router.push(result.url || '/');
       } else {
         setIncorrectLogin(true);
       }
+    } catch (error) {
+      setLoading(false);
+      console.error("Sign-In Error:", error);
+      setIncorrectLogin(true);
     }
   }
-
   return (
     <>
       <Head>

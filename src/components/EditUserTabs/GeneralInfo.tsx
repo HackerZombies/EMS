@@ -269,17 +269,17 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ formData, setFormDa
 
       {/* Reset Password */}
       <div className="flex items-center">
-        <input
-          type="checkbox"
-          id="resetPassword"
-          name="resetPassword"
-          checked={!!formData.resetPassword}
-          onChange={handleResetPassword}
-          className="form-checkbox h-4 w-4 text-blue-600"
-        />
-        <Label htmlFor="resetPassword" className="ml-2 text-white">Reset Password</Label>
-      </div>
-
+  <input
+    type="checkbox"
+    id="resetPassword"
+    name="resetPassword"
+    checked={!!formData.resetPassword}
+    onChange={handleResetPassword}
+    className="form-checkbox h-4 w-4 text-blue-600"
+  />
+  <Label htmlFor="resetPassword" className="ml-2 text-white">Reset Password</Label>
+  <span className="ml-2 text-sm text-gray-400">(Generate a new password and send it to the user's email)</span>
+</div>
       {/* Personal Information */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>

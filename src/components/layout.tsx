@@ -1,37 +1,20 @@
-// File: components/layout.tsx
 import { useSession } from "next-auth/react";
 import SignIn from "@/components/signin";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/router";
 import { Icon } from "@iconify/react";
 import DashboardLayout from "./DashboardLayout";
-import { useState, useEffect } from "react";
+import backgroundImage from "../../public/bg.jpg";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { status } = useSession();
   const router = useRouter();
-  const [backgroundUrl, setBackgroundUrl] = useState("");
-
-  useEffect(() => {
-    const fetchRandomImage = async () => {
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-      const newImageUrl = `https://picsum.photos/${width}/${height}?random=1&?blur=2`;
-      setBackgroundUrl(newImageUrl);
-    };
-
-    fetchRandomImage();
-
-    const intervalId = setInterval(fetchRandomImage, 10000);
-
-    return () => clearInterval(intervalId);
-  }, []);
 
   return (
     <div
       className="min-h-dvh text-black antialiased"
       style={{
-        background: `linear-gradient(rgba(30,30,30,0.85), rgba(30,30,30,0.85)), url(${backgroundUrl}) center / cover no-repeat fixed`,
+        background: `linear-gradient(rgba(30,30,30,0.85), rgba(30,30,30,0.85)), url(${backgroundImage.src}) center / cover no-repeat fixed`,
       }}
     >
       <div
@@ -48,7 +31,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           exit={{ opacity: 0 }}
           transition={{ ease: "easeInOut", duration: 0.3 }}
         >
-          {/* Loading */}
+          {/* Loading State */}
           {status === "loading" && (
             <div className="flex min-h-dvh items-center justify-center gap-2 bg-transparent text-xl font-medium text-white">
               <Icon icon="svg-spinners:90-ring-with-bg" />
@@ -56,7 +39,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </div>
           )}
 
-          {/* Authenticated */}
+          {/* Authenticated State */}
           {status === "authenticated" && (
             <DashboardLayout>
               <AnimatePresence
@@ -78,7 +61,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </DashboardLayout>
           )}
 
-          {/* Unauthenticated */}
+          {/* Unauthenticated State */}
           {status === "unauthenticated" && <SignIn />}
         </motion.div>
       </AnimatePresence>

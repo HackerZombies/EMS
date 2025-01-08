@@ -32,7 +32,7 @@ const AttendancePage: React.FC<AttendancePageProps> = ({
 
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    ws.current = new WebSocket(`${protocol}://${window.location.host}/api/Socket`);
+    ws.current = new WebSocket(`${protocol}://${window.location.host}/api/socket`);
   
     ws.current.onopen = () => {
       console.log('WebSocket connection opened');

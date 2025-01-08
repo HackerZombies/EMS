@@ -117,7 +117,8 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     await handleDocuments(username, documents);
     await handleEmergencyContacts(username, emergencyContacts);
 
-    return res.status(200).json({ message: "User updated successfully", updatedUser });
+    return res.status(200).json({ message: "User updated successfully", resetPassword: resetPassword ? "Password reset email sent" : undefined,
+      updatedUser });
   } catch (error: any) {
     logger.error("Error updating user:", error);
     return res.status(500).json({ message: "Failed to update user", error: error.message });

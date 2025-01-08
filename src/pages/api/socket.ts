@@ -1,98 +1,105 @@
 // src/pages/api/socket.ts
 
-import WebSocket, { WebSocketServer } from 'ws'; // Corrected import
+import WebSocket, { WebSocketServer } from 'ws'; // Import WebSocket
 import { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma'; // Import Prisma client
 import { Server as HTTPServer } from 'http';
 
-// 2. Initialize WebSocketServer only once
+// Singleton WebSocket Server
 let wss: WebSocketServer | undefined;
 
-// 3. WebSocket handler
 const wsHandler = (req: NextApiRequest, res: NextApiResponse) => {
-  const server = req.socket.server as HTTPServer; // Type assertion with augmented properties
+  const server = req.socket.server as HTTPServer; // Access underlying HTTP server
 
+  // Prevent reinitializing the WebSocket server
   if (server.wss) {
-    console.log('WebSocket server already running');
+    console.log('WebSocket server already initialized');
     res.end();
     return;
   }
 
-  console.log('Initializing WebSocket server');
+  console.log('Initializing WebSocket server...');
 
-  // 4. Initialize the WebSocket server with the HTTP server
-  wss = new WebSocketServer({ server });
+  // Initialize WebSocket server
+  wss = new WebSocketServer({ noServer: true });
 
-  server.wss = wss; // Attach the WebSocketServer instance to the HTTP server
+  // Attach the WebSocket server to handle HTTP upgrade events
+  server.on('upgrade', (req, socket, head) => {
+    wss!.handleUpgrade(req, socket, head, (ws) => {
+      wss!.emit('connection', ws, req);
+    });
+  });
 
-  // 5. Handle new client connections
+  server.wss = wss; // Attach WebSocket server to the HTTP server
+
+  // Handle WebSocket connections
   wss.on('connection', async (ws: WebSocket) => {
     console.log('Client connected');
-    ws.send(JSON.stringify({ type: 'serverReady' })); // Send serverReady message
+    ws.send(JSON.stringify({ type: 'serverReady' })); // Notify client
 
-    // 6. Handle incoming messages from clients
-    ws.on('message', async (message: WebSocket.Data) => { // No more TypeScript error
-      let parsedMessage: any;
-
+    ws.on('message', async (message: WebSocket.Data) => {
       try {
-        // Ensure the message is a string before parsing
-        const messageStr = typeof message === 'string' ? message : message.toString();
-        parsedMessage = JSON.parse(messageStr);
+        const parsedMessage = JSON.parse(
+          typeof message === 'string' ? message : message.toString()
+        );
+
+        if (parsedMessage.type === 'request-all-attendance') {
+          console.log('Received request for attendance data');
+
+          try {
+            const allAttendance = await prisma.attendance.findMany({
+              include: {
+                user: {
+                  select: { username: true, firstName: true, lastName: true, role: true },
+                },
+              },
+              orderBy: { date: 'desc' },
+            });
+
+            ws.send(JSON.stringify({ type: 'allAttendanceData', payload: allAttendance }));
+          } catch (dbError) {
+            console.error('Error fetching attendance data:', dbError);
+            ws.send(JSON.stringify({ type: 'error', message: 'Failed to fetch attendance data' }));
+          }
+        } else {
+          ws.send(JSON.stringify({ type: 'error', message: 'Unknown request type' }));
+        }
       } catch (error) {
         console.error('Invalid JSON received:', error);
         ws.send(JSON.stringify({ type: 'error', message: 'Invalid JSON format' }));
-        return;
-      }
-
-      // Handle different message types
-      if (parsedMessage.type === 'request-all-attendance') {
-        console.log('Received request for all attendance data');
-        try {
-          const allAttendance = await prisma.attendance.findMany({
-            include: {
-              user: {
-                select: { username: true, firstName: true, lastName: true, role: true },
-              },
-            },
-            orderBy: { date: 'desc' },
-          });
-          ws.send(JSON.stringify({ type: 'allAttendanceData', payload: allAttendance }));
-        } catch (error) {
-          console.error('Error fetching all attendance data:', error);
-          ws.send(JSON.stringify({ type: 'error', message: 'Failed to fetch attendance data' }));
-        }
       }
     });
 
-    // 7. Handle client disconnections
+    // Handle client disconnect
     ws.on('close', () => {
       console.log('Client disconnected');
     });
 
-    // 8. Handle WebSocket errors
+    // Handle WebSocket errors
     ws.on('error', (error: Error) => {
       console.error('WebSocket error:', error);
     });
   });
 
-  console.log('WebSocket server started');
+  console.log('WebSocket server initialized');
   res.end();
 };
 
-// 9. Broadcast attendance updates to all connected clients
+// Broadcast attendance updates to all connected clients
 export const broadcastAttendanceUpdate = (attendanceData: any) => {
   if (!wss) {
-    console.log('WebSocket server not initialized');
+    console.error('WebSocket server is not initialized');
     return;
   }
-  wss.clients.forEach(client => {
+
+  wss.clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(JSON.stringify({ type: 'attendanceUpdate', payload: attendanceData }));
     }
   });
 };
 
-// 10. Disable Next.js body parsing for this API route
+// Disable body parsing for WebSocket API route
 export const config = {
   api: {
     bodyParser: false,

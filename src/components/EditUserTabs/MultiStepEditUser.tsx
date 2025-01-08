@@ -231,7 +231,6 @@ const MultiStepEditUser: React.FC = () => {
       qualifications: qualifications.qualifications,
       experiences: qualifications.experiences,
       certifications: qualifications.certifications,
-      profileImageUrl: initialData.profileImageUrl,
       
       
     };

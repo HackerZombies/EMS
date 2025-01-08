@@ -45,7 +45,7 @@ export default function AllAttendancePage({ initialAttendance }: AllAttendancePa
   useEffect(() => {
     const connectWebSocket = async () => {
       socketRef.current = new WebSocket(
-        `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/api/Socket`
+        `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/api/socket`
       )
 
       socketRef.current.onopen = () => {
@@ -171,17 +171,17 @@ export default function AllAttendancePage({ initialAttendance }: AllAttendancePa
                       <TableCell className="font-medium">
                         {new Date(record.date).toLocaleDateString()}
                       </TableCell>
-                      <TableCell>
-                        <Link
-                          href={`/manage/users/user/${record.user.username}`}
-                          className="flex items-center gap-2 text-primary hover:underline"
-                        >
-                          <Users className="h-4 w-4" />
-                          <span>
-                            {record.user.firstName} {record.user.lastName}
-                          </span>
-                        </Link>
-                      </TableCell>
+                      <TableCell className="font-medium">
+  <Link
+    href={`/manage/users/user/${record.user.username}`}
+    className="flex items-center gap-2 text-black hover:underline text-base"
+  >
+    <Users className="h-5 w-5" />
+    <span className="whitespace-nowrap overflow-hidden text-ellipsis">
+      {record.user.firstName} {record.user.lastName}
+    </span>
+  </Link>
+</TableCell>
                       <TableCell>{getStatusBadge(record)}</TableCell>
                       <TableCell>
                         {record.checkInTime ? (

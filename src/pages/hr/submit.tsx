@@ -192,7 +192,7 @@ export default function SubmitDocument() {
             Document Management Portal
           </h1>
           <p className="text-slate-400 max-w-2xl mx-auto">
-            Upload, manage, and track your document submissions in one secure location
+            Upload, manage, and track your documents submission and verification process.
           </p>
         </div>
 
@@ -227,7 +227,7 @@ export default function SubmitDocument() {
 
             {file && isRenaming && (
               <div className="bg-slate-800/50 backdrop-blur-md rounded-xl border border-slate-700/50 p-6">
-                <p className="text-slate-400 mb-3">Customize filename:</p>
+                <p className="text-slate-400 mb-3">Customize filename according to ducument's type ie, Adhaar Card, Pan Card, Reprts etc.</p>
                 <div className="flex gap-3">
                   <input
                     type="text"

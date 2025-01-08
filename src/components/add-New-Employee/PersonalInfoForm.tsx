@@ -11,7 +11,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Camera } from "lucide-react";
 
-// Import the same interface you use in /pages/add-New-Employee/index.tsx
 import { CreateUserFormData } from "@/pages/add-New-Employee";
 
 interface PersonalInfoFormProps {
@@ -25,6 +24,10 @@ export default function PersonalInfoForm({
 }: PersonalInfoFormProps) {
   const [profilePreview, setProfilePreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Notification states for image upload
+  const [uploadSuccessMessage, setUploadSuccessMessage] = useState<string | null>(null);
+  const [uploadErrorMessage, setUploadErrorMessage] = useState<string | null>(null);
 
   // Local state for address parts
   const [residentialAddress, setResidentialAddress] = useState({
@@ -50,13 +53,11 @@ export default function PersonalInfoForm({
     };
   };
 
-  // Initialize local address state from formData
   useEffect(() => {
     setResidentialAddress(parseAddress(formData.residentialAddress));
     setPermanentAddress(parseAddress(formData.permanentAddress));
   }, [formData.residentialAddress, formData.permanentAddress]);
 
-  // Synchronize permanent address with residential if checkbox is checked
   useEffect(() => {
     if (formData.sameAsResidential) {
       setPermanentAddress(residentialAddress);
@@ -67,7 +68,6 @@ export default function PersonalInfoForm({
     }
   }, [formData.sameAsResidential, residentialAddress, setFormData]);
 
-  // Update parent formData when residential address fields lose focus
   const syncResidentialToParent = () => {
     setFormData(prev => ({
       ...prev,
@@ -75,7 +75,6 @@ export default function PersonalInfoForm({
     }));
   };
 
-  // Update parent formData when permanent address fields lose focus, if not same as residential
   const syncPermanentToParent = () => {
     if (!formData.sameAsResidential) {
       setFormData(prev => ({
@@ -109,6 +108,10 @@ export default function PersonalInfoForm({
       uploadData.append("oldImagePath", oldImagePath);
     }
 
+    // Clear previous upload messages
+    setUploadSuccessMessage(null);
+    setUploadErrorMessage(null);
+
     setLoading(true);
 
     try {
@@ -124,17 +127,16 @@ export default function PersonalInfoForm({
       const data = await response.json();
       const imageUrl = data.imageUrl;
 
-      // Use the same image for both profile and avatar
       setFormData((prev) => ({
         ...prev,
         profileImageUrl: imageUrl,
         avatarImageUrl: imageUrl,
       }));
 
-      alert("Image uploaded successfully.");
+      setUploadSuccessMessage("Image uploaded successfully.");
     } catch (error) {
       console.error("Error uploading image:", error);
-      alert("Failed to upload image. Please try again.");
+      setUploadErrorMessage("Failed to upload image. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -168,7 +170,6 @@ export default function PersonalInfoForm({
         ...prev,
         sameAsResidential: true,
       }));
-      // Immediately sync permanentAddress with residentialAddress
       setPermanentAddress(residentialAddress);
       setFormData(prev => ({
         ...prev,
@@ -209,10 +210,12 @@ export default function PersonalInfoForm({
     setFormData({ ...formData, emergencyContacts: updatedContacts });
   };
 
+
   return (
     <div className="space-y-6">
       {/* ---------------------- Image Upload ---------------------- */}
-      <div className="flex flex-col items-center">
+       {/* ---------------------- Image Upload ---------------------- */}
+       <div className="flex flex-col items-center">
         <Label className="mb-2 text-sm font-semibold">
           Profile/Avatar Image
         </Label>
@@ -226,7 +229,6 @@ export default function PersonalInfoForm({
           ) : (
             <span className="text-gray-500 text-xs">No Image</span>
           )}
-          {/* Hidden file input + Camera Icon overlay */}
           <label
             htmlFor="profileImage"
             className="absolute bottom-1 right-1 bg-black/60 p-1 rounded-full cursor-pointer"
@@ -242,6 +244,18 @@ export default function PersonalInfoForm({
             className="hidden"
           />
         </div>
+
+        {/* Inline Notifications for Image Upload */}
+        {uploadSuccessMessage && (
+          <div className="mt-2 p-2 bg-green-100 text-green-800 rounded">
+            {uploadSuccessMessage}
+          </div>
+        )}
+        {uploadErrorMessage && (
+          <div className="mt-2 p-2 bg-red-100 text-red-800 rounded">
+            {uploadErrorMessage}
+          </div>
+        )}
       </div>
 
       {/* ---------------------- Name/Basic Info + Address ---------------------- */}

@@ -125,7 +125,7 @@ export default function AllAttendancePage({ initialAttendance }: AllAttendancePa
           <div className="flex items-center justify-between">
             <CardTitle className="text-2xl font-bold">Employee Attendance</CardTitle>
             <Badge variant="secondary" className="text-sm">
-              Real-Time Updates
+              
             </Badge>
           </div>
         </CardHeader>

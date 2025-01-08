@@ -20,9 +20,6 @@ import DocumentsForm, {
   UploadedDocuments,
 } from "@/components/add-New-Employee/DocumentsForm";
 
-//
-// Define a type for the entire form data
-//
 export interface CreateUserFormData {
   firstName: string;
   middleName: string;
@@ -46,14 +43,18 @@ export interface CreateUserFormData {
   experiences: any[];
   certifications: any[];
   documents: UploadedDocuments;
-  profileImageUrl: string; // Add this field
-  avatarImageUrl: string;  // Add this field
+  profileImageUrl: string;
+  avatarImageUrl: string;
   sameAsResidential?: boolean;
 }
 
 export default function CreateUserPage() {
   const router = useRouter();
-  const { data: session, status } = useSession(); // Access session info
+  const { data: session, status } = useSession();
+
+  // Notification states
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Authorization logic
   const allowedRoles = ["HR"];
@@ -66,12 +67,10 @@ export default function CreateUserPage() {
   }
 
   if (!session || !session.user || !allowedRoles.includes(session.user.role)) {
-    // Redirect unauthorized users
     router.push("/unauthorized");
-    return null; // Prevent rendering any content
+    return null;
   }
 
-  
   const [activeTab, setActiveTab] = useState("personal");
 
   const [formData, setFormData] = useState<CreateUserFormData>({
@@ -104,44 +103,36 @@ export default function CreateUserPage() {
       skills: [],
       others: [],
     },
-    profileImageUrl: "", // Initialize as empty string
-    avatarImageUrl: "",  // Initialize as empty string
+    profileImageUrl: "",
+    avatarImageUrl: "",
   });
 
-  //
-  // If you want to handle updated documents in a separate callback
-  //
   const handleDocumentChange = (updatedDocuments: UploadedDocuments) => {
     setFormData((prev) => ({ ...prev, documents: updatedDocuments }));
   };
 
-  //
-  // The main submit function
-  //
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const formDataToSend = new FormData();
+    // Clear previous messages
+    setSuccessMessage(null);
+    setErrorMessage(null);
 
-    // Append all form fields
+    const formDataToSend = new FormData();
     Object.entries(formData).forEach(([key, value]) => {
       if (key === "documents") {
-        // Append document data
         Object.entries(value as UploadedDocuments).forEach(
           ([docType, docArray]) => {
             docArray.forEach(
               (doc: { file: File; displayName: string }, index: number) => {
-                // Append file
                 formDataToSend.append(
                   `documents[${docType}][${index}][file]`,
                   doc.file
                 );
-                // Append display name
                 formDataToSend.append(
                   `documents[${docType}][${index}][displayName]`,
                   doc.displayName
                 );
-                // Append category
                 formDataToSend.append(
                   `documents[${docType}][${index}][category]`,
                   docType.toUpperCase()
@@ -151,10 +142,8 @@ export default function CreateUserPage() {
           }
         );
       } else if (Array.isArray(value)) {
-        // If it's an array (e.g., emergencyContacts), store as JSON
         formDataToSend.append(key, JSON.stringify(value));
       } else {
-        // Otherwise, just append the value as is
         formDataToSend.append(key, value as string);
       }
     });
@@ -165,25 +154,45 @@ export default function CreateUserPage() {
         body: formDataToSend,
       });
 
+      if (response.status === 409) {
+        const errorData = await response.json();
+        // Use a notification or inline message to display conflict information
+        setErrorMessage(errorData.message || "Conflict: User may already exist.");
+        return;
+      }
+    
+
       if (!response.ok) {
         throw new Error("Failed to create user");
       }
 
       const data = await response.json();
-      alert(`New user created with username: ${data.username}`);
-      router.push("/manage/users");
+      // Show success message
+      setSuccessMessage(`New user created with username: ${data.username}`);
+      // Redirect using dynamic route
+      router.push(`/manage/users/user/${data.username}`);
     } catch (error) {
       console.error("Error creating user:", error);
-      alert("Failed to create user. Please try again.");
+      setErrorMessage("Failed to create user. Please try again.");
     }
   };
 
-  //
-  // Render
-  //
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-3xl font-bold mb-4">Add New Employee</h1>
+      
+      {/* Notification Messages */}
+      {successMessage && (
+        <div className="mb-4 p-4 bg-green-100 text-green-800 rounded">
+          {successMessage}
+        </div>
+      )}
+      {errorMessage && (
+        <div className="mb-4 p-4 bg-red-100 text-red-800 rounded">
+          {errorMessage}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit}>
         <Card>
           <CardContent className="p-6">
@@ -208,10 +217,7 @@ export default function CreateUserPage() {
               </TabsList>
 
               <TabsContent value="personal">
-                <PersonalInfoForm
-                  formData={formData}
-                  setFormData={setFormData}
-                />
+                <PersonalInfoForm formData={formData} setFormData={setFormData} />
               </TabsContent>
 
               <TabsContent value="job">
@@ -242,12 +248,16 @@ export default function CreateUserPage() {
             </Tabs>
 
             <div className="mt-6 flex justify-end space-x-4">
-              {/* PREVIOUS Button */}
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => {
-                  const tabs = ["personal", "job", "qualifications", "documents"];
+                  const tabs = [
+                    "personal",
+                    "job",
+                    "qualifications",
+                    "documents",
+                  ];
                   const currentIndex = tabs.indexOf(activeTab);
                   if (currentIndex > 0) {
                     setActiveTab(tabs[currentIndex - 1]);
@@ -258,11 +268,15 @@ export default function CreateUserPage() {
                 Previous
               </Button>
 
-              {/* NEXT Button */}
               <Button
                 type="button"
                 onClick={() => {
-                  const tabs = ["personal", "job", "qualifications", "documents"];
+                  const tabs = [
+                    "personal",
+                    "job",
+                    "qualifications",
+                    "documents",
+                  ];
                   const currentIndex = tabs.indexOf(activeTab);
                   if (currentIndex < tabs.length - 1) {
                     setActiveTab(tabs[currentIndex + 1]);
@@ -273,7 +287,6 @@ export default function CreateUserPage() {
                 Next
               </Button>
 
-              {/* SUBMIT Button */}
               <Button type="submit">Create User</Button>
             </div>
           </CardContent>

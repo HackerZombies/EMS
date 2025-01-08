@@ -1,8 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "../auth/[...nextauth]";
-import { sendDeleteEmail } from "@/lib/sendDeleteEmail"; // Import the sendDeleteEmail function
+import { authOptions } from "../auth/[...nextauth]"; // Import the sendDeleteEmail function
 
 export default async function handle(
   req: NextApiRequest,
@@ -36,7 +35,6 @@ export default async function handle(
     });
 
     // Send delete email with notification
-    await sendDeleteEmail(user.email, username);
 
     return res.status(200).json(deletedUser);
   } catch (error) {

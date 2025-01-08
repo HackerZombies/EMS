@@ -2,17 +2,16 @@
 
 import type { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/lib/prisma";
-import bcrypt from "bcrypt"; 
+import bcrypt from "bcrypt";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
 import { DocumentCategory } from "@prisma/client";
 import sendUpdateEmail from "@/lib/sendUserUpdateEmail";
 import { mapToDocumentCategory } from "@/lib/documentCategory";
-import logger from "@/lib/logger"; // Assuming you have a logger set up
-import crypto from "crypto"; // To generate secure password
+import logger from "@/lib/logger";
+import crypto from "crypto";
 
-const ALLOWED_ROLES = ["HR"]; // Roles allowed to update user data
-
+const ALLOWED_ROLES = ["HR"];
 
 export default async function handle(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "PUT") {
@@ -20,7 +19,6 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
   }
 
   try {
-    // Validate session and user role
     const session = await getServerSession(req, res, authOptions);
     if (!session || !session.user || !ALLOWED_ROLES.includes(session.user.role as string)) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -48,16 +46,16 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       experiences,
       certifications,
       documents,
+      emergencyContacts,
       profileImageUrl,
-      resetPassword, // Added flag
+      nationality,
+      resetPassword,
     } = req.body;
 
-    // Basic validation for mandatory fields
     if (!username || !firstName || !lastName || !email || !role) {
       return res.status(400).json({ message: "Missing mandatory fields" });
     }
 
-    // Prepare data to update
     const dataToUpdate: Record<string, any> = {
       firstName,
       lastName,
@@ -67,7 +65,6 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       role,
     };
 
-    // Optional fields
     if (middleName) dataToUpdate.middleName = middleName;
     if (permanentAddress) dataToUpdate.permanentAddress = permanentAddress;
     if (department) dataToUpdate.department = department;
@@ -78,15 +75,11 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     if (profileImageUrl) dataToUpdate.profileImageUrl = profileImageUrl;
     if (dob) dataToUpdate.dob = new Date(dob);
     if (joiningDate) dataToUpdate.joiningDate = new Date(joiningDate);
+    if (nationality) dataToUpdate.nationality = nationality;
 
-    // Handle password reset
     if (resetPassword) {
-      // Generate a secure random password
-      const newPassword = crypto.randomBytes(12).toString("hex"); // 24 characters
-
-      // Hash the new password
+      const newPassword = crypto.randomBytes(12).toString("hex");
       const hashedPassword = await bcrypt.hash(newPassword, 10);
-
       dataToUpdate.password = hashedPassword;
 
       try {
@@ -100,13 +93,11 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       dataToUpdate.password = await bcrypt.hash(password, 10);
     }
 
-    // Check if user exists
     const existingUser = await prisma.user.findUnique({ where: { username } });
     if (!existingUser) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Compare each key in dataToUpdate with the existingUser (cast to Record<string, any>)
     const isUnchanged = Object.keys(dataToUpdate).every(
       (key) => (existingUser as Record<string, any>)[key] === dataToUpdate[key]
     );
@@ -114,22 +105,44 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(200).json({ message: "No changes detected" });
     }
 
-    // Update the user in the database
     const updatedUser = await prisma.user.update({
       where: { username },
       data: dataToUpdate,
     });
 
-    // --- Optional Sections ---
+    // --- Handle Related Data ---
     await handleQualifications(username, qualifications);
     await handleExperiences(username, experiences);
     await handleCertifications(username, certifications);
     await handleDocuments(username, documents);
+    await handleEmergencyContacts(username, emergencyContacts);
 
     return res.status(200).json({ message: "User updated successfully", updatedUser });
   } catch (error: any) {
     logger.error("Error updating user:", error);
     return res.status(500).json({ message: "Failed to update user", error: error.message });
+  }
+}
+
+// Handle Emergency Contacts
+async function handleEmergencyContacts(username: string, emergencyContacts: any[]) {
+  if (Array.isArray(emergencyContacts)) {
+    // Delete existing emergency contacts for the user
+    await prisma.emergencyContact.deleteMany({ where: { userUsername: username } });
+
+    // Map new emergency contacts to Prisma-compatible data
+    const emergencyContactsData = emergencyContacts.map((contact) => ({
+      name: contact.name,
+      relationship: contact.relationship,
+      phoneNumber: contact.phoneNumber,
+      email: contact.email,
+      userUsername: username, // Use the `userUsername` field directly
+    }));
+
+    // Create new emergency contacts
+    if (emergencyContactsData.length > 0) {
+      await prisma.emergencyContact.createMany({ data: emergencyContactsData });
+    }
   }
 }
 
@@ -189,7 +202,6 @@ async function handleCertifications(username: string, certifications: any[]) {
 // Handle Documents
 async function handleDocuments(username: string, documents: any) {
   if (documents && typeof documents === "object") {
-    // Delete existing documents
     await prisma.employeeDocument.deleteMany({ where: { userUsername: username } });
 
     const allDocs = Object.keys(documents).flatMap((category) => {
@@ -199,7 +211,7 @@ async function handleDocuments(username: string, documents: any) {
           const mappedCategory = mapToDocumentCategory(category);
           if (!mappedCategory) {
             console.warn(`Invalid document category: ${category}`);
-            return null; // Skip invalid categories or handle as needed
+            return null;
           }
 
           return {
@@ -214,7 +226,6 @@ async function handleDocuments(username: string, documents: any) {
         .filter((doc) => doc !== null);
     });
 
-    // Filter out null values and ensure allDocs is an array of valid document objects
     const validDocs = allDocs.filter((doc) => doc !== null) as Array<{
       userUsername: string;
       filename: string;
@@ -225,7 +236,6 @@ async function handleDocuments(username: string, documents: any) {
     }>;
 
     if (validDocs.length > 0) {
-      // Perform concurrent create operations
       await Promise.all(
         validDocs.map((doc) =>
           prisma.employeeDocument.create({
@@ -237,7 +247,6 @@ async function handleDocuments(username: string, documents: any) {
   }
 }
 
-// API Body Size Limit
 export const config = {
   api: {
     bodyParser: {

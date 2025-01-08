@@ -35,6 +35,7 @@ export interface User {
   middleName?: string;
   lastName: string;
   email: string;
+  nationality?: string;
   phoneNumber?: string;
   dob?: string;
   residentialAddress?: string;
@@ -94,7 +95,14 @@ const MultiStepEditUser: React.FC = () => {
     permanentAddress: '',
     gender: '',
     bloodGroup: '',
-    emergencyContacts: [],
+    emergencyContacts: [
+      {
+        name: '',
+        relationship: '',
+        phoneNumber: '',
+        email: '',
+      },
+    ],
     resetPassword: false,
     profileImageUrl: '',
     nationality: ''
@@ -150,6 +158,7 @@ const MultiStepEditUser: React.FC = () => {
             certifications: data.certifications || [],
             emergencyContacts: data.emergencyContacts || [],
             profileImageUrl: data.profileImageUrl,
+            nationality: data.nationality
             
           };
 
@@ -164,16 +173,11 @@ const MultiStepEditUser: React.FC = () => {
             permanentAddress: userData.permanentAddress || '',
             gender: userData.gender || '',
             bloodGroup: userData.bloodGroup || '',
-            emergencyContacts: userData.emergencyContacts.map((ec: EmergencyContact) => ({
-              name: ec.name,
-              relationship: ec.relationship,
-              phoneNumber: ec.phoneNumber,
-              email: ec.email,
-            })),
+            emergencyContacts: userData.emergencyContacts,
             resetPassword: false,
             profileImageUrl: userData.profileImageUrl || '',
             
-            nationality: ''
+            nationality: userData.nationality
           });
 
           setJobDetails({
@@ -217,6 +221,7 @@ const MultiStepEditUser: React.FC = () => {
       permanentAddress: personalInfo.permanentAddress,
       gender: personalInfo.gender,
       bloodGroup: personalInfo.bloodGroup,
+      nationality: personalInfo.nationality,
       emergencyContacts: personalInfo.emergencyContacts,
       department: jobDetails.department,
       position: jobDetails.position,
@@ -227,6 +232,7 @@ const MultiStepEditUser: React.FC = () => {
       experiences: qualifications.experiences,
       certifications: qualifications.certifications,
       profileImageUrl: initialData.profileImageUrl,
+      
       
     };
 
@@ -267,6 +273,7 @@ const MultiStepEditUser: React.FC = () => {
         username: initialData!.username,
         firstName: personalInfo.firstName,
         middleName: personalInfo.middleName,
+        nationality:personalInfo.nationality,
         lastName: personalInfo.lastName,
         email: personalInfo.email,
         phoneNumber: personalInfo.phoneNumber,

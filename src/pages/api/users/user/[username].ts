@@ -36,6 +36,7 @@ export default async function handler(
       where: { username: username as string },
       include: {
         qualifications: true,
+        emergencyContacts: true,
         experiences: true,
         certifications: true,
         employeeDocuments: {

@@ -482,14 +482,19 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ formData, setFormDa
       </div>
 
       {/* Emergency Contacts */}
-      <div className="space-y-4">
-        <div className="flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-white">Emergency Contacts</h2>
-          <Button type="button" onClick={addEmergencyContact} className="bg-green-600 hover:bg-green-700 text-white text-sm px-3 py-1">
-            Add Contact
-          </Button>
-        </div>
-        {formData.emergencyContacts.map((contact, index) => (
+        <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h2 className="text-lg font-semibold text-white">Emergency Contacts</h2>
+        <Button
+          type="button"
+          onClick={addEmergencyContact}
+          className="bg-green-600 hover:bg-green-700 text-white text-sm px-3 py-1"
+        >
+          Add Contact
+        </Button>
+      </div>
+      {formData.emergencyContacts && formData.emergencyContacts.length > 0 ? (
+        formData.emergencyContacts.map((contact, index) => (
           <div key={index} className="border rounded-lg p-4 bg-gray-800 relative">
             <Button
               variant="destructive"
@@ -501,59 +506,61 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ formData, setFormDa
             </Button>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor={`contact-name-${index}`} className="text-white">Name *</Label>
+                <Label htmlFor={`contact-name-${index}`} className="text-white">
+                  Name *
+                </Label>
                 <Input
                   id={`contact-name-${index}`}
                   value={contact.name || ''}
-                  onChange={(e) =>
-                    handleEmergencyContactChange(index, 'name', e.target.value)
-                  }
+                  onChange={(e) => handleEmergencyContactChange(index, 'name', e.target.value)}
                   required
                   className="bg-gray-700 text-white border-gray-600 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <Label htmlFor={`contact-relationship-${index}`} className="text-white">Relationship *</Label>
+                <Label htmlFor={`contact-relationship-${index}`} className="text-white">
+                  Relationship *
+                </Label>
                 <Input
                   id={`contact-relationship-${index}`}
                   value={contact.relationship || ''}
-                  onChange={(e) =>
-                    handleEmergencyContactChange(index, 'relationship', e.target.value)
-                  }
+                  onChange={(e) => handleEmergencyContactChange(index, 'relationship', e.target.value)}
                   required
                   className="bg-gray-700 text-white border-gray-600 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <Label htmlFor={`contact-phone-${index}`} className="text-white">Phone Number *</Label>
+                <Label htmlFor={`contact-phone-${index}`} className="text-white">
+                  Phone Number *
+                </Label>
                 <Input
                   id={`contact-phone-${index}`}
                   value={contact.phoneNumber || ''}
-                  onChange={(e) =>
-                    handleEmergencyContactChange(index, 'phoneNumber', e.target.value)
-                  }
+                  onChange={(e) => handleEmergencyContactChange(index, 'phoneNumber', e.target.value)}
                   required
                   className="bg-gray-700 text-white border-gray-600 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <Label htmlFor={`contact-email-${index}`} className="text-white">Email *</Label>
+                <Label htmlFor={`contact-email-${index}`} className="text-white">
+                  Email *
+                </Label>
                 <Input
                   id={`contact-email-${index}`}
                   value={contact.email || ''}
-                  onChange={(e) =>
-                    handleEmergencyContactChange(index, 'email', e.target.value)
-                  }
+                  onChange={(e) => handleEmergencyContactChange(index, 'email', e.target.value)}
                   required
                   className="bg-gray-700 text-white border-gray-600 focus:ring-blue-500"
                 />
               </div>
             </div>
           </div>
-        ))}
-      </div>
+        ))
+      ) : (
+        <div className="text-gray-400">No emergency contacts added yet.</div>
+      )}
     </div>
-  );
+    </div>  );
 };
 
 export default PersonalInfoForm;

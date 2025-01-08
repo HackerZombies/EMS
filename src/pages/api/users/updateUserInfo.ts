@@ -8,7 +8,7 @@ import prisma from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
-import argon2 from "argon2";
+import bcrypt from "bcrypt"; 
 import sendUserUpdateEmail from "@/lib/sendUpdateEmail";
 
 // Disable the default body parser to handle multipart/form-data
@@ -172,7 +172,7 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
     }
 
     // Hash the password if provided
-    const hashedPassword = password ? await argon2.hash(password) : undefined;
+    const hashedPassword = password ? await bcrypt.hash(password, 10) : undefined;
 
     // Prepare data to update
     const dataToUpdate: {
@@ -228,7 +228,6 @@ const handler = async (req: NextApiRequest, res: NextApiResponse) => {
       if (errCode === "LIMIT_FILE_SIZE") {
         return res.status(400).json({ message: "File size exceeds the 5MB limit." });
       }
-      // Add more formidable error codes handling if needed
     }
 
     // Handle custom errors

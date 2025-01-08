@@ -2,7 +2,7 @@
 
 import NextAuth, { NextAuthOptions, Session, User } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import argon2 from "argon2";
+import bcrypt from "bcrypt"; 
 import prisma from "@/lib/prisma";
 
 // Extend the default User interface
@@ -34,11 +34,13 @@ export const authOptions: NextAuthOptions = {
         });
 
         if (user == null) {
-          // user does not exist
+          // User does not exist
           return null;
         }
 
-        if (await argon2.verify(user.password, credentials.password)) {
+        // Use bcrypt to verify the hashed password
+        const isValidPassword = await bcrypt.compare(credentials.password, user.password);
+        if (isValidPassword) {
           return {
             id: user.id,
             username: user.username,
@@ -46,7 +48,7 @@ export const authOptions: NextAuthOptions = {
             firstName: user.firstName,
             lastName: user.lastName,
             department: user.department || undefined,
-            position: user.position || undefined
+            position: user.position || undefined,
           } as CustomUser;
         } else {
           return null;

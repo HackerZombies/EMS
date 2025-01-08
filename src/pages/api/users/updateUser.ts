@@ -2,17 +2,17 @@
 
 import type { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/lib/prisma";
-import argon2 from "argon2";
+import bcrypt from "bcrypt"; 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
-import { DocumentCategory } from '@prisma/client';
-import sendUpdateEmail from '@/lib/sendUserUpdateEmail';
+import { DocumentCategory } from "@prisma/client";
+import sendUpdateEmail from "@/lib/sendUserUpdateEmail";
+import { mapToDocumentCategory } from "@/lib/documentCategory";
+import logger from "@/lib/logger"; // Assuming you have a logger set up
+import crypto from "crypto"; // To generate secure password
 
-import { mapToDocumentCategory } from '@/lib/documentCategory';
-import logger from '@/lib/logger'; // Assuming you have a logger set up
-import crypto from 'crypto'; // To generate secure password
+const ALLOWED_ROLES = ["HR"]; // Roles allowed to update user data
 
-const ALLOWED_ROLES = [ "HR"]; // Roles allowed to update user data
 
 export default async function handle(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "PUT") {
@@ -82,10 +82,10 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     // Handle password reset
     if (resetPassword) {
       // Generate a secure random password
-      const newPassword = crypto.randomBytes(12).toString('hex'); // 24 characters
+      const newPassword = crypto.randomBytes(12).toString("hex"); // 24 characters
 
       // Hash the new password
-      const hashedPassword = await argon2.hash(newPassword);
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
 
       dataToUpdate.password = hashedPassword;
 
@@ -94,10 +94,10 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
         logger.info(`Password reset email sent to user ${username}.`);
       } catch (error) {
         logger.error(`Failed to send password reset email to ${username}:`, error);
-        return res.status(500).json({ message: 'Failed to send password reset email' });
+        return res.status(500).json({ message: "Failed to send password reset email" });
       }
     } else if (password) {
-      dataToUpdate.password = await argon2.hash(password);
+      dataToUpdate.password = await bcrypt.hash(password, 10);
     }
 
     // Check if user exists

@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/lib/prisma";
-import argon2 from "argon2";
+import bcrypt from "bcrypt";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
@@ -288,7 +288,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       // Generate username and password
       const username = generateUsername(firstName as string);
       const generatedPassword = generateSecurePassword();
-      const hashedPassword = await argon2.hash(generatedPassword);
+      const hashedPassword = await bcrypt.hash(generatedPassword, 10);
 
       // Validate enumerations
       const validRoles: UserRole[] = ["HR", "EMPLOYEE"];

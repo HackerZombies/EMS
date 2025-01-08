@@ -1,10 +1,11 @@
 import prisma from './prisma';
 import { sendotpEmail } from './email'; // Correct import from the consolidated email module
 import crypto from 'crypto';
-import argon2 from 'argon2';
+import bcrypt from 'bcrypt';
 import logger from './logger'; // If you're using a logger
 
 const OTP_EXPIRATION_TIME = 10 * 60 * 1000; // 10 minutes
+const SALT_ROUNDS = 10; // Number of salt rounds for bcrypt
 
 /**
  * Sends an OTP to the user's registered email.
@@ -25,7 +26,7 @@ export async function sendOtpToUser(username: string) {
     const otp = crypto.randomInt(100000, 999999).toString();
 
     // Hash the OTP before storing it
-    const hashedOtp = await argon2.hash(otp);
+    const hashedOtp = await bcrypt.hash(otp, SALT_ROUNDS);
 
     // Save or update the OTP for the user
     await prisma.oTP.upsert({
@@ -80,8 +81,8 @@ export async function verifyUserOtp(username: string, otp: string): Promise<bool
       return false;
     }
 
-    // Verify the OTP using argon2
-    const isValid = await argon2.verify(otpRecord.otp, otp);
+    // Verify the OTP using bcrypt
+    const isValid = await bcrypt.compare(otp, otpRecord.otp);
     if (!isValid) {
       return false;
     }
@@ -113,7 +114,7 @@ export async function verifyUserOtp(username: string, otp: string): Promise<bool
  */
 export async function resetUserPassword(username: string, newPassword: string) {
   try {
-    // Hash the new password using argon2
+    // Hash the new password using bcrypt
     const hashedPassword = await hashPassword(newPassword);
 
     // Update the user's password
@@ -130,10 +131,10 @@ export async function resetUserPassword(username: string, newPassword: string) {
 }
 
 /**
- * Hashes a password using argon2.
+ * Hashes a password using bcrypt.
  * @param password The plain text password.
  * @returns The hashed password.
  */
 async function hashPassword(password: string): Promise<string> {
-  return await argon2.hash(password);
+  return await bcrypt.hash(password, SALT_ROUNDS);
 }

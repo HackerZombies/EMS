@@ -18,6 +18,7 @@ enum QualificationLevel {
 enum UserRole {
   EMPLOYEE
   HR
+  ADMIN
 }
 
 enum Gender {
@@ -29,6 +30,13 @@ enum Gender {
 enum MaritalStatus {
   Married
   Unmarried
+}
+
+enum WorkLocation {
+  NaviMumbai
+  Delhi
+  Kochi
+  Remote
 }
 
 enum BloodGroup {
@@ -50,6 +58,24 @@ enum EmploymentType { // Added EmploymentType enum
   INTERN
   OTHER
 }
+
+enum Position {
+  Software_Development_Engineer
+  Embedded_Software_Development_Engineer
+  Hardware_Engineer
+  Chief_Technology_Officer
+  Chief_Executive_Officer
+  Project_Manager
+}
+
+enum Department {
+  Admin
+  HR
+  Software
+  Hardware
+  Production
+}
+
 
 enum DocumentCategory {
   resume
@@ -75,15 +101,15 @@ model User {
   dob                DateTime?
   residentialAddress String?
   permanentAddress   String?
-  department         String?
-  position           String?
+  department         Department?
+  position           Position?
   nationality        String?
   gender             Gender?
   maritalStatus      MaritalStatus?
   bloodGroup         BloodGroup?          @default(UNKNOWN)
   joiningDate        DateTime?          // Added Joining Date
   employmentType     EmploymentType?    // Added Employment Type
-  workLocation       String?            // Added Work Location
+  workLocation      WorkLocation?           // Added Work Location
   profileImageUrl    String?            // Add this field for profile image
   avatarImageUrl     String?  
 

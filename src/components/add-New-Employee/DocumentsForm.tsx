@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -18,20 +18,18 @@ interface DocumentsFormProps {
   uploadedDocuments: UploadedDocuments;
 }
 
-export default function DocumentsForm({ uploadedDocuments, setUploadedDocuments }: DocumentsFormProps) {
-  const documentTypes: { key: keyof UploadedDocuments; label: string }[] = [
-    { key: 'resume', label: 'Resume' },
-    { key: 'education', label: 'Education Related Documents' },
-    { key: 'identity', label: 'Identity Verification Related Documents' },
-    { key: 'certification', label: 'Certification' },
-    { key: 'skills', label: 'Skills or Certificates' },
-    { key: 'others', label: 'Others' },
-  ];
+const documentTypes: { key: keyof UploadedDocuments; label: string }[] = [
+  { key: 'resume', label: 'Resume' },
+  { key: 'education', label: 'Education' },
+  { key: 'identity', label: 'Identity' },
+  { key: 'certification', label: 'Certification' },
+  { key: 'skills', label: 'Skills' },
+  { key: 'others', label: 'Others' },
+];
 
-  const handleFileChange = (
-    e: React.ChangeEvent<HTMLInputElement>,
-    type: keyof UploadedDocuments
-  ) => {
+export default function DocumentsForm({ uploadedDocuments, setUploadedDocuments }: DocumentsFormProps) {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const type: keyof UploadedDocuments = 'others';
     if (e.target.files) {
       const newFiles = Array.from(e.target.files).map((file) => ({
         file,
@@ -52,78 +50,100 @@ export default function DocumentsForm({ uploadedDocuments, setUploadedDocuments 
     }));
   };
 
-  const handleEditName = (
-    type: keyof UploadedDocuments,
-    index: number,
-    newName: string
+  const handleCategoryChange = (
+    currentType: keyof UploadedDocuments,
+    fileIndex: number,
+    newType: keyof UploadedDocuments
   ) => {
     setUploadedDocuments((prev) => {
-      const updatedCategory = [...prev[type]];
-      updatedCategory[index] = { ...updatedCategory[index], displayName: newName };
-      return { ...prev, [type]: updatedCategory };
+      const fileToMove = prev[currentType][fileIndex];
+      if (!fileToMove) return prev;
+
+      const updatedCurrent = prev[currentType].filter((_, i) => i !== fileIndex);
+      const updatedNew = [...prev[newType], fileToMove];
+
+      return {
+        ...prev,
+        [currentType]: updatedCurrent,
+        [newType]: updatedNew,
+      };
     });
   };
 
-  const addDocumentInput = (type: keyof UploadedDocuments) => {
-    const input = document.getElementById(`file-upload-${type}`) as HTMLInputElement | null;
+  const addDocumentInput = () => {
+    const input = document.getElementById(`file-upload`) as HTMLInputElement | null;
     if (input) {
       input.click();
     }
   };
 
+  const allDocuments: Array<{
+    file: File;
+    displayName: string;
+    category: keyof UploadedDocuments;
+  }> = [];
+
+  documentTypes.forEach(({ key }) => {
+    uploadedDocuments[key].forEach((doc) => {
+      allDocuments.push({ ...doc, category: key });
+    });
+  });
+
   return (
     <div className="space-y-6">
-      {documentTypes.map(({ key, label }) => (
-        <div key={key} className="border rounded-md p-4">
-          <div className="flex items-center justify-between mb-3">
-            <Label htmlFor={`file-upload-${key}`} className="text-lg font-semibold">
-              {label}
-            </Label>
-            <Button type="button" size="sm" onClick={() => addDocumentInput(key)}>
-              {/* Type assertion */}
-              Add Document
-            </Button>
-          </div>
-          <Input
-            id={`file-upload-${key}`}
-            type="file"
-            multiple
-            className="hidden"
-            onChange={(e) => handleFileChange(e, key as keyof UploadedDocuments)}
-            // Type assertion
-          />
+      <div className="flex items-center justify-between mb-3">
+        <Label className="text-lg font-semibold">Uploaded Documents</Label>
+        <Button type="button" size="sm" onClick={addDocumentInput}>
+          Add Document
+        </Button>
+      </div>
+      <Input
+        id="file-upload"
+        type="file"
+        multiple
+        className="hidden"
+        onChange={handleFileChange}
+      />
 
-          {uploadedDocuments[key]?.length > 0 && (
-            <ul className="mt-2 space-y-2">
-              {uploadedDocuments[key]?.map(({ file, displayName }, index: number) => (
-                <li key={index} className="flex items-center justify-between p-2 border rounded-md">
-                  <div className="flex items-center space-x-2">
-                    <Input
-                      type="text"
-                      value={displayName}
-                      className="w-48 border rounded-md px-2 py-1 focus-visible:ring-2 focus-visible:ring-primary"
-                      onChange={(e) => handleEditName(key, index, e.target.value)}
-                      // No assertion needed here, types align
-                    />
-                    <span className="text-gray-500 text-sm">.{file.name.split('.').pop()}</span>
-                  </div>
-                  <div className="flex space-x-2">
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="icon"
-                      onClick={() => removeFile(key, index)}
-                      // No assertion needed here, types align
-                    >
-                      <TrashIcon className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      ))}
+      {allDocuments.length > 0 && (
+        <ul className="space-y-2">
+          {allDocuments.map(({ file, displayName, category }, i) => (
+            <li key={`${category}-${i}`} className="flex items-center justify-between p-2 border rounded-md">
+              <div className="flex items-center space-x-2">
+                <span className="w-48 truncate" title={displayName}>{displayName}</span>
+                <span className="text-gray-500 text-sm">.{file.name.split('.').pop()}</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <select
+                  value={category}
+                  onChange={(e) => handleCategoryChange(category, uploadedDocuments[category].findIndex(d => d.file === file), e.target.value as keyof UploadedDocuments)}
+                  className="border rounded-md px-2 py-1"
+                >
+                  {documentTypes.map(({ key: optionKey, label: optionLabel }) => (
+                    <option key={optionKey} value={optionKey}>
+                      {optionLabel}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="icon"
+                  onClick={() => {
+                    const currentCat = category;
+                    const currentIdx = uploadedDocuments[currentCat].findIndex(d => d.file === file);
+                    if (currentIdx !== -1) {
+                      removeFile(currentCat, currentIdx);
+                    }
+                  }}
+                >
+                  <TrashIcon className="w-4 h-4" />
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

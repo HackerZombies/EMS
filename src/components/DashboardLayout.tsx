@@ -74,11 +74,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       },
     ];
 
+    if (session?.user.role === "ADMIN") {
+      baseItems.push({
+        category: "ADMIN",
+        items: [
+          { url: "/add-New-Employee", title: "Add Employees", icon: "ph:address-book" },
+          { url: "/manage/users", title: "Manage Employees", icon: "ph:address-book" },
+          { url: "/hr/attendance", title: "Manage Attendance", icon: "ph:calendar-check" },
+
+          
+        ],
+      });
+    }
+
     if (session?.user.role === "HR") {
       baseItems.push({
         category: "HR Employees",
         items: [
-          { url: "/add-New-Employee", title: "Add Employees", icon: "ph:address-book" },
           { url: "/manage/users", title: "Manage Employees", icon: "ph:address-book" },
           { url: "/hr/attendance", title: "Manage Attendance", icon: "ph:calendar-check" },
           { url: "/manage/tickets", title: "Resolve Tickets", icon: "ph:ticket" },

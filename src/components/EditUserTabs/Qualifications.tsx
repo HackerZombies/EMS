@@ -46,6 +46,10 @@ interface QualificationsFormProps {
   formData: QualificationsData;
   setFormData: React.Dispatch<React.SetStateAction<QualificationsData>>;
 }
+// Helper function to format ISO date to yyyy-MM-dd
+const formatDate = (isoDate: string | undefined) => {
+  return isoDate ? new Date(isoDate).toISOString().split('T')[0] : '';
+};
 
 const QualificationsForm: React.FC<QualificationsFormProps> = ({
   formData,
@@ -270,28 +274,25 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
               <div>
                 <Label htmlFor={`experience-startDate-${index}`} className="text-white">Start Date *</Label>
                 <Input
-                  id={`experience-startDate-${index}`}
-                  type="date"
-                  value={experience.startDate}
-                  onChange={(e) =>
-                    handleExperienceChange(index, 'startDate', e.target.value)
-                  }
-                  required
-                  className="bg-gray-700 text-white border-gray-600 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <Label htmlFor={`experience-endDate-${index}`} className="text-white">End Date *</Label>
-                <Input
-                  id={`experience-endDate-${index}`}
-                  type="date"
-                  value={experience.endDate}
-                  onChange={(e) =>
-                    handleExperienceChange(index, 'endDate', e.target.value)
-                  }
-                  required
-                  className="bg-gray-700 text-white border-gray-600 focus:ring-blue-500"
-                />
+  id={`experience-startDate-${index}`}
+  type="date"
+  value={formatDate(experience.startDate)} // Updated
+  onChange={(e) =>
+    handleExperienceChange(index, 'startDate', e.target.value)
+  }
+  required
+  className="bg-gray-700 text-white border-gray-600 focus:ring-blue-500"
+/>
+<Input
+  id={`experience-endDate-${index}`}
+  type="date"
+  value={formatDate(experience.endDate)} // Updated
+  onChange={(e) =>
+    handleExperienceChange(index, 'endDate', e.target.value)
+  }
+  required
+  className="bg-gray-700 text-white border-gray-600 focus:ring-blue-500"
+/>
               </div>
               <div className="col-span-2">
                 <Label htmlFor={`experience-description-${index}`} className="text-white">Description *</Label>
@@ -369,28 +370,26 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
               <div>
                 <Label htmlFor={`certification-issueDate-${index}`} className="text-white">Issue Date *</Label>
                 <Input
-                  id={`certification-issueDate-${index}`}
-                  type="date"
-                  value={certification.issueDate}
-                  onChange={(e) =>
-                    handleCertificationChange(index, 'issueDate', e.target.value)
-                  }
-                  required
-                  className="bg-gray-700 text-white border-gray-600 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <Label htmlFor={`certification-expiryDate-${index}`} className="text-white">Expiry Date *</Label>
-                <Input
-                  id={`certification-expiryDate-${index}`}
-                  type="date"
-                  value={certification.expiryDate}
-                  onChange={(e) =>
-                    handleCertificationChange(index, 'expiryDate', e.target.value)
-                  }
-                  required
-                  className="bg-gray-700 text-white border-gray-600 focus:ring-blue-500"
-                />
+  id={`certification-issueDate-${index}`}
+  type="date"
+  value={formatDate(certification.issueDate)} // Updated
+  onChange={(e) =>
+    handleCertificationChange(index, 'issueDate', e.target.value)
+  }
+  required
+  className="bg-gray-700 text-white border-gray-600 focus:ring-blue-500"
+/>
+<Input
+  id={`certification-expiryDate-${index}`}
+  type="date"
+  value={formatDate(certification.expiryDate)} // Updated
+  onChange={(e) =>
+    handleCertificationChange(index, 'expiryDate', e.target.value)
+  }
+  required
+  className="bg-gray-700 text-white border-gray-600 focus:ring-blue-500"
+/>
+
               </div>
             </div>
           </div>

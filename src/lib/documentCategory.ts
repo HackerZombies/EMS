@@ -10,11 +10,9 @@ import { DocumentCategory } from '@prisma/client';
  * @returns The corresponding DocumentCategory enum value or null.
  */
 export function mapToDocumentCategory(category: string): DocumentCategory | null {
-  const upperCategory = category.toUpperCase();
-
-  // Check if the uppercased category exists in the DocumentCategory enum
-  if (Object.values(DocumentCategory).includes(upperCategory as DocumentCategory)) {
-    return upperCategory as DocumentCategory;
+  // Directly check if the input matches any enum value without normalization
+  if (Object.values(DocumentCategory).includes(category as DocumentCategory)) {
+    return category as DocumentCategory;
   }
 
   console.warn(`Invalid DocumentCategory: ${category}`);

@@ -52,6 +52,7 @@ export interface User {
   certifications: Certification[];
   emergencyContacts: EmergencyContact[];
   profileImageUrl?: string;
+  workLocation?: string;  // Add this line
 }
 
 export type Qualification = {
@@ -113,6 +114,7 @@ const MultiStepEditUser: React.FC = () => {
     role: '',
     employmentType: '',
     joiningDate: '',
+    workLocation: '', 
   });
   const [qualifications, setQualifications] = useState<QualificationsData>({
     qualifications: [],
@@ -158,7 +160,8 @@ const MultiStepEditUser: React.FC = () => {
             certifications: data.certifications || [],
             emergencyContacts: data.emergencyContacts || [],
             profileImageUrl: data.profileImageUrl,
-            nationality: data.nationality
+            nationality: data.nationality,
+            workLocation: data.workLocation
             
           };
 
@@ -186,6 +189,7 @@ const MultiStepEditUser: React.FC = () => {
             role: userData.role || '',
             employmentType: userData.employmentType || '',
             joiningDate: userData.joiningDate || '',
+            workLocation: userData.workLocation || '',
           });
 
           setQualifications({
@@ -247,7 +251,7 @@ const MultiStepEditUser: React.FC = () => {
     );
   }
 
-  const allowedRoles = ['HR'];
+  const allowedRoles = ['HR' , 'ADMIN'];
   if (!session || !session.user || !allowedRoles.includes(session.user.role)) {
     return (
       <div className="flex justify-center items-center h-screen bg-gray-900">
@@ -291,7 +295,7 @@ const MultiStepEditUser: React.FC = () => {
         experiences: qualifications.experiences,
         certifications: qualifications.certifications,
         profileImageUrl: personalInfo.profileImageUrl,
-        
+        workLocation: jobDetails.workLocation,
       };
 
       if (personalInfo.resetPassword) {

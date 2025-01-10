@@ -59,24 +59,43 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ formData, setFormDa
   const [isModalOpen, setModalOpen] = useState(false);
 
   const [residentialAddress, setResidentialAddress] = useState({
-    street: '',
-    city: '',
-    zip: '',
+    flat: '',       // Flat/House Number
+    street: '',     // Street/Locality
+    landmark: '',   // Landmark (Optional)
+    city: '',       // City
+    district: '',   // District
+    state: '',      // State
+    pin: '',        // PIN Code
   });
 
   const [permanentAddress, setPermanentAddress] = useState({
+    flat: '',
     street: '',
+    landmark: '',
     city: '',
-    zip: '',
+    district: '',
+    state: '',
+    pin: '',
   });
 
   const parseAddress = (address?: string) => {
-    if (!address) return { street: '', city: '', zip: '' };
+    if (!address)  return {
+      flat: '',
+      street: '',
+      landmark: '',
+      city: '',
+      district: '',
+      state: '',
+      pin: '', };
     const parts = address.split(',').map(part => part.trim());
     return {
-      street: parts[0] || '',
-      city: parts[1] || '',
-      zip: parts[2] || '',
+      flat: parts[0] || '',
+      street: parts[1] || '',
+      landmark: parts[2] || '',
+      city: parts[3] || '',
+      district: parts[4] || '',
+      state: parts[5] || '',
+      pin: parts[6] || '',
     };
   };
 
@@ -96,7 +115,7 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ formData, setFormDa
       setPermanentAddress(residentialAddress);
       setFormData(prev => ({
         ...prev,
-        permanentAddress: `${residentialAddress.street}, ${residentialAddress.city}, ${residentialAddress.zip}`,
+        permanentAddress: `${permanentAddress.flat},${permanentAddress.street},${permanentAddress.landmark},${permanentAddress.city},${permanentAddress.district},${permanentAddress.state},${permanentAddress.pin}`,
       }));
     }
   }, [formData.sameAsResidential, residentialAddress, setFormData]);
@@ -105,7 +124,7 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ formData, setFormDa
   const syncResidentialToParent = () => {
     setFormData(prev => ({
       ...prev,
-      residentialAddress: `${residentialAddress.street}, ${residentialAddress.city}, ${residentialAddress.zip}`,
+      residentialAddress: `${residentialAddress.flat},${residentialAddress.street},${residentialAddress.landmark},${residentialAddress.city},${residentialAddress.district},${residentialAddress.state},${residentialAddress.pin}`,
     }));
   };
 
@@ -114,7 +133,7 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ formData, setFormDa
     if (!formData.sameAsResidential) {
       setFormData(prev => ({
         ...prev,
-        permanentAddress: `${permanentAddress.street}, ${permanentAddress.city}, ${permanentAddress.zip}`,
+        permanentAddress: `${permanentAddress.flat},${permanentAddress.street},${permanentAddress.landmark},${permanentAddress.city},${permanentAddress.district},${permanentAddress.state},${permanentAddress.pin}`,
       }));
     }
   };
@@ -411,10 +430,24 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ formData, setFormDa
           <Label className="text-white">Residential Address *</Label>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             <Input
+              value={residentialAddress.flat}
+              onChange={(e) => handleResidentialChange('flat', e.target.value)}
+              onBlur={syncResidentialToParent}
+              placeholder="Flat/House Number"
+              className="bg-gray-700 text-white border-gray-600 focus:ring-blue-500"
+            />
+            <Input
               value={residentialAddress.street}
               onChange={(e) => handleResidentialChange('street', e.target.value)}
               onBlur={syncResidentialToParent}
               placeholder="Street"
+              className="bg-gray-700 text-white border-gray-600 focus:ring-blue-500"
+            />
+            <Input
+              value={residentialAddress.landmark}
+              onChange={(e) => handleResidentialChange('landmark', e.target.value)}
+              onBlur={syncResidentialToParent}
+              placeholder="Landmark"
               className="bg-gray-700 text-white border-gray-600 focus:ring-blue-500"
             />
             <Input
@@ -425,10 +458,24 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ formData, setFormDa
               className="bg-gray-700 text-white border-gray-600 focus:ring-blue-500"
             />
             <Input
-              value={residentialAddress.zip}
-              onChange={(e) => handleResidentialChange('zip', e.target.value)}
+              value={residentialAddress.district}
+              onChange={(e) => handleResidentialChange('district', e.target.value)}
               onBlur={syncResidentialToParent}
-              placeholder="Zip"
+              placeholder="District"
+              className="bg-gray-700 text-white border-gray-600 focus:ring-blue-500"
+            />
+            <Input
+              value={residentialAddress.state}
+              onChange={(e) => handleResidentialChange('state', e.target.value)}
+              onBlur={syncResidentialToParent}
+              placeholder="State"
+              className="bg-gray-700 text-white border-gray-600 focus:ring-blue-500"
+            />
+            <Input
+              value={residentialAddress.pin}
+              onChange={(e) => handleResidentialChange('pin', e.target.value)}
+              onBlur={syncResidentialToParent}
+              placeholder="PIN Code"
               className="bg-gray-700 text-white border-gray-600 focus:ring-blue-500"
             />
           </div>
@@ -439,10 +486,30 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ formData, setFormDa
           <Label className="text-white">Permanent Address *</Label>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             <Input
+              value={permanentAddress.flat}
+              onChange={(e) => handlePermanentChange('flat', e.target.value)}
+              onBlur={syncPermanentToParent}
+              placeholder="Flat/House Number"
+              disabled={formData.sameAsResidential}
+              className={`bg-gray-700 text-white border-gray-600 focus:ring-blue-500 ${
+                formData.sameAsResidential ? 'bg-gray-600 cursor-not-allowed' : ''
+              }`}
+            />
+            <Input
               value={permanentAddress.street}
               onChange={(e) => handlePermanentChange('street', e.target.value)}
               onBlur={syncPermanentToParent}
               placeholder="Street"
+              disabled={formData.sameAsResidential}
+              className={`bg-gray-700 text-white border-gray-600 focus:ring-blue-500 ${
+                formData.sameAsResidential ? 'bg-gray-600 cursor-not-allowed' : ''
+              }`}
+            />
+            <Input
+              value={permanentAddress.landmark}
+              onChange={(e) => handlePermanentChange('landmark', e.target.value)}
+              onBlur={syncPermanentToParent}
+              placeholder="Landmark"
               disabled={formData.sameAsResidential}
               className={`bg-gray-700 text-white border-gray-600 focus:ring-blue-500 ${
                 formData.sameAsResidential ? 'bg-gray-600 cursor-not-allowed' : ''
@@ -459,10 +526,30 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ formData, setFormDa
               }`}
             />
             <Input
-              value={permanentAddress.zip}
-              onChange={(e) => handlePermanentChange('zip', e.target.value)}
+              value={permanentAddress.district}
+              onChange={(e) => handlePermanentChange('district', e.target.value)}
               onBlur={syncPermanentToParent}
-              placeholder="Zip"
+              placeholder="District"
+              disabled={formData.sameAsResidential}
+              className={`bg-gray-700 text-white border-gray-600 focus:ring-blue-500 ${
+                formData.sameAsResidential ? 'bg-gray-600 cursor-not-allowed' : ''
+              }`}
+            />
+            <Input
+              value={permanentAddress.state}
+              onChange={(e) => handlePermanentChange('state', e.target.value)}
+              onBlur={syncPermanentToParent}
+              placeholder="State"
+              disabled={formData.sameAsResidential}
+              className={`bg-gray-700 text-white border-gray-600 focus:ring-blue-500 ${
+                formData.sameAsResidential ? 'bg-gray-600 cursor-not-allowed' : ''
+              }`}
+            />
+            <Input
+              value={permanentAddress.pin}
+              onChange={(e) => handlePermanentChange('pin', e.target.value)}
+              onBlur={syncPermanentToParent}
+              placeholder="PIN Code"
               disabled={formData.sameAsResidential}
               className={`bg-gray-700 text-white border-gray-600 focus:ring-blue-500 ${
                 formData.sameAsResidential ? 'bg-gray-600 cursor-not-allowed' : ''
@@ -480,6 +567,7 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ formData, setFormDa
           </div>
         </div>
       </div>
+
 
       {/* Emergency Contacts */}
         <div className="space-y-4">

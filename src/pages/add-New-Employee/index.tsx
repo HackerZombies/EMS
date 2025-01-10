@@ -57,7 +57,7 @@ export default function CreateUserPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Authorization logic
-  const allowedRoles = ["HR"];
+  const allowedRoles = ["ADMIN"];
   if (status === "loading") {
     return (
       <div className="flex justify-center items-center h-screen bg-gray-900">
@@ -107,17 +107,13 @@ export default function CreateUserPage() {
     avatarImageUrl: "",
   });
 
-  const handleDocumentChange = (updatedDocuments: UploadedDocuments) => {
-    setFormData((prev) => ({ ...prev, documents: updatedDocuments }));
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+  
     // Clear previous messages
     setSuccessMessage(null);
     setErrorMessage(null);
-
+  
     const formDataToSend = new FormData();
     Object.entries(formData).forEach(([key, value]) => {
       if (key === "documents") {
@@ -133,9 +129,10 @@ export default function CreateUserPage() {
                   `documents[${docType}][${index}][displayName]`,
                   doc.displayName
                 );
+                // Directly use docType as the category without converting to lowercase
                 formDataToSend.append(
                   `documents[${docType}][${index}][category]`,
-                  docType.toUpperCase()
+                  docType
                 );
               }
             );
@@ -147,7 +144,7 @@ export default function CreateUserPage() {
         formDataToSend.append(key, value as string);
       }
     });
-
+  
     try {
       const response = await fetch("/api/users/newUser", {
         method: "POST",

@@ -20,12 +20,13 @@ import {
 import { useState } from "react";
 import axios from "axios";
 
-type Role = "EMPLOYEE" | "HR";
+type Role = "EMPLOYEE" | "HR" | "ADMIN"; 
 
 const renderRoleLabel = (role: Role): string => {
   const roleLabels: { [key in Role]: string } = {
     EMPLOYEE: "Employee",
     HR: "HR Professional",
+    ADMIN: "Admin",
   };
   return roleLabels[role] || role;
 };

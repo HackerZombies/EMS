@@ -12,7 +12,11 @@ import {
   Gender,
   BloodGroup,
   EmploymentType,
-  DocumentCategory, // Import the enum directly
+  DocumentCategory,
+  WorkLocation,
+  Department,
+  Position
+
 } from "@prisma/client";
 
 // Disable default body parser to handle multipart/form-data
@@ -103,7 +107,7 @@ interface FileEntry {
 export default async function handle(req: NextApiRequest, res: NextApiResponse) {
   // Authentication Check
   const session = await getServerSession(req, res, authOptions);
-  if (!session || session.user.role !== "HR") {
+  if (!session || session.user.role !== "ADMIN") {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
@@ -181,33 +185,37 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
 
       // After parsing all fields and files
       bb.on("finish", () => {
-        files.forEach((fileObj, index) => {
-          // Assign custom name if provided
-          const customNameField = `documentName[${index}]` as keyof FormFields;
-          if (fields.hasOwnProperty(customNameField)) {
-            fileObj.customName = fields[customNameField];
-          }
-
-          // Assign category if provided and valid
-          const categoryField = `documentCategory[${index}]` as keyof FormFields;
-          if (fields.hasOwnProperty(categoryField)) {
-            const categoryVal = (fields[categoryField] || "").toLowerCase() as DocumentCategory;
-            if (Object.values(DocumentCategory).includes(categoryVal)) {
-              fileObj.category = categoryVal;
-            } else {
-              console.warn(
-                `Invalid category provided: ${fields[categoryField]}. Defaulting to "others".`
-              );
-              fileObj.category = DocumentCategory.others; // Default to 'others'
+        // Iterate over field keys to find category fields in the nested structure
+        let fileCounter = 0;
+        Object.keys(fields).forEach((fieldKey) => {
+          const match = fieldKey.match(/^documents\[(.+?)\]\[(\d+)\]\[category\]$/);
+          if (match) {
+            const providedCategory = (fields as Record<string, any>)[fieldKey] as DocumentCategory;
+            if (files[fileCounter]) {
+              if (Object.values(DocumentCategory).includes(providedCategory)) {
+                files[fileCounter].category = providedCategory;
+              } else {
+                files[fileCounter].category = DocumentCategory.others;
+              }
             }
-          } else {
-            // If category not provided, default to 'others'
+            fileCounter++;
+          }
+        });
+      
+        // Assign custom names and ensure a default category is set
+        files.forEach((fileObj, index) => {
+          const customNameField = `documentName[${index}]`;
+          if ((fields as Record<string, any>).hasOwnProperty(customNameField)) {
+            fileObj.customName = (fields as Record<string, any>)[customNameField];
+          }
+          if (!fileObj.category) {
             fileObj.category = DocumentCategory.others;
           }
         });
+      
         resolve();
       });
-
+      
       req.pipe(bb);
     });
 
@@ -291,7 +299,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       const hashedPassword = await bcrypt.hash(generatedPassword, 10);
 
       // Validate enumerations
-      const validRoles: UserRole[] = ["HR", "EMPLOYEE"];
+      const validRoles: UserRole[] = ["ADMIN", "HR", "EMPLOYEE"];
       if (!validRoles.includes(role as UserRole)) {
         return res.status(400).json({ message: "Invalid role" });
       }
@@ -324,33 +332,67 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
         return res.status(400).json({ message: "Invalid employment type" });
       }
 
-      // Create the new user
-      const newUser = await prisma.user.create({
-        data: {
-          username,
-          firstName: firstName as string,
-          middleName: middleName,
-          lastName: lastName as string,
-          password: hashedPassword,
-          email: email as string,
-          phoneNumber: phoneNumber as string,
-          leaveBalance: 28,
-          role: role as UserRole,
-          gender: gender as Gender,
-          bloodGroup: bloodGroup as BloodGroup,
-          employmentType: employmentType as EmploymentType,
-          dob: dob ? new Date(dob as string) : null,
-          residentialAddress: residentialAddress as string,
-          permanentAddress: permanentAddress as string,
-          department: department as string,
-          position: position as string,
-          nationality: nationality as string,
-          workLocation: workLocation as string,
-          joiningDate: joiningDate ? new Date(joiningDate as string) : null,
-          profileImageUrl: profileImageUrl as string,
-          avatarImageUrl: avatarImageUrl as string,
-        },
-      });
+      const validPositions: Position[] = [
+        Position.Software_Development_Engineer,
+        Position.Embedded_Software_Development_Engineer,
+        Position.Hardware_Engineer,
+        Position.Chief_Technology_Officer,
+        Position.Chief_Executive_Officer,
+        Position.Project_Manager
+      ]
+      if (!validPositions.includes(position as Position)) { 
+        return res.status(400).json({ message: "Invalid position" });
+    }
+
+      const validWorkLocations: WorkLocation[] = [
+        WorkLocation.NaviMumbai,
+        WorkLocation.Delhi,
+        WorkLocation.Kochi,
+        WorkLocation.Remote,
+      ];
+      if (!validWorkLocations.includes(workLocation as WorkLocation)) {
+        return res.status(400).json({ message: "Invalid work location" });
+      }
+
+      // <-- Add department validation here -->
+  const validDepartments: Department[] = [
+    Department.Admin,
+    Department.HR,
+    Department.Software,
+    Department.Hardware,
+    Department.Production,
+  ];
+  if (!validDepartments.includes(department as Department)) {
+    return res.status(400).json({ message: "Invalid department" });
+  }
+
+       const newUser = await prisma.user.create({
+    data: {
+      username,
+      firstName: firstName as string,
+      middleName: middleName,
+      lastName: lastName as string,
+      password: hashedPassword,
+      email: email as string,
+      phoneNumber: phoneNumber as string,
+      leaveBalance: 28,
+      role: role as UserRole,
+      gender: gender as Gender,
+      bloodGroup: bloodGroup as BloodGroup,
+      employmentType: employmentType as EmploymentType,
+      dob: dob ? new Date(dob as string) : null,
+      residentialAddress: residentialAddress as string,
+      permanentAddress: permanentAddress as string,
+      department: department as Department, // Use enum here
+      position: position as Position,
+      nationality: nationality as string,
+      workLocation: workLocation as WorkLocation,
+      joiningDate: joiningDate ? new Date(joiningDate as string) : null,
+      profileImageUrl: profileImageUrl as string,
+      avatarImageUrl: avatarImageUrl as string,
+    },
+  });
+
 
       // Create emergency contacts
       if (parsedEmergencyContacts.length > 0) {
@@ -420,9 +462,10 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
           data: fileObj.file.buffer,
           size: fileObj.file.buffer.length,
           userUsername: newUser.username,
-          category: fileObj.category, // Assign category here
+          // Ensure a valid category is assigned, fallback to 'others' if not set
+          category: fileObj.category || DocumentCategory.others,
         }));
-
+      
         await prisma.employeeDocument.createMany({
           data: employeeDocumentsData,
         });

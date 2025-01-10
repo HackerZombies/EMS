@@ -5,13 +5,21 @@ import prisma from "@/lib/prisma";
 import bcrypt from "bcrypt";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
-import { DocumentCategory } from "@prisma/client";
+import {  QualificationLevel,
+  UserRole,
+  Gender,
+  BloodGroup,
+  EmploymentType,
+  DocumentCategory,
+  WorkLocation,
+  Department,
+  Position } from "@prisma/client";
 import sendUpdateEmail from "@/lib/sendUserUpdateEmail";
 import { mapToDocumentCategory } from "@/lib/documentCategory";
 import logger from "@/lib/logger";
 import crypto from "crypto";
 
-const ALLOWED_ROLES = ["HR"];
+const ALLOWED_ROLES = ["HR" , "ADMIN"];
 
 export default async function handle(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "PUT") {
@@ -42,6 +50,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       gender,
       bloodGroup,
       employmentType,
+      workLocation,
       qualifications,
       experiences,
       certifications,
@@ -72,6 +81,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     if (gender) dataToUpdate.gender = gender;
     if (bloodGroup) dataToUpdate.bloodGroup = bloodGroup;
     if (employmentType) dataToUpdate.employmentType = employmentType;
+    if (workLocation) dataToUpdate.workLocation = workLocation;
     if (profileImageUrl) dataToUpdate.profileImageUrl = profileImageUrl;
     if (dob) dataToUpdate.dob = new Date(dob);
     if (joiningDate) dataToUpdate.joiningDate = new Date(joiningDate);
@@ -91,6 +101,51 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       }
     } else if (password) {
       dataToUpdate.password = await bcrypt.hash(password, 10);
+    }
+
+    // Enum Validations
+    const validDepartments: Department[] = [
+      Department.Admin,
+      Department.HR,
+      Department.Software,
+      Department.Hardware,
+      Department.Production,
+    ];
+    if (department && !validDepartments.includes(department as Department)) {
+      return res.status(400).json({ message: "Invalid department" });
+    }
+
+    const validPositions: Position[] = [
+      Position.Software_Development_Engineer,
+      Position.Embedded_Software_Development_Engineer,
+      Position.Hardware_Engineer,
+      Position.Chief_Technology_Officer,
+      Position.Chief_Executive_Officer,
+      Position.Project_Manager,
+    ];
+    if (position && !validPositions.includes(position as Position)) {
+      return res.status(400).json({ message: "Invalid position" });
+    }
+
+    const validWorkLocations: WorkLocation[] = [
+      WorkLocation.NaviMumbai,
+      WorkLocation.Delhi,
+      WorkLocation.Kochi,
+      WorkLocation.Remote,
+    ];
+    if (workLocation && !validWorkLocations.includes(workLocation as WorkLocation)) {
+      return res.status(400).json({ message: "Invalid work location" });
+    }
+
+    const validEmploymentTypes: EmploymentType[] = [
+      EmploymentType.FULL_TIME,
+      EmploymentType.PART_TIME,
+      EmploymentType.CONTRACT,
+      EmploymentType.INTERN,
+      EmploymentType.OTHER,
+    ];
+    if (employmentType && !validEmploymentTypes.includes(employmentType as EmploymentType)) {
+      return res.status(400).json({ message: "Invalid employment type" });
     }
 
     const existingUser = await prisma.user.findUnique({ where: { username } });
@@ -117,8 +172,11 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     await handleDocuments(username, documents);
     await handleEmergencyContacts(username, emergencyContacts);
 
-    return res.status(200).json({ message: "User updated successfully", resetPassword: resetPassword ? "Password reset email sent" : undefined,
-      updatedUser });
+    return res.status(200).json({ 
+      message: "User updated successfully", 
+      resetPassword: resetPassword ? "Password reset email sent" : undefined,
+      updatedUser 
+    });
   } catch (error: any) {
     logger.error("Error updating user:", error);
     return res.status(500).json({ message: "Failed to update user", error: error.message });
@@ -128,19 +186,14 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
 // Handle Emergency Contacts
 async function handleEmergencyContacts(username: string, emergencyContacts: any[]) {
   if (Array.isArray(emergencyContacts)) {
-    // Delete existing emergency contacts for the user
     await prisma.emergencyContact.deleteMany({ where: { userUsername: username } });
-
-    // Map new emergency contacts to Prisma-compatible data
     const emergencyContactsData = emergencyContacts.map((contact) => ({
       name: contact.name,
       relationship: contact.relationship,
       phoneNumber: contact.phoneNumber,
       email: contact.email,
-      userUsername: username, // Use the `userUsername` field directly
+      userUsername: username,
     }));
-
-    // Create new emergency contacts
     if (emergencyContactsData.length > 0) {
       await prisma.emergencyContact.createMany({ data: emergencyContactsData });
     }

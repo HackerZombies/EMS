@@ -28,7 +28,7 @@ export default function ManageUsers({ users }: Props) {
       <div className="flex grow flex-col gap-5 p-5 bg-black bg-opacity-50 opacity-80 rounded-2xl text-white">
         <div className="flex justify-between">
           <h1 className="text-3xl font-semibold py--2 px-2">Manage Employees</h1>
-          {userRole === "HR" && (
+          {userRole === "ADMIN" && (
             <Link scroll={false} href="/add-New-Employee">
               <GreenButton>Add Employee</GreenButton>
             </Link>
@@ -49,11 +49,16 @@ export default function ManageUsers({ users }: Props) {
 export const getServerSideProps: GetServerSideProps = async (context) => {
   const session = await getServerSession(context.req, context.res, authOptions);
 
-  if (session) {
-    const users = await prisma.user.findMany();
-
-    return { props: { users } };
-  } else {
-    return { props: {} };
+  if (!session || (session.user?.role !== "HR" && session.user?.role !== "ADMIN")) {
+    return {
+      redirect: {
+        destination: "/unauthorized", // Redirect to an unauthorized page or login
+        permanent: false,
+      },
+    };
   }
+
+  const users = await prisma.user.findMany();
+
+  return { props: { users } };
 };

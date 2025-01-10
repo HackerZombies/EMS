@@ -1,17 +1,19 @@
-// src/pages/api/socket.ts
-
-import WebSocket, { WebSocketServer } from 'ws'; // Import WebSocket
+import WebSocket, { WebSocketServer } from 'ws';
 import { NextApiRequest, NextApiResponse } from 'next';
-import prisma from '@/lib/prisma'; // Import Prisma client
-import { Server as HTTPServer } from 'http';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from './auth/[...nextauth]';
+import prisma from '@/lib/prisma';
+import { IncomingMessage } from 'http'; // Import IncomingMessage from Node.js
 
-// Singleton WebSocket Server
 let wss: WebSocketServer | undefined;
 
-const wsHandler = (req: NextApiRequest, res: NextApiResponse) => {
-  const server = req.socket.server as HTTPServer; // Access underlying HTTP server
+const wsHandler = async (req: NextApiRequest, res: NextApiResponse) => {
+  const server = req.socket.server;
 
-  // Prevent reinitializing the WebSocket server
+  if (!server) {
+    return res.status(500).json({ message: 'Server not initialized' });
+  }
+
   if (server.wss) {
     console.log('WebSocket server already initialized');
     res.end();
@@ -19,23 +21,37 @@ const wsHandler = (req: NextApiRequest, res: NextApiResponse) => {
   }
 
   console.log('Initializing WebSocket server...');
-
-  // Initialize WebSocket server
   wss = new WebSocketServer({ noServer: true });
 
-  // Attach the WebSocket server to handle HTTP upgrade events
-  server.on('upgrade', (req, socket, head) => {
-    wss!.handleUpgrade(req, socket, head, (ws) => {
-      wss!.emit('connection', ws, req);
-    });
+  server.on('upgrade', async (req, socket, head) => {
+    // Ensure `req` includes `cookies`
+    const enhancedReq = req as IncomingMessage & { cookies: Record<string, string> };
+    enhancedReq.cookies = enhancedReq.cookies || {};
+
+    try {
+      const session = await getServerSession({ req: enhancedReq, res, ...authOptions });
+      if (!session || !['HR', 'ADMIN'].includes(session.user?.role)) {
+        console.log('Unauthorized WebSocket connection attempt');
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+
+      wss!.handleUpgrade(req, socket, head, (ws) => {
+        wss!.emit('connection', ws, req, session);
+      });
+    } catch (error) {
+      console.error('Error during session validation:', error);
+      socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
+      socket.destroy();
+    }
   });
 
-  server.wss = wss; // Attach WebSocket server to the HTTP server
+  server.wss = wss;
 
-  // Handle WebSocket connections
-  wss.on('connection', async (ws: WebSocket) => {
-    console.log('Client connected');
-    ws.send(JSON.stringify({ type: 'serverReady' })); // Notify client
+  wss.on('connection', (ws: WebSocket, req: IncomingMessage, session: any) => {
+    console.log(`WebSocket connected: ${session.user.username}`);
+    ws.send(JSON.stringify({ type: 'serverReady' }));
 
     ws.on('message', async (message: WebSocket.Data) => {
       try {
@@ -45,7 +61,6 @@ const wsHandler = (req: NextApiRequest, res: NextApiResponse) => {
 
         if (parsedMessage.type === 'request-all-attendance') {
           console.log('Received request for attendance data');
-
           try {
             const allAttendance = await prisma.attendance.findMany({
               include: {
@@ -70,12 +85,10 @@ const wsHandler = (req: NextApiRequest, res: NextApiResponse) => {
       }
     });
 
-    // Handle client disconnect
     ws.on('close', () => {
       console.log('Client disconnected');
     });
 
-    // Handle WebSocket errors
     ws.on('error', (error: Error) => {
       console.error('WebSocket error:', error);
     });
@@ -99,7 +112,6 @@ export const broadcastAttendanceUpdate = (attendanceData: any) => {
   });
 };
 
-// Disable body parsing for WebSocket API route
 export const config = {
   api: {
     bodyParser: false,

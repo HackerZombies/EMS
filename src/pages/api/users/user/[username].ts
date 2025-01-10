@@ -5,7 +5,7 @@ import prisma from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../auth/[...nextauth]";
 
-const ALLOWED_ROLES = [ "HR"];
+const ALLOWED_ROLES = [ "HR" , "ADMIN"];
 
 export default async function handler(
   req: NextApiRequest,

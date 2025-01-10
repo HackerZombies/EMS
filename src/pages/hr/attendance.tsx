@@ -248,7 +248,7 @@ export default function AllAttendancePage({ initialAttendance }: AllAttendancePa
 export const getServerSideProps: GetServerSideProps = async (context) => {
   const session = await getServerSession(context.req, context.res, authOptions)
 
-  if (!session?.user || session?.user.role !== 'HR') {
+  if (!session?.user || !["HR", "ADMIN"].includes(session?.user.role)) {
     return {
       redirect: {
         destination: '/unauthorized',
@@ -292,7 +292,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
       },
     }
   } catch (error) {
-    console.error('Error fetching attendance data for HR page:', error)
+    console.error('Error fetching attendance data for HR and ADMIN page:', error)
     return {
       props: {
         initialAttendance: [],

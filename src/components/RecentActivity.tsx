@@ -35,7 +35,6 @@ export default function RecentActivityList({
             <CardTitle className="text-2xl font-semibold text-zinc-100">
               Recent Activity
             </CardTitle>
-            
           </div>
         </div>
       </CardHeader>
@@ -51,33 +50,66 @@ export default function RecentActivityList({
           </div>
         ) : (
           <div className="flex flex-col space-y-4">
-            {events.map((event) => (
-              <motion.div
-                key={event.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
-                whileTap={{ scale: 0.98 }}
-                className="flex items-center bg-zinc-800/30 p-4 rounded-lg border border-zinc-700/50 hover:bg-zinc-700 transition-colors cursor-pointer"
-                onClick={() => event.linkTo && router.push(event.linkTo)}
-              >
-                <Icon
-                  icon={event.icon}
-                  className="w-10 h-10 text-yellow-500 mr-4"
-                />
-                <div className="flex-1">
-                  <h3 className="text-base font-semibold text-zinc-100">
-                    {event.title}
-                  </h3>
-                  <p className="text-sm text-zinc-400">{event.text}</p>
-                </div>
-                <p className="text-sm text-zinc-500 ml-4">
-                  {formatDistanceToNow(new Date(event.date), {
-                    addSuffix: true,
-                  })}
-                </p>
-              </motion.div>
-            ))}
+            {events.map((event) => {
+              // Special design for Attendance events
+              if (event.type === "Attendance") {
+                return (
+                  <motion.div
+                    key={event.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
+                    whileTap={{ scale: 0.98 }}
+                    className="flex items-center bg-blue-900/50 p-5 rounded-lg border-2 border-blue-500 hover:bg-blue-800 transition-colors cursor-pointer"
+                    onClick={() => event.linkTo && router.push(event.linkTo)}
+                  >
+                    <Icon
+                      icon={event.icon}
+                      className="w-12 h-12 text-blue-300 mr-6"
+                    />
+                    <div className="flex-1">
+                      <h3 className="text-lg font-bold text-blue-100">
+                        {event.title}
+                      </h3>
+                      <p className="text-sm text-blue-200">{event.text}</p>
+                    </div>
+                    {/* No relative time for Attendance events */}
+                  </motion.div>
+                );
+              }
+
+              // Default design for non-Attendance events
+              return (
+                <motion.div
+                  key={event.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
+                  whileTap={{ scale: 0.98 }}
+                  className="flex items-center bg-zinc-800/30 p-4 rounded-lg border border-zinc-700/50 hover:bg-zinc-700 transition-colors cursor-pointer"
+                  onClick={() => event.linkTo && router.push(event.linkTo)}
+                >
+                  <Icon
+                    icon={event.icon}
+                    className="w-10 h-10 text-yellow-500 mr-4"
+                  />
+                  <div className="flex-1">
+                    <h3 className="text-base font-semibold text-zinc-100">
+                      {event.title}
+                    </h3>
+                    <p className="text-sm text-zinc-400">{event.text}</p>
+                  </div>
+                  {/* Use type assertion to avoid TypeScript error */}
+                  {(event.type as any) !== "Attendance" && (
+                    <p className="text-sm text-zinc-500 ml-4">
+                      {formatDistanceToNow(new Date(event.date), {
+                        addSuffix: true,
+                      })}
+                    </p>
+                  )}
+                </motion.div>
+              );
+            })}
           </div>
         )}
       </CardContent>

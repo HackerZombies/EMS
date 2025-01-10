@@ -1,5 +1,3 @@
-// pages/api/hr/attendance.ts
-
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getSession } from "next-auth/react";
 import prisma from "../../../lib/prisma";
@@ -13,7 +11,7 @@ export default async function handler(
   }
 
   const session = await getSession({ req });
-  if (!session || session.user?.role !== "HR") {
+  if (!session || !["HR", "ADMIN"].includes(session.user?.role)) {
     return res.status(403).json({ message: "Forbidden" });
   }
 

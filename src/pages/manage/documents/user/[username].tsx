@@ -170,7 +170,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
   const session = await getServerSession(context.req, context.res, authOptions);
 
   // Authorization check
-  if (!session || session.user.role !== "HR") {
+  if (!session || session.user.role !== "HR" && session.user.role !== "ADMIN") {
     return {
       redirect: {
         destination: "/unauthorized",

@@ -20,12 +20,12 @@ export default function SignIn() {
     const formData = new FormData(event.currentTarget);
     const username = formData.get("username")?.toString().trim();
     const password = formData.get("password")?.toString().trim();
-  
+
     if (!username || !password) {
       setIncorrectLogin(true);
       return;
     }
-  
+
     setLoading(true);
     try {
       const result = await signIn("credentials", {
@@ -35,10 +35,10 @@ export default function SignIn() {
         redirect: false,
       });
       setLoading(false);
-  
+
       if (result?.ok) {
         setIncorrectLogin(false);
-        router.push(result.url || '/');
+        router.push(result.url || "/");
       } else {
         setIncorrectLogin(true);
       }
@@ -48,6 +48,7 @@ export default function SignIn() {
       setIncorrectLogin(true);
     }
   }
+
   return (
     <>
       <Head>
@@ -57,7 +58,8 @@ export default function SignIn() {
         <div className="w-full max-w-md bg-black rounded-lg shadow-md p-8 bg-opacity-50">
           <div className="text-center mb-8">
             <div className="mx-auto w-24 mb-2">
-            <Image src={fdmLogo} alt="FDM" width={96} height={96} priority />
+              {/* Ensure the priority attribute is used for important images */}
+              <Image src={fdmLogo} alt="FDM" width={96} height={96} priority />
             </div>
             <h1 className="text-3xl font-bold text-white">EMS Sign In</h1>
           </div>

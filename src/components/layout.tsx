@@ -6,9 +6,18 @@ import { Icon } from "@iconify/react";
 import DashboardLayout from "./DashboardLayout";
 import backgroundImage from "../../public/bg.jpg";
 
+// 1) Import the revised hook
+import useNotifications from "@/hooks/useNotifications";
+
 export default function Layout({ children }: { children: React.ReactNode }) {
-  const { status } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
+
+  // 2) Determine if user is admin
+  const isAdmin = (status === "authenticated" && session?.user?.role === "ADMIN");
+
+  // 3) Always call the hook (no condition here!)
+  useNotifications(isAdmin);
 
   return (
     <div

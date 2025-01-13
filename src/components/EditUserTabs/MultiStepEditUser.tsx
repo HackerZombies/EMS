@@ -1,25 +1,26 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
-import Head from 'next/head';
-import { useRouter } from 'next/router';
-import { useSession } from 'next-auth/react';
-import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
-import isEqual from 'lodash.isequal';
+import React, { useState, useEffect, useMemo } from "react";
+import Head from "next/head";
+import { useRouter } from "next/router";
+import { useSession } from "next-auth/react";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import isEqual from "lodash.isequal";
 
-import PersonalInfoForm, { PersonalInfoData } from './GeneralInfo';
-import JobDetailsForm, { JobDetailsData } from './JobDetails';
-import QualificationsForm, { QualificationsData } from './Qualifications';
-import DocumentsSection from './Documents';
+import PersonalInfoForm, { PersonalInfoData } from "./GeneralInfo";
+import JobDetailsForm, { JobDetailsData } from "./JobDetails";
+import QualificationsForm, { QualificationsData } from "./Qualifications";
+import DocumentsSection from "./Documents";
 
-import { TrashIcon } from '@heroicons/react/24/outline';
+import { TrashIcon } from "@heroicons/react/24/outline";
 
+// Steps used for your stepper
 const steps = [
-  { id: 0, name: 'Personal Information' },
-  { id: 1, name: 'Job Details' },
-  { id: 2, name: 'Qualifications' },
-  { id: 3, name: 'Documents' },
+  { id: 0, name: "Personal Information" },
+  { id: 1, name: "Job Details" },
+  { id: 2, name: "Qualifications" },
+  { id: 3, name: "Documents" },
 ];
 
 export interface EmergencyContact {
@@ -52,7 +53,7 @@ export interface User {
   certifications: Certification[];
   emergencyContacts: EmergencyContact[];
   profileImageUrl?: string;
-  workLocation?: string;  // Add this line
+  workLocation?: string;
 }
 
 export type Qualification = {
@@ -79,65 +80,77 @@ export type Certification = {
 };
 
 const MultiStepEditUser: React.FC = () => {
-  // Initialize router, session, and state hooks
+  // Next.js / NextAuth
   const router = useRouter();
   const { username } = router.query;
   const { data: session, status } = useSession();
 
+  // Steps
   const [activeStep, setActiveStep] = useState<number>(0);
+
+  // Child state slices
   const [personalInfo, setPersonalInfo] = useState<PersonalInfoData>({
-    firstName: '',
-    middleName: '',
-    lastName: '',
-    email: '',
-    phoneNumber: '',
-    dob: '',
-    residentialAddress: '',
-    permanentAddress: '',
-    gender: '',
-    bloodGroup: '',
+    firstName: "",
+    middleName: "",
+    lastName: "",
+    email: "",
+    phoneNumber: "",
+    dob: "",
+    residentialAddress: "",
+    permanentAddress: "",
+    gender: "",
+    bloodGroup: "",
     emergencyContacts: [
       {
-        name: '',
-        relationship: '',
-        phoneNumber: '',
-        email: '',
+        name: "",
+        relationship: "",
+        phoneNumber: "",
+        email: "",
       },
     ],
     resetPassword: false,
-    profileImageUrl: '',
-    nationality: ''
+    profileImageUrl: "",
+    nationality: "",
   });
+
   const [jobDetails, setJobDetails] = useState<JobDetailsData>({
-    department: '',
-    position: '',
-    role: '',
-    employmentType: '',
-    joiningDate: '',
-    workLocation: '', 
+    department: "",
+    position: "",
+    role: "",
+    employmentType: "",
+    joiningDate: "",
+    workLocation: "",
   });
+
   const [qualifications, setQualifications] = useState<QualificationsData>({
     qualifications: [],
     experiences: [],
     certifications: [],
   });
 
+  // Data from API
   const [initialData, setInitialData] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [showConfirmation, setShowConfirmation] = useState<boolean>(false);
+
+  // Delete logic
   const [deleteConfirm, setDeleteConfirm] = useState<boolean>(false);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
-  // Fetch user data on mount or username change
+  // 1) Derive the current user role from the session
+  // Make sure your session.user.role is uppercase or handle case consistently
+  const userRole = session?.user?.role ?? "";
+
+  // Fetch user data on mount (or when username changes)
   useEffect(() => {
     if (username) {
       const fetchData = async () => {
         try {
           const response = await fetch(`/api/users/user/${username}`);
-          if (!response.ok) throw new Error('Failed to fetch user data');
-          const data = await response.json();
+          if (!response.ok) throw new Error("Failed to fetch user data");
 
+          const data = await response.json();
           const userData: User = {
             username: data.username,
             firstName: data.firstName,
@@ -161,46 +174,48 @@ const MultiStepEditUser: React.FC = () => {
             emergencyContacts: data.emergencyContacts || [],
             profileImageUrl: data.profileImageUrl,
             nationality: data.nationality,
-            workLocation: data.workLocation
-            
+            workLocation: data.workLocation,
           };
 
-          setPersonalInfo({
+          // Fill local states
+          setPersonalInfo((prev) => ({
+            ...prev,
             firstName: userData.firstName,
-            middleName: userData.middleName || '',
+            middleName: userData.middleName || "",
             lastName: userData.lastName,
             email: userData.email,
-            phoneNumber: userData.phoneNumber || '',
-            dob: userData.dob || '',
-            residentialAddress: userData.residentialAddress || '',
-            permanentAddress: userData.permanentAddress || '',
-            gender: userData.gender || '',
-            bloodGroup: userData.bloodGroup || '',
+            phoneNumber: userData.phoneNumber || "",
+            dob: userData.dob || "",
+            residentialAddress: userData.residentialAddress || "",
+            permanentAddress: userData.permanentAddress || "",
+            gender: userData.gender || "",
+            bloodGroup: userData.bloodGroup || "",
             emergencyContacts: userData.emergencyContacts,
+            profileImageUrl: userData.profileImageUrl || "",
+            nationality: userData.nationality || "",
             resetPassword: false,
-            profileImageUrl: userData.profileImageUrl || '',
-            
-            nationality: userData.nationality
-          });
+          }));
 
-          setJobDetails({
-            department: userData.department || '',
-            position: userData.position || '',
-            role: userData.role || '',
-            employmentType: userData.employmentType || '',
-            joiningDate: userData.joiningDate || '',
-            workLocation: userData.workLocation || '',
-          });
+          setJobDetails((prev) => ({
+            ...prev,
+            department: userData.department || "",
+            position: userData.position || "",
+            role: userData.role || "",
+            employmentType: userData.employmentType || "",
+            joiningDate: userData.joiningDate || "",
+            workLocation: userData.workLocation || "",
+          }));
 
-          setQualifications({
+          setQualifications((prev) => ({
+            ...prev,
             qualifications: userData.qualifications,
             experiences: userData.experiences,
             certifications: userData.certifications,
-          });
+          }));
 
           setInitialData(userData);
         } catch (error) {
-          console.error('Error fetching user data:', error);
+          console.error("Error fetching user data:", error);
         } finally {
           setIsLoading(false);
         }
@@ -209,10 +224,9 @@ const MultiStepEditUser: React.FC = () => {
     }
   }, [username]);
 
-  // Memoized check for changes
+  // Compare current states with initialData to see if changes were made
   const changesMade = useMemo(() => {
     if (!initialData) return false;
-
     const currentUser: User = {
       username: initialData.username,
       firstName: personalInfo.firstName,
@@ -235,15 +249,14 @@ const MultiStepEditUser: React.FC = () => {
       qualifications: qualifications.qualifications,
       experiences: qualifications.experiences,
       certifications: qualifications.certifications,
-      
-      
+      profileImageUrl: personalInfo.profileImageUrl,
+      workLocation: jobDetails.workLocation,
     };
-
     return !isEqual(initialData, currentUser);
   }, [initialData, personalInfo, jobDetails, qualifications]);
 
-  // Conditional renders after all hooks are declared
-  if (status === 'loading' || isLoading) {
+  // Early returns (loading, unauthorized, not found)
+  if (status === "loading" || isLoading) {
     return (
       <div className="flex justify-center items-center h-screen bg-gray-900">
         <span className="text-xl text-white">Loading...</span>
@@ -251,7 +264,7 @@ const MultiStepEditUser: React.FC = () => {
     );
   }
 
-  const allowedRoles = ['HR' , 'ADMIN'];
+  const allowedRoles = ["HR", "ADMIN"];
   if (!session || !session.user || !allowedRoles.includes(session.user.role)) {
     return (
       <div className="flex justify-center items-center h-screen bg-gray-900">
@@ -273,10 +286,9 @@ const MultiStepEditUser: React.FC = () => {
     setIsSubmitting(true);
     try {
       const payload: any = {
-        username: initialData!.username,
+        username: initialData.username,
         firstName: personalInfo.firstName,
         middleName: personalInfo.middleName,
-        nationality:personalInfo.nationality,
         lastName: personalInfo.lastName,
         email: personalInfo.email,
         phoneNumber: personalInfo.phoneNumber,
@@ -295,6 +307,7 @@ const MultiStepEditUser: React.FC = () => {
         experiences: qualifications.experiences,
         certifications: qualifications.certifications,
         profileImageUrl: personalInfo.profileImageUrl,
+        nationality: personalInfo.nationality,
         workLocation: jobDetails.workLocation,
       };
 
@@ -302,24 +315,24 @@ const MultiStepEditUser: React.FC = () => {
         payload.resetPassword = true;
       }
 
-      const response = await fetch('/api/users/updateUser', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/users/updateUser", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update user.');
+        throw new Error("Failed to update user.");
       }
 
-      const data = await response.json();
+      await response.json(); // or destructure if needed
 
       setShowConfirmation(true);
       setTimeout(() => {
-        router.push('/manage/users');
+        router.push("/manage/users");
       }, 2000);
     } catch (error) {
-      console.error('Error updating user:', error);
+      console.error("Error updating user:", error);
     } finally {
       setIsSubmitting(false);
     }
@@ -329,25 +342,24 @@ const MultiStepEditUser: React.FC = () => {
   const handleDeleteUser = async () => {
     setIsDeleting(true);
     try {
-      const response = await fetch('/api/users/deleteUser', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: initialData!.username }),
+      const response = await fetch("/api/users/deleteUser", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: initialData.username }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to delete user.');
+        throw new Error("Failed to delete user.");
       }
-
-      router.push('/manage/users');
+      router.push("/manage/users");
     } catch (error) {
-      console.error('Error deleting user:', error);
+      console.error("Error deleting user:", error);
     } finally {
       setIsDeleting(false);
     }
   };
 
-  // Render current step component
+  // Render current step
   const renderStep = () => {
     switch (activeStep) {
       case 0:
@@ -362,6 +374,7 @@ const MultiStepEditUser: React.FC = () => {
           <JobDetailsForm
             formData={jobDetails}
             setFormData={setJobDetails}
+            currentUserRole={userRole} // <--- pass userRole here!
           />
         );
       case 2:
@@ -372,9 +385,7 @@ const MultiStepEditUser: React.FC = () => {
           />
         );
       case 3:
-        return (
-          <DocumentsSection userUsername={initialData!.username} />
-        );
+        return <DocumentsSection userUsername={initialData.username} />;
       default:
         return null;
     }
@@ -389,7 +400,9 @@ const MultiStepEditUser: React.FC = () => {
       <Head>
         <title>Edit User - {initialData.username}</title>
       </Head>
+
       <div className="container mx-auto p-6 bg-gray-900 min-h-screen">
+        {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-center text-white">
             Edit User: {initialData.username}
@@ -416,14 +429,14 @@ const MultiStepEditUser: React.FC = () => {
                 key={step.id}
                 onClick={() => handleStepClick(step.id)}
                 className={`flex flex-col items-center cursor-pointer ${
-                  index <= activeStep ? 'text-blue-400' : 'text-gray-500'
+                  index <= activeStep ? "text-blue-400" : "text-gray-500"
                 }`}
               >
                 <div
                   className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${
                     index <= activeStep
-                      ? 'border-blue-400 bg-blue-500 text-white'
-                      : 'border-gray-500'
+                      ? "border-blue-400 bg-blue-500 text-white"
+                      : "border-gray-500"
                   }`}
                 >
                   {index + 1}
@@ -434,10 +447,8 @@ const MultiStepEditUser: React.FC = () => {
           </div>
         </div>
 
-        {/* Form Step */}
-        <div className="bg-gray-800 shadow-md rounded-lg p-6">
-          {renderStep()}
-        </div>
+        {/* Active Step Content */}
+        <div className="bg-gray-800 shadow-md rounded-lg p-6">{renderStep()}</div>
 
         {/* Confirmation Message */}
         {showConfirmation && (
@@ -466,12 +477,13 @@ const MultiStepEditUser: React.FC = () => {
           ) : (
             <Button
               onClick={handleSubmit}
-              disabled={!changesMade || isSubmitting} 
-              // Provide a tooltip when disabled due to no changes
-              title={!changesMade ? 'No changes detected' : undefined}
-              className={`bg-green-600 text-white hover:bg-green-700 ${!changesMade ? 'opacity-50 cursor-not-allowed' : ''}`}
+              disabled={!changesMade || isSubmitting}
+              title={!changesMade ? "No changes detected" : undefined}
+              className={`bg-green-600 text-white hover:bg-green-700 ${
+                !changesMade ? "opacity-50 cursor-not-allowed" : ""
+              }`}
             >
-              {isSubmitting ? 'Submitting...' : 'Submit'}
+              {isSubmitting ? "Submitting..." : "Submit"}
             </Button>
           )}
         </div>
@@ -480,8 +492,13 @@ const MultiStepEditUser: React.FC = () => {
         {deleteConfirm && (
           <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
             <div className="bg-gray-800 p-6 rounded-lg w-96">
-              <h2 className="text-xl font-semibold text-white mb-4">Confirm Deletion</h2>
-              <p className="text-gray-300 mb-6">Are you sure you want to delete user "{initialData.username}"? This action cannot be undone.</p>
+              <h2 className="text-xl font-semibold text-white mb-4">
+                Confirm Deletion
+              </h2>
+              <p className="text-gray-300 mb-6">
+                Are you sure you want to delete user "{initialData.username}"?
+                This action cannot be undone.
+              </p>
               <div className="flex justify-end space-x-4">
                 <Button
                   type="button"
@@ -496,7 +513,7 @@ const MultiStepEditUser: React.FC = () => {
                   disabled={isDeleting}
                   className="bg-red-600 hover:bg-red-700 text-white"
                 >
-                  {isDeleting ? 'Deleting...' : 'Delete'}
+                  {isDeleting ? "Deleting..." : "Delete"}
                 </Button>
               </div>
             </div>

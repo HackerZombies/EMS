@@ -5,21 +5,133 @@ import prisma from "@/lib/prisma";
 import bcrypt from "bcrypt";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
-import {  QualificationLevel,
-  UserRole,
-  Gender,
-  BloodGroup,
+import {
+  Department,
+  Position,
+  WorkLocation,
   EmploymentType,
   DocumentCategory,
-  WorkLocation,
-  Department,
-  Position } from "@prisma/client";
+  User as PrismaUser,
+  Qualification,
+  Experience,
+  Certification,
+  EmployeeDocument,
+  EmergencyContact,
+} from "@prisma/client";
 import sendUpdateEmail from "@/lib/sendUserUpdateEmail";
 import { mapToDocumentCategory } from "@/lib/documentCategory";
 import logger from "@/lib/logger";
 import crypto from "crypto";
 
-const ALLOWED_ROLES = ["HR" , "ADMIN"];
+const ALLOWED_ROLES = ["HR", "ADMIN"];
+
+/** A helper interface to represent the "full" user including relations. */
+interface FullUser extends PrismaUser {
+  qualifications: Qualification[];
+  experiences: Experience[];
+  certifications: Certification[];
+  employeeDocuments: EmployeeDocument[];
+  emergencyContacts: EmergencyContact[];
+}
+
+/**
+ * Compare old FullUser vs. new FullUser, return an object describing changes.
+ * For sub-collections, we do a simplistic approach:
+ * - If the array length or JSON string differs, we log the entire old vs. new array.
+ */
+function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
+  const changedFields: Record<string, { old: any; new: any }> = {};
+
+  // ----- Compare top-level scalar fields -----
+  const topLevelFields = [
+    "firstName",
+    "middleName",
+    "lastName",
+    "email",
+    "phoneNumber",
+    "residentialAddress",
+    "permanentAddress",
+    "role",
+    "dob",
+    "gender",
+    "bloodGroup",
+    "employmentType",
+    "workLocation",
+    "department",
+    "position",
+    "nationality",
+    "profileImageUrl",
+  ];
+
+  for (const key of topLevelFields) {
+    const oldVal = (oldUser as any)[key];
+    const newVal = (newUser as any)[key];
+
+    // Compare Date objects by time, everything else by !==
+    if (oldVal instanceof Date && newVal instanceof Date) {
+      if (oldVal.getTime() !== newVal.getTime()) {
+        changedFields[key] = { old: oldVal, new: newVal };
+      }
+    } else {
+      if (oldVal !== newVal) {
+        changedFields[key] = { old: oldVal, new: newVal };
+      }
+    }
+  }
+
+  // Compare joiningDate separately
+  if (oldUser.joiningDate instanceof Date && newUser.joiningDate instanceof Date) {
+    if (oldUser.joiningDate.getTime() !== newUser.joiningDate.getTime()) {
+      changedFields["joiningDate"] = {
+        old: oldUser.joiningDate,
+        new: newUser.joiningDate,
+      };
+    }
+  } else {
+    if (oldUser.joiningDate !== newUser.joiningDate) {
+      changedFields["joiningDate"] = {
+        old: oldUser.joiningDate,
+        new: newUser.joiningDate,
+      };
+    }
+  }
+
+  // ----- Compare sub-collections -----
+  function compareArray(fieldName: keyof FullUser) {
+    const oldFieldValue = oldUser[fieldName];
+    const newFieldValue = newUser[fieldName];
+
+    const oldArray = Array.isArray(oldFieldValue)
+      ? oldFieldValue.map(simplifyRecord)
+      : [];
+    const newArray = Array.isArray(newFieldValue)
+      ? newFieldValue.map(simplifyRecord)
+      : [];
+
+    const oldVal = JSON.stringify(oldArray);
+    const newVal = JSON.stringify(newArray);
+    if (oldVal !== newVal) {
+      changedFields[fieldName] = {
+        old: JSON.parse(oldVal),
+        new: JSON.parse(newVal),
+      };
+    }
+  }
+
+  // Basic function to remove non-essential or always-unique fields like IDs, etc.
+  function simplifyRecord(obj: any) {
+    const { id, dateCreated, ...rest } = obj;
+    return rest;
+  }
+
+  compareArray("qualifications");
+  compareArray("experiences");
+  compareArray("certifications");
+  compareArray("employeeDocuments");
+  compareArray("emergencyContacts");
+
+  return changedFields;
+}
 
 export default async function handle(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "PUT") {
@@ -27,11 +139,13 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
   }
 
   try {
+    // 1) Check Session & Role
     const session = await getServerSession(req, res, authOptions);
     if (!session || !session.user || !ALLOWED_ROLES.includes(session.user.role as string)) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
+    // 2) Extract body payload
     const {
       username,
       firstName,
@@ -61,10 +175,12 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       resetPassword,
     } = req.body;
 
+    // 3) Basic validation
     if (!username || !firstName || !lastName || !email || !role) {
       return res.status(400).json({ message: "Missing mandatory fields" });
     }
 
+    // 4) Prepare data to update
     const dataToUpdate: Record<string, any> = {
       firstName,
       lastName,
@@ -73,7 +189,6 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       residentialAddress,
       role,
     };
-
     if (middleName) dataToUpdate.middleName = middleName;
     if (permanentAddress) dataToUpdate.permanentAddress = permanentAddress;
     if (department) dataToUpdate.department = department;
@@ -84,9 +199,12 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     if (workLocation) dataToUpdate.workLocation = workLocation;
     if (profileImageUrl) dataToUpdate.profileImageUrl = profileImageUrl;
     if (dob) dataToUpdate.dob = new Date(dob);
-    if (joiningDate) dataToUpdate.joiningDate = new Date(joiningDate);
     if (nationality) dataToUpdate.nationality = nationality;
+    if (joiningDate !== undefined && joiningDate !== null) {
+      dataToUpdate.joiningDate = new Date(joiningDate);
+    }
 
+    // 5) Handle password reset or direct password change
     if (resetPassword) {
       const newPassword = crypto.randomBytes(12).toString("hex");
       const hashedPassword = await bcrypt.hash(newPassword, 10);
@@ -103,7 +221,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       dataToUpdate.password = await bcrypt.hash(password, 10);
     }
 
-    // Enum Validations
+    // 6) Enum Validations
     const validDepartments: Department[] = [
       Department.Admin,
       Department.HR,
@@ -148,80 +266,139 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(400).json({ message: "Invalid employment type" });
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { username } });
-    if (!existingUser) {
+    // 7) Fetch the OLD user (including sub-relations) for a full comparison later
+    const oldUser = await prisma.user.findUnique({
+      where: { username },
+      include: {
+        qualifications: true,
+        experiences: true,
+        certifications: true,
+        employeeDocuments: true,
+        emergencyContacts: true,
+      },
+    }) as FullUser | null;
+
+    if (!oldUser) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    const isUnchanged = Object.keys(dataToUpdate).every(
-      (key) => (existingUser as Record<string, any>)[key] === dataToUpdate[key]
-    );
-    if (isUnchanged && !resetPassword) {
-      return res.status(200).json({ message: "No changes detected" });
-    }
-
+    // 8) Update the main user record
     const updatedUser = await prisma.user.update({
       where: { username },
       data: dataToUpdate,
     });
 
-    // --- Handle Related Data ---
+    // 9) Update sub-collections
     await handleQualifications(username, qualifications);
     await handleExperiences(username, experiences);
     await handleCertifications(username, certifications);
     await handleDocuments(username, documents);
     await handleEmergencyContacts(username, emergencyContacts);
 
-    return res.status(200).json({ 
-      message: "User updated successfully", 
+    // 10) Now fetch the NEW user (including sub-relations) for a full diff
+    const newUser = await prisma.user.findUnique({
+      where: { username },
+      include: {
+        qualifications: true,
+        experiences: true,
+        certifications: true,
+        employeeDocuments: true,
+        emergencyContacts: true,
+      },
+    }) as FullUser | null;
+
+    if (!newUser) {
+      return res.status(500).json({ message: "Could not re-fetch updated user." });
+    }
+
+    // 11) Build a single changes diff for everything
+    const changedFields = buildChangesDiff(oldUser, newUser);
+
+    // 12) If there are changes, log once + send one notification
+    const hasChanges = Object.keys(changedFields).length > 0 || resetPassword;
+    if (!hasChanges) {
+      // No real changes found
+      return res.status(200).json({ message: "No changes detected" });
+    }
+
+    // Create one AuditLog entry
+    // ------ IMPORTANT BUGFIX HERE ------
+    // Store ONLY the JSON, NOT extra text.
+    await prisma.auditLog.create({
+      data: {
+        action: "UPDATE_USER",
+        performedBy: session.user.username,
+        // Instead of `User 'username' updated. Changes:\n...`, just store JSON
+        details: JSON.stringify(changedFields, null, 2),
+      },
+    });
+
+    // Create exactly one notification for all changes
+    const admins = await prisma.user.findMany({
+      where: { role: "ADMIN" },
+      select: { username: true },
+    });
+    if (admins.length > 0) {
+      const notificationsData = admins.map((admin) => ({
+        recipientUsername: admin.username,
+        message: `User '${username}' was updated by ${session.user.username}`,
+      }));
+      await prisma.notification.createMany({ data: notificationsData });
+    }
+
+    // 13) Return response
+    return res.status(200).json({
+      message: "User updated successfully",
       resetPassword: resetPassword ? "Password reset email sent" : undefined,
-      updatedUser 
+      updatedUser,
     });
   } catch (error: any) {
     logger.error("Error updating user:", error);
-    return res.status(500).json({ message: "Failed to update user", error: error.message });
+    return res
+      .status(500)
+      .json({ message: "Failed to update user", error: error.message });
   }
 }
 
-// Handle Emergency Contacts
+// ------------------------------
+// Handle sub-collections as before
+// ------------------------------
 async function handleEmergencyContacts(username: string, emergencyContacts: any[]) {
   if (Array.isArray(emergencyContacts)) {
     await prisma.emergencyContact.deleteMany({ where: { userUsername: username } });
-    const emergencyContactsData = emergencyContacts.map((contact) => ({
+    const data = emergencyContacts.map((contact) => ({
       name: contact.name,
       relationship: contact.relationship,
       phoneNumber: contact.phoneNumber,
       email: contact.email,
       userUsername: username,
     }));
-    if (emergencyContactsData.length > 0) {
-      await prisma.emergencyContact.createMany({ data: emergencyContactsData });
+    if (data.length > 0) {
+      await prisma.emergencyContact.createMany({ data });
     }
   }
 }
 
-// Handle Qualifications
 async function handleQualifications(username: string, qualifications: any[]) {
   if (Array.isArray(qualifications)) {
     await prisma.qualification.deleteMany({ where: { username } });
-    const qualificationsData = qualifications.map((qual) => ({
+    const data = qualifications.map((qual) => ({
       name: qual.name,
       level: qual.level,
       specializations: qual.specializations || [],
       institution: qual.institution || null,
       username,
     }));
-    if (qualificationsData.length > 0) {
-      await prisma.qualification.createMany({ data: qualificationsData });
+    if (data.length > 0) {
+      await prisma.qualification.createMany({ data });
     }
   }
 }
 
-// Handle Experiences
 async function handleExperiences(username: string, experiences: any[]) {
   if (Array.isArray(experiences)) {
     await prisma.experience.deleteMany({ where: { username } });
-    const experiencesData = experiences.map((exp) => ({
+    const data = experiences.map((exp) => ({
       jobTitle: exp.jobTitle,
       company: exp.company,
       description: exp.description,
@@ -229,17 +406,16 @@ async function handleExperiences(username: string, experiences: any[]) {
       startDate: new Date(exp.startDate),
       endDate: exp.endDate ? new Date(exp.endDate) : undefined,
     }));
-    if (experiencesData.length > 0) {
-      await prisma.experience.createMany({ data: experiencesData });
+    if (data.length > 0) {
+      await prisma.experience.createMany({ data });
     }
   }
 }
 
-// Handle Certifications
 async function handleCertifications(username: string, certifications: any[]) {
   if (Array.isArray(certifications)) {
     await prisma.certification.deleteMany({ where: { username } });
-    const certificationsData = certifications.map((cert) => ({
+    const data = certifications.map((cert) => ({
       name: cert.name,
       issuingAuthority: cert.issuingAuthority,
       licenseNumber: cert.licenseNumber || null,
@@ -247,17 +423,15 @@ async function handleCertifications(username: string, certifications: any[]) {
       issueDate: cert.issueDate ? new Date(cert.issueDate) : undefined,
       expiryDate: cert.expiryDate ? new Date(cert.expiryDate) : undefined,
     }));
-    if (certificationsData.length > 0) {
-      await prisma.certification.createMany({ data: certificationsData });
+    if (data.length > 0) {
+      await prisma.certification.createMany({ data });
     }
   }
 }
 
-// Handle Documents
 async function handleDocuments(username: string, documents: any) {
   if (documents && typeof documents === "object") {
     await prisma.employeeDocument.deleteMany({ where: { userUsername: username } });
-
     const allDocs = Object.keys(documents).flatMap((category) => {
       const docs = Array.isArray(documents[category]) ? documents[category] : [];
       return docs
@@ -267,12 +441,13 @@ async function handleDocuments(username: string, documents: any) {
             console.warn(`Invalid document category: ${category}`);
             return null;
           }
-
           return {
             userUsername: username,
             filename: doc.displayName || "Untitled",
             fileType: doc.fileType || null,
-            data: doc.fileData ? Buffer.from(doc.fileData, "base64") : Buffer.from([]),
+            data: doc.fileData
+              ? Buffer.from(doc.fileData, "base64")
+              : Buffer.from([]),
             size: doc.size || 0,
             category: mappedCategory,
           };
@@ -280,27 +455,15 @@ async function handleDocuments(username: string, documents: any) {
         .filter((doc) => doc !== null);
     });
 
-    const validDocs = allDocs.filter((doc) => doc !== null) as Array<{
-      userUsername: string;
-      filename: string;
-      fileType: string | null;
-      data: Buffer;
-      size: number;
-      category: DocumentCategory;
-    }>;
-
-    if (validDocs.length > 0) {
-      await Promise.all(
-        validDocs.map((doc) =>
-          prisma.employeeDocument.create({
-            data: doc,
-          })
-        )
-      );
+    if (allDocs.length > 0) {
+      await prisma.employeeDocument.createMany({ data: allDocs });
     }
   }
 }
 
+// --------------
+// Next.js Config
+// --------------
 export const config = {
   api: {
     bodyParser: {

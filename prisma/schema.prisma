@@ -128,10 +128,24 @@ model User {
   certifications     Certification[]    @relation("UserCertifications")
   auditLogs          AuditLog[]         @relation("UserAuditLogs") // New relation for audit logs
   emergencyContacts  EmergencyContact[] @relation("UserEmergencyContacts")
+  notifications      Notification[] @relation("UserNotifications")
 
 
   @@index([email, phoneNumber], name: "user_contact_index") // Combined index
 }
+
+model Notification {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  message           String
+  createdAt         DateTime @default(now())
+  isRead            Boolean  @default(false)
+  
+  recipientUsername String
+  recipient         User     @relation("UserNotifications", fields: [recipientUsername], references: [username], onDelete: Cascade)
+
+  @@index([recipientUsername])
+}
+
 
 
 model EmergencyContact {

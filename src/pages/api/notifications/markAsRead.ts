@@ -1,3 +1,4 @@
+//api/notifications/markAsRead.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";

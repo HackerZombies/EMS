@@ -81,8 +81,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           { url: "/add-New-Employee", title: "Add Employees", icon: "ph:address-book" },
           { url: "/manage/users", title: "Manage Employees", icon: "ph:address-book" },
           { url: "/hr/attendance", title: "Manage Attendance", icon: "ph:calendar-check" },
-
-          
+          { url: "/activity", title: "Activity Logs", icon: "ph:clock-clockwise" }, // Added Activity Logs
         ],
       });
     }

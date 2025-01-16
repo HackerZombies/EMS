@@ -8,12 +8,17 @@ interface AttendanceStatus {
   checkOutTime: string | null;
 }
 
-export const useAttendanceMarking = (username: string, onAttendanceMarked: () => void) => {
+export const useAttendanceMarking = (
+  username: string,
+  onAttendanceMarked: () => void
+) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isRetryingLocation, setIsRetryingLocation] = useState(false);
-  const [retryAction, setRetryAction] = useState<'checkin' | 'checkout' | null>(null);
+  const [retryAction, setRetryAction] = useState<'checkin' | 'checkout' | null>(
+    null
+  );
   const [attendanceStatus, setAttendanceStatus] = useState<AttendanceStatus>({
     checkedIn: false,
     checkedOut: false,
@@ -21,8 +26,9 @@ export const useAttendanceMarking = (username: string, onAttendanceMarked: () =>
     checkOutTime: null,
   });
 
-  const [previousPosition, setPreviousPosition] = useState<GeolocationPosition | null>(null);
-
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 1. Fetch Attendance Status
+  // ─────────────────────────────────────────────────────────────────────────────
   const fetchAttendanceStatus = useCallback(async () => {
     if (!username) return;
     setLoading(true);
@@ -35,55 +41,65 @@ export const useAttendanceMarking = (username: string, onAttendanceMarked: () =>
       const data: AttendanceStatus = await response.json();
       setAttendanceStatus(data);
     } catch (e: any) {
-      setError(e.message || "Failed to fetch attendance status");
+      setError(e.message || 'Failed to fetch attendance status');
     } finally {
       setLoading(false);
     }
   }, [username]);
 
-  const getLocation = async (maxRetries = 3): Promise<GeolocationPosition> => {
-    let attempts = 0;
-    let bestPosition: GeolocationPosition | null = null;
-    let bestAccuracy = Infinity;
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 2. Pinpoint Location (using watch)
+  // ─────────────────────────────────────────────────────────────────────────────
+  const getLocationPinpoint = async (
+    desiredAccuracy = 10,
+    maxWaitMs = 30000
+  ): Promise<GeolocationPosition> => {
+    return new Promise<GeolocationPosition>((resolve, reject) => {
+      let bestPosition: GeolocationPosition | null = null;
+      let watchId: number;
 
-    const attemptToFetchLocation = () =>
-      new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(
-          resolve,
-          reject,
-          {
-            enableHighAccuracy: true,
-            timeout: 20000,
-            maximumAge: 0,
-          }
-        );
-      });
-
-    while (attempts < maxRetries) {
-      try {
-        const position = await attemptToFetchLocation();
-        const accuracy = position.coords.accuracy;
-
-        if (accuracy < bestAccuracy) {
+      const handleSuccess = (position: GeolocationPosition) => {
+        if (
+          !bestPosition ||
+          position.coords.accuracy < bestPosition.coords.accuracy
+        ) {
           bestPosition = position;
-          bestAccuracy = accuracy;
         }
 
-        if (bestAccuracy <= 10) break;
-      } catch (error) {
-        console.error(`Attempt ${attempts + 1} failed:`, error);
-      }
+        if (bestPosition.coords.accuracy <= desiredAccuracy) {
+          navigator.geolocation.clearWatch(watchId);
+          resolve(bestPosition);
+        }
+      };
 
-      attempts++;
-    }
+      const handleError = (error: GeolocationPositionError) => {
+        navigator.geolocation.clearWatch(watchId);
+        reject(error);
+      };
 
-    if (!bestPosition) {
-      throw new Error("Failed to retrieve accurate location after retries.");
-    }
+      watchId = navigator.geolocation.watchPosition(handleSuccess, handleError, {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+      });
 
-    return bestPosition;
+      setTimeout(() => {
+        navigator.geolocation.clearWatch(watchId);
+        if (bestPosition) {
+          resolve(bestPosition); // Return the best we’ve got
+        } else {
+          reject(
+            new Error(
+              `Could not get a sufficiently accurate location within ${maxWaitMs}ms`
+            )
+          );
+        }
+      }, maxWaitMs);
+    });
   };
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 3. Mark Attendance
+  // ─────────────────────────────────────────────────────────────────────────────
   const markAttendance = async (action: 'checkin' | 'checkout') => {
     setLoading(true);
     setError(null);
@@ -92,19 +108,23 @@ export const useAttendanceMarking = (username: string, onAttendanceMarked: () =>
     setRetryAction(null);
 
     try {
-      const position = await getLocation();
+      // Attempt to get the best-possible location
+      const position = await getLocationPinpoint(10, 30000); 
+      // ^ Adjust threshold or timeout as you see fit
       handleLocationSuccess(position, action);
     } catch (err: any) {
       handleLocationError(err, action);
     }
   };
 
-  const handleLocationSuccess = async (position: GeolocationPosition, action: 'checkin' | 'checkout') => {
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 4. Handle Location Success
+  // ─────────────────────────────────────────────────────────────────────────────
+  const handleLocationSuccess = async (
+    position: GeolocationPosition,
+    action: 'checkin' | 'checkout'
+  ) => {
     const { latitude, longitude, accuracy } = position.coords;
-
-    checkAccuracy(accuracy);
-    checkRapidLocationChange(position);
-    setPreviousPosition(position);
 
     try {
       const response = await fetch(`/api/attendance/${action}?action=${action}`, {
@@ -115,8 +135,10 @@ export const useAttendanceMarking = (username: string, onAttendanceMarked: () =>
         body: JSON.stringify({
           username: username,
           date: new Date().toISOString().split('T')[0],
-          checkInTime: action === 'checkin' ? formatToIST(new Date()) : undefined,
-          checkOutTime: action === 'checkout' ? formatToIST(new Date()) : undefined,
+          checkInTime:
+            action === 'checkin' ? formatToIST(new Date()) : undefined,
+          checkOutTime:
+            action === 'checkout' ? formatToIST(new Date()) : undefined,
           checkInLatitude: action === 'checkin' ? latitude : undefined,
           checkInLongitude: action === 'checkin' ? longitude : undefined,
           checkOutLatitude: action === 'checkout' ? latitude : undefined,
@@ -142,27 +164,38 @@ export const useAttendanceMarking = (username: string, onAttendanceMarked: () =>
     }
   };
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 5. Handle Location Error
+  // ─────────────────────────────────────────────────────────────────────────────
   const handleLocationError = (error: any, action: 'checkin' | 'checkout') => {
-    let errorMessage = "Could not retrieve location.";
-    switch (error.code) {
-      case error.PERMISSION_DENIED:
-        errorMessage = "Location access was denied. Please allow location access to check in/out.";
+    let errorMessage = 'Could not retrieve location.';
+    switch (error?.code) {
+      case error?.PERMISSION_DENIED:
+        errorMessage =
+          'Location access was denied. Please allow location access to check in/out.';
         break;
-      case error.POSITION_UNAVAILABLE:
-        errorMessage = "Location information is unavailable. Please ensure your device's location services are enabled.";
+      case error?.POSITION_UNAVAILABLE:
+        errorMessage =
+          "Location information is unavailable. Please ensure your device's location services are enabled.";
         break;
-      case error.TIMEOUT:
-        errorMessage = "The request to get location timed out. Please try again.";
+      case error?.TIMEOUT:
+        errorMessage = 'The request to get location timed out. Please try again.';
         setRetryAction(action);
         break;
       default:
-        errorMessage = `An unknown error occurred while getting location: ${error.message}`;
+        // This could be a plain Error object from our "reject()"
+        errorMessage = error.message
+          ? error.message
+          : 'An unknown error occurred while getting location.';
     }
     setError(errorMessage);
     setLoading(false);
-    console.error("Geolocation error:", error);
+    console.error('Geolocation error:', error);
   };
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 6. Support for Retrying
+  // ─────────────────────────────────────────────────────────────────────────────
   const retryGetLocation = () => {
     if (retryAction) {
       setError(null);
@@ -171,49 +204,16 @@ export const useAttendanceMarking = (username: string, onAttendanceMarked: () =>
     }
   };
 
-  const checkAccuracy = (accuracy: number) => {
-    const accuracyThreshold = 5;
-    if (accuracy > accuracyThreshold) {
-      console.warn(`Low location accuracy: ${accuracy} meters`);
-    }
-  };
-
-  const checkRapidLocationChange = (currentPosition: GeolocationPosition) => {
-    if (previousPosition && currentPosition?.coords) {
-      const distance = calculateDistance(
-        previousPosition.coords.latitude,
-        previousPosition.coords.longitude,
-        currentPosition.coords.latitude,
-        currentPosition.coords.longitude
-      );
-      const timeDifference = currentPosition.timestamp - previousPosition.timestamp;
-      const speed = distance / (timeDifference / 1000);
-      const speedThreshold = 30;
-
-      if (speed > speedThreshold) {
-        console.warn("Suspiciously rapid location change detected!");
-      }
-    }
-  };
-
-  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    const R = 6371e3;
-    const φ1 = lat1 * Math.PI / 180;
-    const φ2 = lat2 * Math.PI / 180;
-    const Δφ = (lat2 - lat1) * Math.PI / 180;
-    const Δλ = (lon2 - lon1) * Math.PI / 180;
-
-    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-              Math.cos(φ1) * Math.cos(φ2) *
-              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  };
-
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 7. Fetch Attendance Status on Mount/Change
+  // ─────────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     fetchAttendanceStatus();
   }, [fetchAttendanceStatus]);
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 8. Return the Hook’s Public API
+  // ─────────────────────────────────────────────────────────────────────────────
   return {
     markAttendance,
     loading,

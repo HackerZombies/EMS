@@ -14,9 +14,21 @@ import "react-toastify/dist/ReactToastify.css";
 // 2) Global styles
 import "../styles/globals.css";
 
+// 3) Import your custom hook
+import useNotifications from "@/hooks/useNotifications";
+
 TimeAgo.addLocale(en);
 
 function App({ Component, pageProps }: AppProps) {
+  // 4) Determine if the user is an HR/ADMIN
+  //    (Or whatever roles you want to receive notifications.)
+  const isAdmin =
+    pageProps?.session?.user?.role === "ADMIN" ||
+    pageProps?.session?.user?.role === "HR";
+
+  // 5) Use the notifications hook
+  useNotifications(isAdmin);
+
   return (
     <>
       <Head>
@@ -26,12 +38,13 @@ function App({ Component, pageProps }: AppProps) {
         />
       </Head>
 
+      {/* 6) Wrap the entire app in the SessionProvider (for next-auth) */}
       <SessionProvider session={pageProps.session}>
         <Layout>
           <Component {...pageProps} />
         </Layout>
 
-        {/* 3) Place the ToastContainer once in your app (usually at the root) */}
+        {/* 7) Place the ToastContainer once in your app (usually at the root) */}
         <ToastContainer
           position="top-right"
           autoClose={5000}    // or any time in ms

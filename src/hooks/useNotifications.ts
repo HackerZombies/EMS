@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "react-toastify";
 import { useRouter } from "next/router";
 
@@ -10,17 +10,29 @@ interface Notification {
   recipientUsername: string;
 }
 
-// 1) Accept a boolean flag (isAdmin) so the hook always gets called
+/**
+ * Polls unread notifications for an admin user every 10s and shows them as toast messages.
+ * 
+ * @param isAdmin boolean indicating if the current user is an admin (or HR).
+ */
 export default function useNotifications(isAdmin: boolean) {
   const router = useRouter();
   const pollInterval = useRef<NodeJS.Timeout | null>(null);
 
+  // Keep track of notification IDs that have already been shown
+  const [displayedNotifications, setDisplayedNotifications] = useState<Set<string>>(new Set());
+
   useEffect(() => {
-    // 2) Only run the polling if isAdmin is true
+    // Only run the polling if isAdmin is true
     if (!isAdmin) return;
 
     // Start polling
-    pollInterval.current = setInterval(fetchNotifications, 10_000);
+    pollInterval.current = setInterval(() => {
+      fetchNotifications();
+    }, 10_000);
+
+    // Fetch immediately on mount too
+    fetchNotifications();
 
     // Cleanup
     return () => {
@@ -33,27 +45,38 @@ export default function useNotifications(isAdmin: boolean) {
       const res = await fetch("/api/notifications/unread");
       const data = await res.json();
 
-      if (res.ok) {
+      if (res.ok && Array.isArray(data.notifications)) {
         const notifications: Notification[] = data.notifications;
-        if (notifications.length > 0) {
-          // Show a toast for each new notification
-          notifications.forEach((notif) => {
-            toast.info(notif.message, {
-              // 3) Make the toast disappear automatically after 5s
-              autoClose: 5000,
+        
+        // Filter out notifications we've already displayed in this session
+        const newNotifications = notifications.filter(
+          (notif) => !displayedNotifications.has(notif.id)
+        );
 
-              // If you DO want them to remain clickable and do something onClick:
-              onClick: async () => {
-                // Mark as read
-                await markAsRead([notif.id]);
-                // Go to the activity page
-                router.push("/activity");
-                // Dismiss the toast immediately
-                toast.dismiss();
-              },
-            });
+        // For each new notification, show a toast
+        newNotifications.forEach((notif) => {
+          // Add to displayedNotifications so we don't show it again
+          setDisplayedNotifications((prev) => new Set(prev).add(notif.id));
+
+          toast.info(notif.message, {
+            autoClose: 5000,
+            onClick: async () => {
+              // Mark single notification as read
+              await markAsRead([notif.id]);
+              // Remove from displayedNotifications set so if it reappears server-side, we could show it or ignore it
+              // but since we mark it as read, it won't reappear in /unread anyway
+              setDisplayedNotifications((prev) => {
+                const next = new Set(prev);
+                next.delete(notif.id);
+                return next;
+              });
+
+              // Optionally navigate the user
+              router.push("/activity");
+              toast.dismiss(); // close all toasts
+            },
           });
-        }
+        });
       } else {
         console.error("Error fetching notifications:", data);
       }
@@ -62,6 +85,7 @@ export default function useNotifications(isAdmin: boolean) {
     }
   }
 
+  // You can also provide a function for reading multiple at once if needed
   async function markAsRead(notificationIds: string[]) {
     if (notificationIds.length === 0) return;
     try {
@@ -70,7 +94,6 @@ export default function useNotifications(isAdmin: boolean) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ notificationIds }),
       });
-      // No further handling needed
     } catch (err) {
       console.error("Failed to mark notifications as read", err);
     }

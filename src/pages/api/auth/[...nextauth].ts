@@ -2,7 +2,7 @@
 
 import NextAuth, { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import bcrypt from "bcrypt"; 
+import bcrypt from "bcrypt";
 import prisma from "@/lib/prisma"; // Ensure this path is correct
 
 // Extend the default User interface
@@ -43,7 +43,10 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        // Return user object including isFirstTime
+        // Coalesce user.isFirstTime (boolean | null) into a strict boolean
+        const isFirstTime = user.isFirstTime ?? false;
+
+        // Return user object including isFirstTime as a boolean
         const customUser: CustomUser = {
           id: user.id,
           username: user.username,
@@ -52,7 +55,7 @@ export const authOptions: NextAuthOptions = {
           lastName: user.lastName,
           department: user.department || undefined,
           position: user.position || undefined,
-          isFirstTime: user.isFirstTime,
+          isFirstTime, // Ensures it's always a boolean
         };
 
         return customUser;
@@ -71,15 +74,17 @@ export const authOptions: NextAuthOptions = {
         token.lastName = user.lastName;
         token.department = user.department;
         token.position = user.position;
+        // Also coalesce here if needed, but user is already boolean in customUser
         token.isFirstTime = user.isFirstTime;
       }
       return token;
     },
     async session({ session, token }) {
       if (token && session.user) {
+        // Cast token fields to the correct types
         session.user = {
           ...session.user,
-          id: token.sub || '', // Use sub (subject) as id
+          id: token.sub || "", // Use sub (subject) as id
           username: token.username as string,
           role: token.role as string,
           firstName: token.firstName as string,

@@ -25,7 +25,7 @@ export default async function handle(
   }
 
   // Extract user data from req body
-  let { username, password, email}: UpdateUserRequest = req.body;
+  let { username, password, email }: UpdateUserRequest = req.body;
 
   // Validate email format
   const emailPattern = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/;
@@ -37,35 +37,50 @@ export default async function handle(
   if (email === "") email = undefined;
 
   try {
-    // Check for existing email or phone number
+    // Check for existing email
     if (email) {
-      const existingEmailUser  = await prisma.user.findUnique({
+      const existingEmailUser = await prisma.user.findUnique({
         where: { email },
       });
-      if (existingEmailUser  && existingEmailUser .username !== username) {
+      if (existingEmailUser && existingEmailUser.username !== username) {
         return res.status(409).json({ message: "Email is already in use by another user." });
       }
     }
-    // Hash the raw password from req body
+
+    // Hash the raw password from req body if password is provided
     const hashedPassword = password ? await bcrypt.hash(password, 10) : undefined;
 
+    // Prepare data for update
+    const updateData: {
+      password?: string;
+      email?: string;
+      isFirstTime?: boolean;
+    } = {};
+
+    if (hashedPassword) {
+      updateData.password = hashedPassword;
+      updateData.isFirstTime = false; // Set isFirstTime to false when password is updated
+    }
+
+    if (email) {
+      updateData.email = email;
+    }
+
     // Update user in database
-    const updatedUser  = await prisma.user.update({
+    const updatedUser = await prisma.user.update({
       where: { username },
-      data: {
-        password: hashedPassword,
-        email,
-      },
+      data: updateData,
     });
 
-    // Send update email with updated information
+    // Send update email if both email and password are updated
     if (email && password) { // Ensure both email and password are defined
       await sendUpdateEmail(email, username, password);
     }
 
-    return res.status(200).json({ success: true, data: updatedUser  });
+    return res.status(200).json({ success: true, data: updatedUser });
   } catch (error) {
     if (error instanceof PrismaClientKnownRequestError) {
+      // Handle specific Prisma errors (e.g., unique constraint violations)
       return res.status(409).json({ message: "This email or phone number is already in use." });
     } else {
       console.error("Failed to update user:", error);

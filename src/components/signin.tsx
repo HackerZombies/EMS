@@ -1,4 +1,6 @@
-import { signIn } from "next-auth/react";
+// src/components/signin.tsx
+
+import { signIn, getSession } from "next-auth/react";
 import { FormEvent, useState } from "react";
 import Head from "next/head";
 import { Icon } from "@iconify/react";
@@ -29,16 +31,22 @@ export default function SignIn() {
     setLoading(true);
     try {
       const result = await signIn("credentials", {
+        redirect: false,
         username,
         password,
-        callbackUrl: "/",
-        redirect: false,
+        callbackUrl: "/", // Can be adjusted as needed
       });
       setLoading(false);
 
-      if (result?.ok) {
+      if (result?.ok && result?.status === 200) {
         setIncorrectLogin(false);
-        router.push(result.url || "/");
+        // Fetch the session to get the latest isFirstTime flag
+        const session = await getSession();
+        if (session?.user.isFirstTime) {
+          router.push("/settings/edit");
+        } else {
+          router.push(result.url || "/attendance");
+        }
       } else {
         setIncorrectLogin(true);
       }
@@ -64,6 +72,7 @@ export default function SignIn() {
             <h1 className="text-3xl font-bold text-white">EMS Sign In</h1>
           </div>
           <form onSubmit={onSubmit} className="space-y-6">
+            {/* Username Field */}
             <div>
               <label htmlFor="username" className="block text-sm font-medium text-white">
                 User ID
@@ -81,6 +90,7 @@ export default function SignIn() {
                 </div>
               </div>
             </div>
+            {/* Password Field */}
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-white">
                 Password
@@ -104,7 +114,9 @@ export default function SignIn() {
                 </div>
               </div>
             </div>
+            {/* Error Message */}
             {incorrectLogin && <p className="text-sm text-red-600">Invalid username or password.</p>}
+            {/* Submit Button */}
             <div>
               <button
                 type="submit"
@@ -115,6 +127,7 @@ export default function SignIn() {
               </button>
             </div>
           </form>
+          {/* Forgot Password Link */}
           <div className="mt-6 text-center">
             <button
               onClick={() => setForgotPasswordPopup(true)}

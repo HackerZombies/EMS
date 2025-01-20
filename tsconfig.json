@@ -20,7 +20,7 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "types": [
-      "react"
+      "react","node"
     ],
     "isolatedModules": true,
     "incremental": true,

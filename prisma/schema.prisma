@@ -111,7 +111,8 @@ model User {
   employmentType     EmploymentType?    // Added Employment Type
   workLocation      WorkLocation?           // Added Work Location
   profileImageUrl    String?            // Add this field for profile image
-  avatarImageUrl     String?  
+  avatarImageUrl     String?
+    isFirstTime     Boolean?  @default(true) 
 
   // Relations
   leaveRequests      LeaveRequest[]     @relation("UserLeaveRequests")

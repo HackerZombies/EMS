@@ -1,22 +1,23 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-	darkMode: ["class"],
+	darkMode: "class", // Enables dark mode via a CSS class
 	content: [
-	  './pages/**/*.{ts,tsx}',
-	  './components/**/*.{ts,tsx}',
-	  './app/**/*.{ts,tsx}',
-	  './src/**/*.{ts,tsx}',
-	  ],
+	  './pages/**/*.{ts,tsx}',      // Includes all TS and TSX files in pages
+	  './components/**/*.{ts,tsx}', // Includes all TS and TSX files in components
+	  './app/**/*.{ts,tsx}',        // Includes all TS and TSX files in app
+	  './src/**/*.{ts,tsx}',        // Includes all TS and TSX files in src
+	],
 	theme: {
 	  container: {
-		center: true,
-		padding: "2rem",
+		center: true,            // Centers the container
+		padding: "2rem",         // Adds horizontal padding
 		screens: {
-		  "2xl": "1400px",
+		  "2xl": "1400px",       // Custom breakpoint for 2xl screens
 		},
 	  },
 	  extend: {
 		colors: {
+		  // Retained shadcn essential colors using CSS variables
 		  border: "hsl(var(--border))",
 		  input: "hsl(var(--input))",
 		  ring: "hsl(var(--ring))",
@@ -50,18 +51,20 @@ module.exports = {
 			DEFAULT: "hsl(var(--card))",
 			foreground: "hsl(var(--card-foreground))",
 		  },
-		  // Add neon colors
+		  // Retained neon colors as per your addition
 		  'neon-blue': '#00FFFF',
 		  'neon-green': '#39FF14',
 		  'neon-pink': '#FF10F0',
 		  'neon-yellow': '#FFFF00',
 		},
 		borderRadius: {
+		  // Maintained borderRadius settings for consistency with shadcn components
 		  lg: "var(--radius)",
 		  md: "calc(var(--radius) - 2px)",
 		  sm: "calc(var(--radius) - 4px)",
 		},
 		keyframes: {
+		  // Retained keyframes for accordion animations if used by shadcn components
 		  "accordion-down": {
 			from: { height: 0 },
 			to: { height: "var(--radix-accordion-content-height)" },
@@ -72,12 +75,15 @@ module.exports = {
 		  },
 		},
 		animation: {
+		  // Retained animations corresponding to keyframes
 		  "accordion-down": "accordion-down 0.2s ease-out",
 		  "accordion-up": "accordion-up 0.2s ease-out",
 		},
 	  },
 	},
-	plugins: [require("tailwindcss-animate")],
+	plugins: [
+	  require("tailwindcss-animate"), // Keeps the animate plugin for animations
+	  // Remove any additional plugins that are not being used
+	],
   }
-  
   

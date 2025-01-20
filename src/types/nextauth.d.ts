@@ -9,6 +9,7 @@ declare module "next-auth" {
     lastName: string;
     department?: string;
     position?: string;
+    isFirstTime: boolean;
   }
 
   interface Session {
@@ -19,6 +20,7 @@ declare module "next-auth" {
       lastName: string;
       department?: string;
       position?: string;
+      isFirstTime: boolean;
     };
   }
 }

@@ -1,12 +1,12 @@
 // src/pages/api/auth/[...nextauth].ts
 
-import NextAuth, { NextAuthOptions, Session, User } from "next-auth";
+import NextAuth, { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcrypt"; 
-import prisma from "@/lib/prisma";
+import prisma from "@/lib/prisma"; // Ensure this path is correct
 
 // Extend the default User interface
-interface CustomUser extends User {
+interface CustomUser {
   id: string;
   username: string;
   role: string;
@@ -14,6 +14,7 @@ interface CustomUser extends User {
   lastName: string;
   department?: string;
   position?: string;
+  isFirstTime: boolean;
 }
 
 export const authOptions: NextAuthOptions = {
@@ -25,34 +26,36 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (credentials == null) {
-          return null;
-        }
+        if (!credentials) return null;
 
         const user = await prisma.user.findUnique({
           where: { username: credentials.username },
         });
 
-        if (user == null) {
+        if (!user) {
           // User does not exist
           return null;
         }
 
-        // Use bcrypt to verify the hashed password
+        // Verify the password using bcrypt
         const isValidPassword = await bcrypt.compare(credentials.password, user.password);
-        if (isValidPassword) {
-          return {
-            id: user.id,
-            username: user.username,
-            role: user.role,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            department: user.department || undefined,
-            position: user.position || undefined,
-          } as CustomUser;
-        } else {
+        if (!isValidPassword) {
           return null;
         }
+
+        // Return user object including isFirstTime
+        const customUser: CustomUser = {
+          id: user.id,
+          username: user.username,
+          role: user.role,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          department: user.department || undefined,
+          position: user.position || undefined,
+          isFirstTime: user.isFirstTime,
+        };
+
+        return customUser;
       },
     }),
   ],
@@ -60,31 +63,20 @@ export const authOptions: NextAuthOptions = {
     signIn: "/auth/signin",
   },
   callbacks: {
-    async jwt({ token, user, trigger, session }) {
+    async jwt({ token, user }) {
       if (user) {
-        // On first login, add user details to token
         token.username = user.username;
         token.role = user.role;
         token.firstName = user.firstName;
         token.lastName = user.lastName;
         token.department = user.department;
         token.position = user.position;
+        token.isFirstTime = user.isFirstTime;
       }
-
-      // Handle profile updates
-      if (trigger === "update") {
-        // Update token with new session data
-        if (session?.firstName) token.firstName = session.firstName;
-        if (session?.lastName) token.lastName = session.lastName;
-        if (session?.department) token.department = session.department;
-        if (session?.position) token.position = session.position;
-      }
-
       return token;
     },
     async session({ session, token }) {
-      // Attach additional user details to session
-      if (token) {
+      if (token && session.user) {
         session.user = {
           ...session.user,
           id: token.sub || '', // Use sub (subject) as id
@@ -94,6 +86,7 @@ export const authOptions: NextAuthOptions = {
           lastName: token.lastName as string,
           department: token.department as string | undefined,
           position: token.position as string | undefined,
+          isFirstTime: token.isFirstTime as boolean,
         };
       }
       return session;
@@ -103,7 +96,6 @@ export const authOptions: NextAuthOptions = {
       return `${baseUrl}`;
     },
   },
-  // Configure session settings
   session: {
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days
@@ -113,7 +105,16 @@ export const authOptions: NextAuthOptions = {
 // Type augmentation for session and token
 declare module "next-auth" {
   interface Session {
-    user: CustomUser;
+    user: {
+      id: string;
+      username: string;
+      role: string;
+      firstName: string;
+      lastName: string;
+      department?: string;
+      position?: string;
+      isFirstTime: boolean;
+    };
   }
 
   interface User {
@@ -124,6 +125,7 @@ declare module "next-auth" {
     lastName: string;
     department?: string;
     position?: string;
+    isFirstTime: boolean;
   }
 }
 
@@ -135,6 +137,7 @@ declare module "next-auth/jwt" {
     lastName: string;
     department?: string;
     position?: string;
+    isFirstTime: boolean;
   }
 }
 

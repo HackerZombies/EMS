@@ -51,7 +51,7 @@ enum BloodGroup {
   UNKNOWN
 }
 
-enum EmploymentType { // Added EmploymentType enum
+enum EmploymentType { 
   FULL_TIME
   PART_TIME
   CONTRACT
@@ -76,7 +76,6 @@ enum Department {
   Production
 }
 
-
 enum DocumentCategory {
   resume
   education
@@ -85,6 +84,10 @@ enum DocumentCategory {
   skills
   others
 }
+
+// ──────────────────────────────────────────────────────────
+// Models
+// ──────────────────────────────────────────────────────────
 
 model User {
   id                 String             @id @default(auto()) @map("_id") @db.ObjectId
@@ -96,7 +99,7 @@ model User {
   email              String             @unique
   phoneNumber        String             @unique
   dateCreated        DateTime           @default(now())
-  leaveBalance       Int                @default(28) // Default leave balance
+  leaveBalance       Int                @default(28)
   role               UserRole           @default(EMPLOYEE)
   dob                DateTime?
   residentialAddress String?
@@ -106,13 +109,13 @@ model User {
   nationality        String?
   gender             Gender?
   maritalStatus      MaritalStatus?
-  bloodGroup         BloodGroup?          @default(UNKNOWN)
-  joiningDate        DateTime?          // Added Joining Date
-  employmentType     EmploymentType?    // Added Employment Type
-  workLocation      WorkLocation?           // Added Work Location
-  profileImageUrl    String?            // Add this field for profile image
+  bloodGroup         BloodGroup?        @default(UNKNOWN)
+  joiningDate        DateTime?
+  employmentType     EmploymentType?
+  workLocation       WorkLocation?
+  profileImageUrl    String?
   avatarImageUrl     String?
-    isFirstTime     Boolean?  @default(true) 
+  isFirstTime        Boolean?           @default(true)
 
   // Relations
   leaveRequests      LeaveRequest[]     @relation("UserLeaveRequests")
@@ -124,15 +127,14 @@ model User {
   otps               OTP[]              @relation("UserOTPs")
   qualifications     Qualification[]    @relation("UserQualifications")
   employeeDocuments  EmployeeDocument[] @relation("UserEmployeeDocuments")
-  attendances        Attendance[]       @relation("UserAttendances") 
+  attendances        Attendance[]       @relation("UserAttendances")
   experiences        Experience[]       @relation("UserExperiences")
   certifications     Certification[]    @relation("UserCertifications")
-  auditLogs          AuditLog[]         @relation("UserAuditLogs") // New relation for audit logs
+  auditLogs          AuditLog[]         @relation("UserAuditLogs") 
   emergencyContacts  EmergencyContact[] @relation("UserEmergencyContacts")
-  notifications      Notification[] @relation("UserNotifications")
+  notifications      Notification[]     @relation("UserNotifications")
 
-
-  @@index([email, phoneNumber], name: "user_contact_index") // Combined index
+  @@index([email, phoneNumber], name: "user_contact_index")
 }
 
 model Notification {
@@ -140,33 +142,31 @@ model Notification {
   message           String
   createdAt         DateTime @default(now())
   isRead            Boolean  @default(false)
-  
+
   recipientUsername String
   recipient         User     @relation("UserNotifications", fields: [recipientUsername], references: [username], onDelete: Cascade)
 
   @@index([recipientUsername])
 }
 
-
-
 model EmergencyContact {
-    id          String    @id @default(auto()) @map("_id") @db.ObjectId
-    name        String
-    relationship String
-    phoneNumber String
-    email       String?
-    userUsername String
-    user  User      @relation("UserEmergencyContacts", fields: [userUsername], references: [username], onDelete: Cascade)
+  id           String @id @default(auto()) @map("_id") @db.ObjectId
+  name         String
+  relationship String
+  phoneNumber  String
+  email        String?
+  userUsername String
+  user         User   @relation("UserEmergencyContacts", fields: [userUsername], references: [username], onDelete: Cascade)
 }
 
 model Qualification {
-  id            String             @id @default(auto()) @map("_id") @db.ObjectId
-  level         QualificationLevel
-  name          String?
-  specializations String[]         // Renamed and made an array for multiple specializations
-  institution   String?
-  username      String
-  user          User               @relation("UserQualifications", fields: [username], references: [username], onDelete: Cascade)
+  id             String             @id @default(auto()) @map("_id") @db.ObjectId
+  level          QualificationLevel
+  name           String?
+  specializations String[]
+  institution    String?
+  username       String
+  user           User               @relation("UserQualifications", fields: [username], references: [username], onDelete: Cascade)
 
   @@index([username])
 }
@@ -176,7 +176,7 @@ model Experience {
   jobTitle    String
   company     String
   startDate   DateTime
-  endDate     DateTime? // Null if currently employed
+  endDate     DateTime?
   description String?
   username    String
   user        User     @relation("UserExperiences", fields: [username], references: [username], onDelete: Cascade)
@@ -185,56 +185,52 @@ model Experience {
 }
 
 model Certification {
-  id              String   @id @default(auto()) @map("_id") @db.ObjectId
-  name            String   // Certification Name (Mandatory)
-  issuingAuthority String   // Issuing Authority (Mandatory)
-  licenseNumber   String?  // License Number (Optional, but recommended)
-  expiryDate      DateTime? // Expiry Date (Optional, but recommended)
-  username        String
-  user            User     @relation("UserCertifications", fields: [username], references: [username], onDelete: Cascade)
-  issueDate       DateTime? // Optional: Date Issued
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  name             String
+  issuingAuthority String
+  licenseNumber    String?
+  expiryDate       DateTime?
+  username         String
+  user             User     @relation("UserCertifications", fields: [username], references: [username], onDelete: Cascade)
+  issueDate        DateTime?
 
   @@index([username])
 }
 
-
-
 model EmployeeDocument {
-  id            String   @id @default(auto()) @map("_id") @db.ObjectId
-  filename      String
-  fileType      String? 
-  data          Bytes
-  size          Int
-  dateUploaded  DateTime @default(now())
-  userUsername  String
+  id           String          @id @default(auto()) @map("_id") @db.ObjectId
+  filename     String
+  fileType     String?
+  data         Bytes
+  size         Int
+  dateUploaded DateTime        @default(now())
+  userUsername String
+  category     DocumentCategory?
 
-  category      DocumentCategory?  // <--- use the enum
-
-  user          User @relation("UserEmployeeDocuments", fields: [userUsername], references: [username], onDelete: Cascade)
+  user User @relation("UserEmployeeDocuments", fields: [userUsername], references: [username], onDelete: Cascade)
 }
 
-
 model LeaveRequest {
-  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
   reason        String
   startDate     DateTime
   endDate       DateTime
-  requestStatus String    @default("Pending")
-  dateCreated   DateTime  @default(now())
+  requestStatus String   @default("Pending")
+  dateCreated   DateTime @default(now())
   dateResponded DateTime?
   userUsername  String
-  user          User      @relation("UserLeaveRequests", fields: [userUsername], references: [username], onDelete: Cascade)
+  user          User     @relation("UserLeaveRequests", fields: [userUsername], references: [username], onDelete: Cascade)
 }
 
 model Digilocker {
-  id            String   @id @default(auto()) @map("_id") @db.ObjectId
-  filename      String?
-  size          Int?
-  mimetype      String?
-  data          Bytes?
-  dateCreated   DateTime @default(now())
-  userUsername  String
-  user          User     @relation("UserDigilocker", fields: [userUsername], references: [username], onDelete: Cascade)
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  filename     String?
+  size         Int?
+  mimetype     String?
+  data         Bytes?
+  dateCreated  DateTime @default(now())
+  userUsername String
+  user         User     @relation("UserDigilocker", fields: [userUsername], references: [username], onDelete: Cascade)
 }
 
 model HrDocument {
@@ -253,12 +249,12 @@ model HrDocument {
 }
 
 model Document {
-  id            String   @id @default(auto()) @map("_id") @db.ObjectId
-  filename      String
-  data          Bytes
-  dateCreated   DateTime @default(now())
-  userUsername  String
-  user          User     @relation("UserDocuments", fields: [userUsername], references: [username], onDelete: Cascade)
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  filename     String
+  data         Bytes
+  dateCreated  DateTime @default(now())
+  userUsername String
+  user         User     @relation("UserDocuments", fields: [userUsername], references: [username], onDelete: Cascade)
 }
 
 model Announcement {
@@ -312,11 +308,24 @@ model Attendance {
   @@unique([userUsername, date])
 }
 
+// ──────────────────────────────────────────────────────────
+// AuditLog Model with Proper MongoDB ID + Relation
+// ──────────────────────────────────────────────────────────
+
 model AuditLog {
-  id           String   @id @default(auto()) @map("_id") @db.ObjectId
-  action       String
-  details      String
-  datePerformed DateTime @default(now())
-  performedBy   String
-  user          User     @relation("UserAuditLogs", fields: [performedBy], references: [username], onDelete: Cascade)
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  /** 
+    In case you want a direct link to the user 
+    who performed the action, keep these fields:
+    userUsername is the FK, user is the relation.
+    performedBy is just a string copy (if you want).
+  **/
+  userUsername   String?  
+  user           User?    @relation("UserAuditLogs", fields: [userUsername], references: [username], onDelete: Cascade)
+
+  action         String
+  performedBy    String
+  targetUsername String?  
+  datePerformed  DateTime @default(now())
+  details        String
 }

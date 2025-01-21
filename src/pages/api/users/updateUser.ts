@@ -10,7 +10,6 @@ import {
   Position,
   WorkLocation,
   EmploymentType,
-  DocumentCategory,
   User as PrismaUser,
   Qualification,
   Experience,
@@ -267,7 +266,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     }
 
     // 7) Fetch the OLD user (including sub-relations) for a full comparison later
-    const oldUser = await prisma.user.findUnique({
+    const oldUser = (await prisma.user.findUnique({
       where: { username },
       include: {
         qualifications: true,
@@ -276,7 +275,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
         employeeDocuments: true,
         emergencyContacts: true,
       },
-    }) as FullUser | null;
+    })) as FullUser | null;
 
     if (!oldUser) {
       return res.status(404).json({ message: "User not found" });
@@ -296,7 +295,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     await handleEmergencyContacts(username, emergencyContacts);
 
     // 10) Now fetch the NEW user (including sub-relations) for a full diff
-    const newUser = await prisma.user.findUnique({
+    const newUser = (await prisma.user.findUnique({
       where: { username },
       include: {
         qualifications: true,
@@ -305,7 +304,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
         employeeDocuments: true,
         emergencyContacts: true,
       },
-    }) as FullUser | null;
+    })) as FullUser | null;
 
     if (!newUser) {
       return res.status(500).json({ message: "Could not re-fetch updated user." });
@@ -322,13 +321,13 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     }
 
     // Create one AuditLog entry
-    // ------ IMPORTANT BUGFIX HERE ------
-    // Store ONLY the JSON, NOT extra text.
+    // *IMPORTANT*: we store only the JSON changes and the targetUsername
     await prisma.auditLog.create({
       data: {
         action: "UPDATE_USER",
         performedBy: session.user.username,
-        // Instead of `User 'username' updated. Changes:\n...`, just store JSON
+        targetUsername: username, 
+        userUsername :  username, // <-- NEW: essential for future 'revert' functionality
         details: JSON.stringify(changedFields, null, 2),
       },
     });

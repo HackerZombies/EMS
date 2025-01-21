@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
-import { formatToIST } from '@/lib/timezone'; // Import the helper function
+import { useState, useEffect, useCallback, useRef } from 'react';
+import KalmanFilter from 'kalmanjs';
+import { formatToIST } from '@/lib/timezone';
 
 interface AttendanceStatus {
   checkedIn: boolean;
@@ -27,7 +28,14 @@ export const useAttendanceMarking = (
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // 1. Fetch Attendance Status
+  // 1. Kalman Filter Instances
+  // ─────────────────────────────────────────────────────────────────────────────
+  // R = measurement noise, Q = process noise -- tweak as necessary:
+  const latKFRef = useRef(new KalmanFilter({ R: 0.01, Q: 3 }));
+  const lonKFRef = useRef(new KalmanFilter({ R: 0.01, Q: 3 }));
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 2. Fetch Attendance Status
   // ─────────────────────────────────────────────────────────────────────────────
   const fetchAttendanceStatus = useCallback(async () => {
     if (!username) return;
@@ -48,7 +56,8 @@ export const useAttendanceMarking = (
   }, [username]);
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // 2. Pinpoint Location (using watch)
+  // 3. getLocationPinpoint (using watch + Kalman)
+  //    Includes toJSON methods to satisfy GeolocationPosition interface
   // ─────────────────────────────────────────────────────────────────────────────
   const getLocationPinpoint = async (
     desiredAccuracy = 10,
@@ -59,13 +68,60 @@ export const useAttendanceMarking = (
       let watchId: number;
 
       const handleSuccess = (position: GeolocationPosition) => {
+        // Apply Kalman filters
+        const filteredLatitude = latKFRef.current.filter(position.coords.latitude);
+        const filteredLongitude = lonKFRef.current.filter(position.coords.longitude);
+        const { accuracy, altitude, altitudeAccuracy, heading, speed } =
+          position.coords;
+
+        // Create a new "kalmanPosition" object that implements
+        // GeolocationPosition + GeolocationCoordinates + toJSON methods.
+        const kalmanPosition: GeolocationPosition = {
+          // Keep original timestamp
+          timestamp: position.timestamp,
+
+          // Define coords with filtered lat/lng
+          coords: {
+            latitude: filteredLatitude,
+            longitude: filteredLongitude,
+            accuracy,
+            altitude,
+            altitudeAccuracy,
+            heading,
+            speed,
+
+            // Required by the TS DOM lib:
+            toJSON() {
+              return {
+                latitude: this.latitude,
+                longitude: this.longitude,
+                accuracy: this.accuracy,
+                altitude: this.altitude,
+                altitudeAccuracy: this.altitudeAccuracy,
+                heading: this.heading,
+                speed: this.speed,
+              };
+            },
+          },
+
+          // Also required at the top-level:
+          toJSON() {
+            return {
+              coords: this.coords,
+              timestamp: this.timestamp,
+            };
+          },
+        };
+
+        // Compare accuracy with "bestPosition"
         if (
           !bestPosition ||
-          position.coords.accuracy < bestPosition.coords.accuracy
+          kalmanPosition.coords.accuracy < bestPosition.coords.accuracy
         ) {
-          bestPosition = position;
+          bestPosition = kalmanPosition;
         }
 
+        // If the best position meets or beats desiredAccuracy, resolve
         if (bestPosition.coords.accuracy <= desiredAccuracy) {
           navigator.geolocation.clearWatch(watchId);
           resolve(bestPosition);
@@ -77,15 +133,17 @@ export const useAttendanceMarking = (
         reject(error);
       };
 
+      // Begin watching position
       watchId = navigator.geolocation.watchPosition(handleSuccess, handleError, {
         enableHighAccuracy: true,
         maximumAge: 0,
       });
 
+      // Fallback after maxWaitMs if not resolved
       setTimeout(() => {
         navigator.geolocation.clearWatch(watchId);
         if (bestPosition) {
-          resolve(bestPosition); // Return the best we’ve got
+          resolve(bestPosition);
         } else {
           reject(
             new Error(
@@ -98,7 +156,7 @@ export const useAttendanceMarking = (
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // 3. Mark Attendance
+  // 4. markAttendance
   // ─────────────────────────────────────────────────────────────────────────────
   const markAttendance = async (action: 'checkin' | 'checkout') => {
     setLoading(true);
@@ -108,9 +166,8 @@ export const useAttendanceMarking = (
     setRetryAction(null);
 
     try {
-      // Attempt to get the best-possible location
-      const position = await getLocationPinpoint(10, 30000); 
-      // ^ Adjust threshold or timeout as you see fit
+      // Attempt to get the best possible location
+      const position = await getLocationPinpoint(10, 30000);
       handleLocationSuccess(position, action);
     } catch (err: any) {
       handleLocationError(err, action);
@@ -118,7 +175,7 @@ export const useAttendanceMarking = (
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // 4. Handle Location Success
+  // 5. handleLocationSuccess
   // ─────────────────────────────────────────────────────────────────────────────
   const handleLocationSuccess = async (
     position: GeolocationPosition,
@@ -133,12 +190,10 @@ export const useAttendanceMarking = (
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          username: username,
+          username,
           date: new Date().toISOString().split('T')[0],
-          checkInTime:
-            action === 'checkin' ? formatToIST(new Date()) : undefined,
-          checkOutTime:
-            action === 'checkout' ? formatToIST(new Date()) : undefined,
+          checkInTime: action === 'checkin' ? formatToIST(new Date()) : undefined,
+          checkOutTime: action === 'checkout' ? formatToIST(new Date()) : undefined,
           checkInLatitude: action === 'checkin' ? latitude : undefined,
           checkInLongitude: action === 'checkin' ? longitude : undefined,
           checkOutLatitude: action === 'checkout' ? latitude : undefined,
@@ -165,7 +220,7 @@ export const useAttendanceMarking = (
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // 5. Handle Location Error
+  // 6. handleLocationError
   // ─────────────────────────────────────────────────────────────────────────────
   const handleLocationError = (error: any, action: 'checkin' | 'checkout') => {
     let errorMessage = 'Could not retrieve location.';
@@ -183,8 +238,7 @@ export const useAttendanceMarking = (
         setRetryAction(action);
         break;
       default:
-        // This could be a plain Error object from our "reject()"
-        errorMessage = error.message
+        errorMessage = error?.message
           ? error.message
           : 'An unknown error occurred while getting location.';
     }
@@ -194,7 +248,7 @@ export const useAttendanceMarking = (
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // 6. Support for Retrying
+  // 7. Support for Retrying
   // ─────────────────────────────────────────────────────────────────────────────
   const retryGetLocation = () => {
     if (retryAction) {
@@ -205,14 +259,14 @@ export const useAttendanceMarking = (
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // 7. Fetch Attendance Status on Mount/Change
+  // 8. Fetch Attendance Status on Mount/Change
   // ─────────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     fetchAttendanceStatus();
   }, [fetchAttendanceStatus]);
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // 8. Return the Hook’s Public API
+  // 9. Return the Hook’s Public API
   // ─────────────────────────────────────────────────────────────────────────────
   return {
     markAttendance,

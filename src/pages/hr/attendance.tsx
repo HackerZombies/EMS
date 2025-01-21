@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useRef, useMemo } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getServerSession } from 'next-auth/next'
@@ -11,7 +11,7 @@ import { GetServerSideProps } from 'next'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { MapPin, Clock, Users, AlertCircle, Download } from "lucide-react"
+import { AlertCircle, Clock, Download, Users } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
@@ -50,10 +50,14 @@ export default function AllAttendancePage({ initialAttendance, users }: AllAtten
   const router = useRouter()
   const socketRef = useRef<WebSocket | null>(null)
   const [isServerReady, setIsServerReady] = useState(false)
-  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date())
+
+  // For filtering by date range
+  const [startDate, setStartDate] = useState<Date | null>(null)
+  const [endDate, setEndDate] = useState<Date | null>(null)
   const [selectedUser, setSelectedUser] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
 
+  // 1) Connect to WebSocket to receive real-time attendance updates
   useEffect(() => {
     const connectWebSocket = async () => {
       socketRef.current = new WebSocket(
@@ -89,7 +93,7 @@ export default function AllAttendancePage({ initialAttendance, users }: AllAtten
                   username: user.username,
                   firstName: user.firstName,
                   lastName: user.lastName,
-                  role: user.role || 'USER', // Use user.role from the users array
+                  role: user.role || 'USER',
                 },
               }
 
@@ -126,17 +130,18 @@ export default function AllAttendancePage({ initialAttendance, users }: AllAtten
     }
   }, [users])
 
+  // 2) Filter logic: filter by selected user and date range
   useEffect(() => {
-    // Filter attendance data based on selected date and user
     const filtered = attendanceData.filter(record => {
       const recordDate = new Date(record.date)
-      const matchesDate = selectedDate ? recordDate.toDateString() === selectedDate.toDateString() : true
+      const isAfterStart = startDate ? recordDate >= startDate : true
+      const isBeforeEnd = endDate ? recordDate <= endDate : true
       const matchesUser = selectedUser ? record.user.id === selectedUser : true
-      return matchesDate && matchesUser
+      return isAfterStart && isBeforeEnd && matchesUser
     })
     setFilteredData(filtered)
-    setCurrentPage(1) // Reset to first page on filter change
-  }, [attendanceData, selectedDate, selectedUser])
+    setCurrentPage(1) // Reset to page 1 whenever filters change
+  }, [attendanceData, startDate, endDate, selectedUser])
 
   const getStatusBadge = (record: AttendanceRecord) => {
     if (!record.checkInTime) {
@@ -148,17 +153,30 @@ export default function AllAttendancePage({ initialAttendance, users }: AllAtten
     return <Badge variant="default">Completed</Badge>
   }
 
+  // Export only the filtered data (now without any addresses from Mapbox)
   const handleExport = () => {
     const dataToExport = filteredData.map(record => ({
       ID: record.id,
       Date: new Date(record.date).toLocaleDateString(),
       'Check-In Time': record.checkInTime ? new Date(record.checkInTime).toLocaleTimeString() : 'N/A',
       'Check-Out Time': record.checkOutTime ? new Date(record.checkOutTime).toLocaleTimeString() : 'N/A',
-      'Check-In Location': record.checkInLatitude && record.checkInLongitude ? `${record.checkInLatitude}, ${record.checkInLongitude}` : 'N/A',
-      'Check-Out Location': record.checkOutLatitude && record.checkOutLongitude ? `${record.checkOutLatitude}, ${record.checkOutLongitude}` : 'N/A',
+      // Since we removed Mapbox functionality, we’ll just list lat/long or N/A
+      'Check-In Location':
+        record.checkInLatitude && record.checkInLongitude
+          ? `${record.checkInLatitude}, ${record.checkInLongitude}`
+          : 'N/A',
+      'Check-Out Location':
+        record.checkOutLatitude && record.checkOutLongitude
+          ? `${record.checkOutLatitude}, ${record.checkOutLongitude}`
+          : 'N/A',
       User: `${record.user.firstName} ${record.user.lastName}`,
       Role: record.user.role,
     }))
+
+    if (dataToExport.length === 0) {
+      alert('No data to export for the selected filters.')
+      return
+    }
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport)
     const workbook = XLSX.utils.book_new()
@@ -166,17 +184,26 @@ export default function AllAttendancePage({ initialAttendance, users }: AllAtten
 
     const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
     const data = new Blob([excelBuffer], { type: 'application/octet-stream' })
-    const filenameParts = []
-    if (selectedDate) {
-      filenameParts.push(selectedDate.toISOString().split('T')[0])
+
+    // Construct a filename based on date range and user
+    const filenameParts: string[] = []
+    if (startDate) {
+      filenameParts.push(`from_${startDate.toISOString().split('T')[0]}`)
+    }
+    if (endDate) {
+      filenameParts.push(`to_${endDate.toISOString().split('T')[0]}`)
     }
     if (selectedUser) {
       const user = users.find(user => user.id === selectedUser)
       if (user) {
-        filenameParts.push(user.username)
+        filenameParts.push(`${user.username}`)
       }
     }
-    const filename = filenameParts.length > 0 ? `attendance_${filenameParts.join('_')}.xlsx` : 'attendance.xlsx'
+
+    const filename =
+      filenameParts.length > 0
+        ? `attendance_${filenameParts.join('_')}.xlsx`
+        : 'attendance.xlsx'
     saveAs(data, filename)
   }
 
@@ -197,28 +224,63 @@ export default function AllAttendancePage({ initialAttendance, users }: AllAtten
           <div className="flex flex-col md:flex-row items-center justify-between">
             <CardTitle className="text-2xl font-bold">Employee Attendance</CardTitle>
             <div className="flex flex-col sm:flex-row items-center gap-4 mt-4 md:mt-0 w-full md:w-auto">
-              <DatePicker
-                selected={selectedDate}
-                onChange={(date: Date | null) => {
-                  setSelectedDate(date)
-                }}
-                className="px-4 py-2 rounded-md bg-gray-700 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full md:w-auto"
-                dateFormat="MMMM d, yyyy"
-                maxDate={new Date()}
-                placeholderText="Select a date"
-              />
-              <select
-                value={selectedUser || ''}
-                onChange={(e) => setSelectedUser(e.target.value || null)}
-                className="px-4 py-2 rounded-md bg-gray-700 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full md:w-auto"
-              >
-                <option value="">All Users</option>
-                {users.map(user => (
-                  <option key={user.id} value={user.id}>
-                    {user.firstName} {user.lastName} ({user.username})
-                  </option>
-                ))}
-              </select>
+              {/* Start Date Picker */}
+              <div className="flex flex-col">
+                <label htmlFor="startDate" className="text-sm text-gray-400 mb-1">
+                  Start Date
+                </label>
+                <DatePicker
+                  selected={startDate}
+                  onChange={(date: Date | null) => {
+                    setStartDate(date)
+                  }}
+                  className="px-4 py-2 rounded-md bg-gray-700 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full md:w-auto"
+                  dateFormat="MMMM d, yyyy"
+                  maxDate={new Date()}
+                  placeholderText="Select start date"
+                  isClearable
+                />
+              </div>
+
+              {/* End Date Picker */}
+              <div className="flex flex-col">
+                <label htmlFor="endDate" className="text-sm text-gray-400 mb-1">
+                  End Date
+                </label>
+                <DatePicker
+                  selected={endDate}
+                  onChange={(date: Date | null) => {
+                    setEndDate(date)
+                  }}
+                  className="px-4 py-2 rounded-md bg-gray-700 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full md:w-auto"
+                  dateFormat="MMMM d, yyyy"
+                  maxDate={new Date()}
+                  placeholderText="Select end date"
+                  isClearable
+                />
+              </div>
+
+              {/* User Filter */}
+              <div className="flex flex-col">
+                <label htmlFor="userFilter" className="text-sm text-gray-400 mb-1">
+                  Employee
+                </label>
+                <select
+                  id="userFilter"
+                  value={selectedUser || ''}
+                  onChange={(e) => setSelectedUser(e.target.value || null)}
+                  className="px-4 py-2 rounded-md bg-gray-700 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full md:w-auto"
+                >
+                  <option value="">All Users</option>
+                  {users.map(user => (
+                    <option key={user.id} value={user.id}>
+                      {user.firstName} {user.lastName} ({user.username})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Export Button */}
               <button
                 onClick={handleExport}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md w-full md:w-auto"
@@ -229,6 +291,7 @@ export default function AllAttendancePage({ initialAttendance, users }: AllAtten
             </div>
           </div>
         </CardHeader>
+
         <CardContent>
           {loading ? (
             <div className="space-y-4">
@@ -254,84 +317,97 @@ export default function AllAttendancePage({ initialAttendance, users }: AllAtten
                     <TableHead>Status</TableHead>
                     <TableHead>Check-In</TableHead>
                     <TableHead>Check-Out</TableHead>
+                    {/* Simplified column name since Mapbox is removed */}
                     <TableHead>Location</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {currentItems.map((record) => (
-                    <TableRow key={record.id} className="hover:bg-gray-700">
-                      <TableCell className="font-medium">
-                        {new Date(record.date).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        <Link
-                          href={`/manage/users/user/${record.user.username}`}
-                          className="flex items-center gap-2 text-blue-400 hover:underline text-base"
-                        >
-                          <Users className="h-5 w-5" />
-                          <span className="whitespace-nowrap overflow-hidden text-ellipsis">
-                            {record.user.firstName} {record.user.lastName}
-                          </span>
-                        </Link>
-                      </TableCell>
-                      <TableCell>{getStatusBadge(record)}</TableCell>
-                      <TableCell>
-                        {record.checkInTime ? (
-                          <div className="flex items-center gap-2">
-                            <Clock className="h-4 w-4 text-gray-400" />
-                            {new Date(record.checkInTime).toLocaleTimeString()}
-                          </div>
-                        ) : (
-                          'N/A'
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {record.checkOutTime ? (
-                          <div className="flex items-center gap-2">
-                            <Clock className="h-4 w-4 text-gray-400" />
-                            {new Date(record.checkOutTime).toLocaleTimeString()}
-                          </div>
-                        ) : (
-                          'N/A'
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          {record.checkInLatitude && record.checkInLongitude ? (
-                            <Link
-                              href={`https://www.google.com/maps/search/?api=1&query=${record.checkInLatitude},${record.checkInLongitude}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-2 text-blue-400 hover:underline text-sm"
-                            >
-                              <MapPin className="h-3 w-3" />
-                              <span>Check-In</span>
-                            </Link>
+                  {currentItems.map((record) => {
+                    return (
+                      <TableRow key={record.id} className="hover:bg-gray-700">
+                        <TableCell className="font-medium">
+                          {new Date(record.date).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          <Link
+                            href={`/manage/users/user/${record.user.username}`}
+                            className="flex items-center gap-2 text-blue-400 hover:underline text-base"
+                          >
+                            <Users className="h-5 w-5" />
+                            <span className="whitespace-nowrap overflow-hidden text-ellipsis">
+                              {record.user.firstName} {record.user.lastName}
+                            </span>
+                          </Link>
+                        </TableCell>
+                        <TableCell>{getStatusBadge(record)}</TableCell>
+                        <TableCell>
+                          {record.checkInTime ? (
+                            <div className="flex items-center gap-2">
+                              <Clock className="h-4 w-4 text-gray-400" />
+                              {new Date(record.checkInTime).toLocaleTimeString()}
+                            </div>
                           ) : (
-                            <span className="text-sm text-gray-400">No Check-In Location</span>
+                            'N/A'
                           )}
-                          {record.checkOutLatitude && record.checkOutLongitude ? (
-                            <Link
-                              href={`https://www.google.com/maps/search/?api=1&query=${record.checkOutLatitude},${record.checkOutLongitude}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-2 text-blue-400 hover:underline text-sm"
-                            >
-                              <MapPin className="h-3 w-3" />
-                              <span>Check-Out</span>
-                            </Link>
+                        </TableCell>
+                        <TableCell>
+                          {record.checkOutTime ? (
+                            <div className="flex items-center gap-2">
+                              <Clock className="h-4 w-4 text-gray-400" />
+                              {new Date(record.checkOutTime).toLocaleTimeString()}
+                            </div>
                           ) : (
-                            <span className="text-sm text-gray-400">No Check-Out Location</span>
+                            'N/A'
                           )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                        </TableCell>
+                        {/* Location column (show lat/long + Google Maps link if present) */}
+                        <TableCell>
+                          <div className="flex flex-col gap-2 text-sm">
+                            {/* Check-In */}
+                            {record.checkInLatitude && record.checkInLongitude ? (
+                              <div>
+                                <strong>Check-In:</strong>{" "}
+                                {record.checkInLatitude}, {record.checkInLongitude}
+                                {" "}
+                                <Link
+                                  href={`https://www.google.com/maps/search/?api=1&query=${record.checkInLatitude},${record.checkInLongitude}`}
+                                  target="_blank"
+                                  className="text-blue-400 underline ml-1"
+                                >
+                                  Show on Google Maps
+                                </Link>
+                              </div>
+                            ) : (
+                              <span>No Check-In Location</span>
+                            )}
+
+                            {/* Check-Out */}
+                            {record.checkOutLatitude && record.checkOutLongitude ? (
+                              <div>
+                                <strong>Check-Out:</strong>{" "}
+                                {record.checkOutLatitude}, {record.checkOutLongitude}
+                                {" "}
+                                <Link
+                                  href={`https://www.google.com/maps/search/?api=1&query=${record.checkOutLatitude},${record.checkOutLongitude}`}
+                                  target="_blank"
+                                  className="text-blue-400 underline ml-1"
+                                >
+                                  Show on Google Maps
+                                </Link>
+                              </div>
+                            ) : (
+                              <span>No Check-Out Location</span>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
                 </TableBody>
               </Table>
               {/* Pagination Controls */}
               {totalPages > 1 && (
-                <div className="flex justify-between items-center mt-4">
+                <div className="flex justify-between items-center mt-4 px-2">
                   <p className="text-sm text-gray-400">
                     Page {currentPage} of {totalPages}
                   </p>
@@ -369,6 +445,7 @@ export default function AllAttendancePage({ initialAttendance, users }: AllAtten
   )
 }
 
+// Server-side fetching logic remains the same
 export const getServerSideProps: GetServerSideProps = async (context) => {
   const session = await getServerSession(context.req, context.res, authOptions)
 
@@ -391,7 +468,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
               username: true,
               firstName: true,
               lastName: true,
-              role: true, // Include role here
+              role: true,
             },
           },
         },
@@ -405,7 +482,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
           username: true,
           firstName: true,
           lastName: true,
-          role: true, // Include role here
+          role: true,
         },
       }),
     ])

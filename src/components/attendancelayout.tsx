@@ -1,26 +1,25 @@
-import React from 'react';
-import Head from 'next/head';
+import React from 'react'
+import Head from 'next/head'
 
 interface LayoutProps {
-  children: React.ReactNode;
+  children: React.ReactNode
 }
 
-const Layout: React.FC<LayoutProps> = ({ children }) => {
+export default function MobileAttendanceLayout({ children }: LayoutProps) {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-zinc-900 to-zinc-950">
+    <div className="min-h-screen bg-zinc-900">
       <Head>
-        <title>EMS - Attendance</title>
-        <meta name="description" content="Employee Management System - Attendance" />
+        <title>EMS - Attendance (Mobile)</title>
+        <meta
+          name="description"
+          content="Employee Management System - Mobile Attendance"
+        />
         <link rel="icon" href="/favicon.ico" />
       </Head>
-      <main className="container mx-auto px-4 py-8 md:py-12">
-        <div className="max-w-4xl mx-auto space-y-8">
-          {children}
-        </div>
+      {/* A narrower container with smaller side padding for mobile */}
+      <main className="mx-auto w-full max-w-md px-4 py-4">
+        {children}
       </main>
     </div>
-  );
-};
-
-export default Layout;
-
+  )
+}

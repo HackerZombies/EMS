@@ -1,23 +1,28 @@
+// src/components/layout.tsx
+
 import { useSession } from "next-auth/react";
 import SignIn from "@/components/signin";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/router";
 import { Icon } from "@iconify/react";
 import DashboardLayout from "./DashboardLayout";
+// Remove the import of backgroundImage if not used
 import backgroundImage from "../../public/bg.jpg";
 
-// 1) Import the revised hook
-import useNotifications from "@/hooks/useNotifications";
+// Remove the import of useNotifications
+// import useNotifications from "@/hooks/useNotifications";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
   const router = useRouter();
 
-  // 2) Determine if user is admin
-  const isAdmin = (status === "authenticated" && session?.user?.role === "ADMIN");
+  // Determine if user is admin
+  const isAdmin =
+    status === "authenticated" &&
+    (session?.user?.role === "ADMIN" || session?.user?.role === "HR");
 
-  // 3) Always call the hook (no condition here!)
-  useNotifications(isAdmin);
+  // Remove the useNotifications hook call
+  // useNotifications(isAdmin);
 
   return (
     <div

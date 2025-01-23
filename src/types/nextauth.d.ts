@@ -1,4 +1,4 @@
-// types/next-auth.d.ts
+// types/nextauth.d.ts
 import "next-auth";
 
 declare module "next-auth" {
@@ -10,17 +10,11 @@ declare module "next-auth" {
     department?: string;
     position?: string;
     isFirstTime: boolean;
+    image?: string; // Optional field for profile picture
   }
+  
 
   interface Session {
-    user: {
-      username: string;
-      role: string;
-      firstName: string;
-      lastName: string;
-      department?: string;
-      position?: string;
-      isFirstTime: boolean;
-    };
+    user: User;
   }
 }

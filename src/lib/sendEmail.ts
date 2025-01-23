@@ -50,7 +50,7 @@ export const sendEmail = async (to: string, username: string, password: string) 
     from: smtpUser, // Sender address from environment variable
     to,
     subject: 'Welcome to Our System',
-    text: `Hello ${username},\n\nWelcome to our system! Your account has been created successfully.\n\nUsername: ${username}\nTemporary Password: ${password}\n\nPlease log in here https://ems-mgba.onrender.com and change your password.\n\nThank you!`,
+    text: `Hello ${username},\n\nWelcome to our system! Your account has been created successfully.\n\nUsername: ${username}\nTemporary Password: ${password}\n\nPlease log in here https://ems-pied-rho.vercel.app/ and change your password.\n\nThank you!`,
   };
 
   try {

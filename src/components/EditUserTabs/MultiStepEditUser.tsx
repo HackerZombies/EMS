@@ -1,23 +1,26 @@
+// src/components/MultiStepEditUser.tsx
+
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import isEqual from "lodash.isequal";
-
 import PersonalInfoForm, { PersonalInfoData } from "./GeneralInfo";
 import JobDetailsForm, { JobDetailsData } from "./JobDetails";
 import QualificationsForm, { QualificationsData } from "./Qualifications";
 import DocumentsSection from "./Documents";
+import { TrashIcon, ExclamationTriangleIcon, ArrowPathIcon } from "@heroicons/react/24/outline";
 
-import { TrashIcon } from "@heroicons/react/24/outline";
+import { processAuditLogs } from "@/lib/processAuditLogs"; // Import the utility
+import useUnsavedChangesWarning from "@/hooks/useUnsavedChangesWarning";
 
 // Steps used for your stepper
 const steps = [
-  { id: 0, name: "Personal Information" },
+  { id: 0, name: "Personal Info" },
   { id: 1, name: "Job Details" },
   { id: 2, name: "Qualifications" },
   { id: 3, name: "Documents" },
@@ -79,6 +82,28 @@ export type Certification = {
   expiryDate: string;
 };
 
+interface AuditLogEntry {
+  id: string;
+  action: string;
+  performedBy: string;
+  userUsername: string;
+  targetUsername: string;
+  datePerformed: string; // ISO string
+  details: string; // JSON string
+  user: {
+    username: string;
+    firstName: string;
+    lastName: string;
+  };
+}
+
+interface ChangeHistoryEntry {
+  old: any;
+  new: any;
+  datePerformed: string;
+  performedBy: string;
+}
+
 const MultiStepEditUser: React.FC = () => {
   // Next.js / NextAuth
   const router = useRouter();
@@ -138,14 +163,25 @@ const MultiStepEditUser: React.FC = () => {
   const [deleteConfirm, setDeleteConfirm] = useState<boolean>(false);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
+  // Error Handling States
+  const [error, setError] = useState<string | null>(null);
+  const [retryFetch, setRetryFetch] = useState<boolean>(false);
+
+  // Success Message State
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Reference to the container to manage scroll
+  const containerRef = useRef<HTMLDivElement>(null);
+
   // 1) Derive the current user role from the session
-  // Make sure your session.user.role is uppercase or handle case consistently
   const userRole = session?.user?.role ?? "";
 
   // Fetch user data on mount (or when username changes)
   useEffect(() => {
     if (username) {
       const fetchData = async () => {
+        setIsLoading(true);
+        setError(null);
         try {
           const response = await fetch(`/api/users/user/${username}`);
           if (!response.ok) throw new Error("Failed to fetch user data");
@@ -157,24 +193,24 @@ const MultiStepEditUser: React.FC = () => {
             middleName: data.middleName,
             lastName: data.lastName,
             email: data.email,
-            phoneNumber: data.phoneNumber,
-            dob: data.dob,
-            residentialAddress: data.residentialAddress,
-            permanentAddress: data.permanentAddress,
-            department: data.department,
-            position: data.position,
-            role: data.role,
-            gender: data.gender,
-            bloodGroup: data.bloodGroup,
-            employmentType: data.employmentType,
-            joiningDate: data.joiningDate,
+            phoneNumber: data.phoneNumber || "",
+            dob: data.dob || "",
+            residentialAddress: data.residentialAddress || "",
+            permanentAddress: data.permanentAddress || "",
+            department: data.department || "",
+            position: data.position || "",
+            role: data.role || "",
+            gender: data.gender || "",
+            bloodGroup: data.bloodGroup || "",
+            employmentType: data.employmentType || "",
+            joiningDate: data.joiningDate || "",
             qualifications: data.qualifications || [],
             experiences: data.experiences || [],
             certifications: data.certifications || [],
             emergencyContacts: data.emergencyContacts || [],
-            profileImageUrl: data.profileImageUrl,
-            nationality: data.nationality,
-            workLocation: data.workLocation,
+            profileImageUrl: data.profileImageUrl || "",
+            nationality: data.nationality || "",
+            workLocation: data.workLocation || "",
           };
 
           // Fill local states
@@ -214,15 +250,52 @@ const MultiStepEditUser: React.FC = () => {
           }));
 
           setInitialData(userData);
-        } catch (error) {
+        } catch (error: any) {
           console.error("Error fetching user data:", error);
+          setError(error.message || "An error occurred while fetching user data.");
         } finally {
           setIsLoading(false);
         }
       };
       fetchData();
     }
+  }, [username, retryFetch]);
+
+  // Fetch audit logs
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [auditLoading, setAuditLoading] = useState<boolean>(true);
+  const [auditError, setAuditError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (username) {
+      const fetchAuditLogs = async () => {
+        setAuditLoading(true);
+        setAuditError(null);
+        try {
+          const response = await fetch(
+            `/api/users/user/${username}/auditLogs?page=1&limit=100`
+          ); // Adjust pagination as needed
+          if (!response.ok) {
+            throw new Error("Failed to fetch audit logs");
+          }
+          const data = await response.json();
+          setAuditLogs(data.data);
+        } catch (error: any) {
+          setAuditError(
+            error.message || "An error occurred while fetching audit logs"
+          );
+        } finally {
+          setAuditLoading(false);
+        }
+      };
+      fetchAuditLogs();
+    }
   }, [username]);
+
+  // Process audit logs to build change history using the utility
+  const changeHistory = useMemo(() => {
+    return processAuditLogs(auditLogs);
+  }, [auditLogs]);
 
   // Compare current states with initialData to see if changes were made
   const changesMade = useMemo(() => {
@@ -246,20 +319,26 @@ const MultiStepEditUser: React.FC = () => {
       role: jobDetails.role,
       employmentType: jobDetails.employmentType,
       joiningDate: jobDetails.joiningDate,
+      workLocation: jobDetails.workLocation,
       qualifications: qualifications.qualifications,
       experiences: qualifications.experiences,
       certifications: qualifications.certifications,
       profileImageUrl: personalInfo.profileImageUrl,
-      workLocation: jobDetails.workLocation,
     };
     return !isEqual(initialData, currentUser);
   }, [initialData, personalInfo, jobDetails, qualifications]);
 
-  // Early returns (loading, unauthorized, not found)
-  if (status === "loading" || isLoading) {
+  // Apply the unsaved changes warning
+  useUnsavedChangesWarning(changesMade);
+
+  // Early returns (loading, unauthorized, not found, audit loading/error)
+  if (status === "loading" || isLoading || auditLoading) {
     return (
-      <div className="flex justify-center items-center h-screen bg-gray-900">
-        <span className="text-xl text-white">Loading...</span>
+      <div className="flex justify-center items-center h-screen bg-gradient-to-r from-purple-500 to-indigo-600">
+        <span className="text-lg sm:text-xl text-white flex items-center">
+          <ArrowPathIcon className="w-5 h-5 animate-spin mr-2" />
+          Loading...
+        </span>
       </div>
     );
   }
@@ -267,16 +346,45 @@ const MultiStepEditUser: React.FC = () => {
   const allowedRoles = ["HR", "ADMIN"];
   if (!session || !session.user || !allowedRoles.includes(session.user.role)) {
     return (
-      <div className="flex justify-center items-center h-screen bg-gray-900">
-        <span className="text-red-500 text-xl">Unauthorized</span>
+      <div className="flex justify-center items-center h-screen bg-gradient-to-r from-red-500 to-yellow-500 px-4">
+        <div className="flex flex-col items-center">
+          <ExclamationTriangleIcon className="w-10 h-10 text-white mb-2" />
+          <span className="text-lg sm:text-xl text-white text-center">Unauthorized</span>
+        </div>
       </div>
     );
   }
 
   if (!initialData) {
     return (
-      <div className="flex justify-center items-center h-screen bg-gray-900">
-        <span className="text-red-500 text-xl">User not found</span>
+      <div className="flex justify-center items-center h-screen bg-gradient-to-r from-red-400 to-pink-500 px-4">
+        <div className="flex flex-col items-center">
+          <ExclamationTriangleIcon className="w-10 h-10 text-white mb-2" />
+          <span className="text-lg sm:text-xl text-white text-center">User not found</span>
+          <Button
+            onClick={() => setRetryFetch((prev) => !prev)}
+            className="mt-2 bg-white text-red-600 hover:bg-gray-100 px-3 py-1 rounded"
+          >
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (auditError) {
+    return (
+      <div className="flex justify-center items-center h-screen bg-gradient-to-r from-yellow-400 to-orange-500 px-4">
+        <div className="flex flex-col items-center">
+          <ExclamationTriangleIcon className="w-10 h-10 text-white mb-2" />
+          <span className="text-lg sm:text-xl text-white text-center">{auditError}</span>
+          <Button
+            onClick={() => router.reload()}
+            className="mt-2 bg-white text-yellow-600 hover:bg-gray-100 px-3 py-1 rounded"
+          >
+            Retry
+          </Button>
+        </div>
       </div>
     );
   }
@@ -284,6 +392,8 @@ const MultiStepEditUser: React.FC = () => {
   // Handle form submission
   const handleSubmit = async () => {
     setIsSubmitting(true);
+    setError(null);
+    setSuccessMessage(null);
     try {
       const payload: any = {
         username: initialData.username,
@@ -297,18 +407,17 @@ const MultiStepEditUser: React.FC = () => {
         permanentAddress: personalInfo.permanentAddress,
         gender: personalInfo.gender,
         bloodGroup: personalInfo.bloodGroup,
+        nationality: personalInfo.nationality,
         emergencyContacts: personalInfo.emergencyContacts,
         department: jobDetails.department,
         position: jobDetails.position,
         role: jobDetails.role,
         employmentType: jobDetails.employmentType,
         joiningDate: jobDetails.joiningDate,
+        workLocation: jobDetails.workLocation,
         qualifications: qualifications.qualifications,
         experiences: qualifications.experiences,
         certifications: qualifications.certifications,
-        profileImageUrl: personalInfo.profileImageUrl,
-        nationality: personalInfo.nationality,
-        workLocation: jobDetails.workLocation,
       };
 
       if (personalInfo.resetPassword) {
@@ -328,11 +437,13 @@ const MultiStepEditUser: React.FC = () => {
       await response.json(); // or destructure if needed
 
       setShowConfirmation(true);
+      setSuccessMessage("User updated successfully!");
       setTimeout(() => {
         router.push("/manage/users");
       }, 2000);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating user:", error);
+      setError(error.message || "An error occurred while updating the user.");
     } finally {
       setIsSubmitting(false);
     }
@@ -341,6 +452,8 @@ const MultiStepEditUser: React.FC = () => {
   // Handle user deletion
   const handleDeleteUser = async () => {
     setIsDeleting(true);
+    setError(null);
+    setSuccessMessage(null);
     try {
       const response = await fetch("/api/users/deleteUser", {
         method: "DELETE",
@@ -351,15 +464,19 @@ const MultiStepEditUser: React.FC = () => {
       if (!response.ok) {
         throw new Error("Failed to delete user.");
       }
-      router.push("/manage/users");
-    } catch (error) {
+      setSuccessMessage("User deleted successfully!");
+      setTimeout(() => {
+        router.push("/manage/users");
+      }, 2000);
+    } catch (error: any) {
       console.error("Error deleting user:", error);
+      setError(error.message || "An error occurred while deleting the user.");
     } finally {
       setIsDeleting(false);
     }
   };
 
-  // Render current step
+  // Render the current step's form
   const renderStep = () => {
     switch (activeStep) {
       case 0:
@@ -367,6 +484,7 @@ const MultiStepEditUser: React.FC = () => {
           <PersonalInfoForm
             formData={personalInfo}
             setFormData={setPersonalInfo}
+            changeHistory={changeHistory} // Pass changeHistory here
           />
         );
       case 1:
@@ -374,7 +492,8 @@ const MultiStepEditUser: React.FC = () => {
           <JobDetailsForm
             formData={jobDetails}
             setFormData={setJobDetails}
-            currentUserRole={userRole} // <--- pass userRole here!
+            currentUserRole={userRole}
+            changeHistory={changeHistory} // Pass changeHistory here
           />
         );
       case 2:
@@ -382,6 +501,7 @@ const MultiStepEditUser: React.FC = () => {
           <QualificationsForm
             formData={qualifications}
             setFormData={setQualifications}
+            changeHistory={changeHistory} // Pass changeHistory here
           />
         );
       case 3:
@@ -393,6 +513,11 @@ const MultiStepEditUser: React.FC = () => {
 
   const handleStepClick = (stepId: number) => {
     setActiveStep(stepId);
+    scrollToTop();
+  };
+
+  const scrollToTop = () => {
+    containerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   return (
@@ -401,86 +526,128 @@ const MultiStepEditUser: React.FC = () => {
         <title>Edit User - {initialData.username}</title>
       </Head>
 
-      <div className="container mx-auto p-6 bg-gray-900 min-h-screen">
+      <div
+        ref={containerRef}
+        className="container mx-auto p-2 sm:p-4 bg-gradient-to-r from-blue-50 to-purple-100 min-h-screen flex flex-col"
+      >
         {/* Header */}
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-center text-white">
-            Edit User: {initialData.username}
-          </h1>
+        <div className="flex justify-between items-center mb-2 sm:mb-4">
+          {/* Empty space to align delete button to the right */}
+          <div></div>
           <Button
             type="button"
             onClick={() => setDeleteConfirm(true)}
-            className="bg-red-600 hover:bg-red-700 text-white flex items-center"
+            className="bg-red-600 hover:bg-red-700 text-white flex items-center px-2 py-1 rounded"
           >
-            <TrashIcon className="w-4 h-4 mr-2" />
-            Delete User
+            <TrashIcon className="w-4 h-4 mr-1" />
+            Delete
           </Button>
         </div>
 
+        {/* Success Message */}
+        {successMessage && (
+          <div
+            className="flex items-center bg-green-100 border border-green-400 text-green-700 px-3 py-2 rounded relative mb-4"
+            role="alert"
+          >
+            <span className="block sm:inline">{successMessage}</span>
+            <button
+              onClick={() => setSuccessMessage(null)}
+              className="absolute top-1 right-1 text-green-700"
+            >
+              <svg
+                className="fill-current h-4 w-4"
+                role="button"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+              >
+                <title>Close</title>
+                <path d="M14.348 5.652a1 1 0 00-1.414 0L10 8.586 7.066 5.652a1 1 0 00-1.414 1.414L8.586 10l-2.934 2.934a1 1 0 101.414 1.414L10 11.414l2.934 2.934a1 1 0 001.414-1.414L11.414 10l2.934-2.934a1 1 0 000-1.414z" />
+              </svg>
+            </button>
+          </div>
+        )}
+
+        {/* Error Message */}
+        {error && (
+          <div
+            className="flex items-center bg-red-100 border border-red-400 text-red-700 px-3 py-2 rounded relative mb-4"
+            role="alert"
+          >
+            <ExclamationTriangleIcon className="w-5 h-5 mr-2" />
+            <span className="block sm:inline">{error}</span>
+            <button
+              onClick={() => setError(null)}
+              className="absolute top-1 right-1 text-red-700"
+            >
+              <svg
+                className="fill-current h-4 w-4"
+                role="button"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+              >
+                <title>Close</title>
+                <path d="M14.348 5.652a1 1 0 00-1.414 0L10 8.586 7.066 5.652a1 1 0 00-1.414 1.414L8.586 10l-2.934 2.934a1 1 0 101.414 1.414L10 11.414l2.934 2.934a1 1 0 001.414-1.414L11.414 10l2.934-2.934a1 1 0 000-1.414z" />
+              </svg>
+            </button>
+          </div>
+        )}
+
         {/* Stepper */}
-        <div className="mb-8">
+        <div className="mb-2 sm:mb-4">
           <Progress
             value={(activeStep / (steps.length - 1)) * 100}
-            className="mb-4 bg-gray-700"
+            className="mb-1 h-1 rounded-full bg-gradient-to-r from-green-200 to-green-400"
           />
-          <div className="flex justify-between">
+          <div className="flex space-x-2 sm:space-x-4 overflow-x-auto">
             {steps.map((step, index) => (
-              <div
+              <button
                 key={step.id}
                 onClick={() => handleStepClick(step.id)}
-                className={`flex flex-col items-center cursor-pointer ${
-                  index <= activeStep ? "text-blue-400" : "text-gray-500"
-                }`}
+                className={`flex flex-col items-center text-xs sm:text-sm font-medium ${
+                  index === activeStep
+                    ? "text-blue-600"
+                    : "text-gray-500 hover:text-blue-500"
+                } focus:outline-none`}
               >
-                <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${
-                    index <= activeStep
-                      ? "border-blue-400 bg-blue-500 text-white"
-                      : "border-gray-500"
-                  }`}
-                >
-                  {index + 1}
-                </div>
-                <span className="mt-2 text-sm">{step.name}</span>
-              </div>
+                <span>{step.name}</span>
+              </button>
             ))}
           </div>
         </div>
 
         {/* Active Step Content */}
-        <div className="bg-gray-800 shadow-md rounded-lg p-6">{renderStep()}</div>
+        <div className="flex-grow">
+          <div className="bg-white shadow-md rounded-lg p-2 sm:p-4">
+            {renderStep()}
+          </div>
+        </div>
 
         {/* Confirmation Message */}
         {showConfirmation && (
-          <div className="mt-4 p-4 bg-green-600 text-white text-center rounded">
+          <div className="mt-2 sm:mt-4 p-2 bg-green-500 text-white text-center rounded shadow-md">
             User updated successfully! Redirecting...
           </div>
         )}
 
         {/* Navigation Buttons */}
-        <div className="flex justify-between mt-6">
-          <Button
-            variant="outline"
-            disabled={activeStep === 0}
-            onClick={() => setActiveStep((prev) => prev - 1)}
-            className="bg-gray-700 text-white hover:bg-gray-600"
-          >
-            Back
-          </Button>
+        <div className="flex justify-end mt-2 sm:mt-4">
           {activeStep < steps.length - 1 ? (
             <Button
-              onClick={() => setActiveStep((prev) => prev + 1)}
-              className="bg-blue-600 text-white hover:bg-blue-700"
+              onClick={() => {
+                setActiveStep((prev) => prev + 1);
+                scrollToTop();
+              }}
+              className="bg-blue-600 text-white hover:bg-blue-700 transition-colors duration-300 px-3 py-1 rounded"
             >
               Next
             </Button>
           ) : (
             <Button
               onClick={handleSubmit}
-              disabled={!changesMade || isSubmitting}
-              title={!changesMade ? "No changes detected" : undefined}
-              className={`bg-green-600 text-white hover:bg-green-700 ${
-                !changesMade ? "opacity-50 cursor-not-allowed" : ""
+              disabled={isSubmitting}
+              className={`bg-green-600 text-white hover:bg-green-700 transition-colors duration-300 px-3 py-1 rounded ${
+                isSubmitting ? "opacity-50 cursor-not-allowed" : ""
               }`}
             >
               {isSubmitting ? "Submitting..." : "Submit"}
@@ -490,20 +657,17 @@ const MultiStepEditUser: React.FC = () => {
 
         {/* Delete Confirmation Modal */}
         {deleteConfirm && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
-            <div className="bg-gray-800 p-6 rounded-lg w-96">
-              <h2 className="text-xl font-semibold text-white mb-4">
-                Confirm Deletion
-              </h2>
-              <p className="text-gray-300 mb-6">
-                Are you sure you want to delete user "{initialData.username}"?
-                This action cannot be undone.
+          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 px-2">
+            <div className="bg-white p-3 sm:p-4 rounded-lg w-full max-w-xs sm:max-w-sm shadow-lg">
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-2">Confirm Deletion</h2>
+              <p className="text-gray-700 mb-3">
+                Are you sure you want to delete user "{initialData.username}"? This action cannot be undone.
               </p>
-              <div className="flex justify-end space-x-4">
+              <div className="flex space-x-2">
                 <Button
                   type="button"
                   onClick={() => setDeleteConfirm(false)}
-                  className="bg-gray-600 hover:bg-gray-700 text-white"
+                  className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded"
                 >
                   Cancel
                 </Button>
@@ -511,7 +675,9 @@ const MultiStepEditUser: React.FC = () => {
                   type="button"
                   onClick={handleDeleteUser}
                   disabled={isDeleting}
-                  className="bg-red-600 hover:bg-red-700 text-white"
+                  className={`bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded ${
+                    isDeleting ? "opacity-50 cursor-not-allowed" : ""
+                  }`}
                 >
                   {isDeleting ? "Deleting..." : "Delete"}
                 </Button>

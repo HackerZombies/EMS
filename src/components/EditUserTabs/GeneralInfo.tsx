@@ -19,6 +19,7 @@ import { Modal } from "@/components/ui/modal";
 
 export interface PersonalInfoData {
   firstName: string;
+  username: string;
   middleName?: string;
   lastName: string;
   email: string;
@@ -325,28 +326,30 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({
     setEditMode(true);
   };
 
-  // Called when user clicks "Finish"
-  const handleFinishEditing = async () => {
-    if (validate()) {
-      // Optionally, save to server here:
-      try {
-        const response = await fetch(`/api/users/${formData.email}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(formData),
-        });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || "Failed to save changes.");
-        }
-      } catch (error) {
-        console.error("Error saving changes:", error);
+ // Called when user clicks "Finish"
+const handleFinishEditing = async () => {
+  if (validate()) {
+    // Optionally, save to server here:
+    try {
+      const response = await fetch(`/api/users/user/${formData.username}`, { // Changed from email to username
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to save changes.");
       }
-      setEditMode(false);
+      // Optionally handle successful update, e.g., show a success message
+    } catch (error) {
+      console.error("Error saving changes:", error);
+      // Optionally, display error message to the user
     }
-  };
+    setEditMode(false);
+  }
+};
 
   // Revert to the original data
   const handleCancel = () => {

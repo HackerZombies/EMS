@@ -1,4 +1,4 @@
-// components/EditUserTabs.tsx
+// components/EditUserTabs/JobDetailsForm.tsx
 
 import React, { useState } from "react";
 import { Input } from "@/components/ui/input";
@@ -26,8 +26,9 @@ export interface JobDetailsData {
 interface JobDetailsFormProps {
   formData: JobDetailsData;
   setFormData: React.Dispatch<React.SetStateAction<JobDetailsData>>;
-  currentUserRole: string; // e.g. 'ADMIN' | 'HR' | 'EMPLOYEE'
+  currentUserRole: string; // e.g., 'ADMIN' | 'HR' | 'EMPLOYEE'
   changeHistory: Record<string, ChangeHistoryEntry[]>;
+  isEditMode: boolean; // Controlled via parent
 }
 
 // Items per page for the history lists
@@ -38,6 +39,7 @@ const JobDetailsForm: React.FC<JobDetailsFormProps> = ({
   setFormData,
   currentUserRole,
   changeHistory,
+  isEditMode, // Destructure from props
 }) => {
   // Track which fields have their history section open
   const [openFields, setOpenFields] = useState<Record<string, boolean>>({});
@@ -57,6 +59,7 @@ const JobDetailsForm: React.FC<JobDetailsFormProps> = ({
 
   // Toggle a field's history panel
   const toggleFieldHistory = (field: string) => {
+    if (!isEditMode) return; // Prevent toggling history when not in edit mode
     setOpenFields((prev) => ({
       ...prev,
       [field]: !prev[field],
@@ -125,8 +128,13 @@ const JobDetailsForm: React.FC<JobDetailsFormProps> = ({
             <Select
               onValueChange={handleSelectChange("department")}
               value={formData.department || ""}
+              disabled={!isEditMode} // Controlled via prop
             >
-              <SelectTrigger className="bg-white text-gray-900 border border-gray-300 focus:ring-blue-500 w-full mt-1">
+              <SelectTrigger
+                className={`bg-white text-gray-900 border border-gray-300 focus:ring-blue-500 w-full mt-1 ${
+                  !isEditMode ? "cursor-not-allowed opacity-50" : ""
+                }`}
+              >
                 <SelectValue placeholder="Select department" />
               </SelectTrigger>
               <SelectContent className="bg-white border border-gray-300 text-gray-700">
@@ -141,16 +149,19 @@ const JobDetailsForm: React.FC<JobDetailsFormProps> = ({
             {getFieldHistory("department").length > 0 && (
               <button
                 type="button"
-                className="ml-2 text-gray-500 hover:text-gray-700"
+                className={`ml-2 text-gray-500 hover:text-gray-700 ${
+                  !isEditMode ? "cursor-not-allowed opacity-50" : ""
+                }`}
                 onClick={() => toggleFieldHistory("department")}
                 title="View Change History"
+                disabled={!isEditMode} // Disable button when not in edit mode
               >
                 <History className="w-5 h-5" />
               </button>
             )}
           </div>
           {/* Change History Display */}
-          {openFields["department"] && (
+          {openFields["department"] && isEditMode && (
             <HistorySection
               field="department"
               label="Department"
@@ -171,8 +182,13 @@ const JobDetailsForm: React.FC<JobDetailsFormProps> = ({
             <Select
               onValueChange={handleSelectChange("position")}
               value={formData.position || ""}
+              disabled={!isEditMode} // Controlled via prop
             >
-              <SelectTrigger className="bg-white text-gray-900 border border-gray-300 focus:ring-blue-500 w-full mt-1">
+              <SelectTrigger
+                className={`bg-white text-gray-900 border border-gray-300 focus:ring-blue-500 w-full mt-1 ${
+                  !isEditMode ? "cursor-not-allowed opacity-50" : ""
+                }`}
+              >
                 <SelectValue placeholder="Select position" />
               </SelectTrigger>
               <SelectContent className="bg-white border border-gray-300 text-gray-700">
@@ -196,16 +212,19 @@ const JobDetailsForm: React.FC<JobDetailsFormProps> = ({
             {getFieldHistory("position").length > 0 && (
               <button
                 type="button"
-                className="ml-2 text-gray-500 hover:text-gray-700"
+                className={`ml-2 text-gray-500 hover:text-gray-700 ${
+                  !isEditMode ? "cursor-not-allowed opacity-50" : ""
+                }`}
                 onClick={() => toggleFieldHistory("position")}
                 title="View Change History"
+                disabled={!isEditMode} // Disable button when not in edit mode
               >
                 <History className="w-5 h-5" />
               </button>
             )}
           </div>
           {/* Change History Display */}
-          {openFields["position"] && (
+          {openFields["position"] && isEditMode && (
             <HistorySection
               field="position"
               label="Position"
@@ -231,8 +250,13 @@ const JobDetailsForm: React.FC<JobDetailsFormProps> = ({
             <Select
               onValueChange={handleSelectChange("role")}
               value={formData.role || ""}
+              disabled={!isEditMode} // Controlled via prop
             >
-              <SelectTrigger className="bg-white text-gray-900 border border-gray-300 focus:ring-blue-500 w-full">
+              <SelectTrigger
+                className={`bg-white text-gray-900 border border-gray-300 focus:ring-blue-500 w-full ${
+                  !isEditMode ? "cursor-not-allowed opacity-50" : ""
+                }`}
+              >
                 <SelectValue placeholder="Select role" />
               </SelectTrigger>
               <SelectContent className="bg-white border border-gray-300 text-gray-700">
@@ -246,9 +270,12 @@ const JobDetailsForm: React.FC<JobDetailsFormProps> = ({
           {getFieldHistory("role").length > 0 && (
             <button
               type="button"
-              className="absolute top-8 right-2 text-gray-500 hover:text-gray-700"
+              className={`absolute top-8 right-2 text-gray-500 hover:text-gray-700 ${
+                !isEditMode ? "cursor-not-allowed opacity-50" : ""
+              }`}
               onClick={() => toggleFieldHistory("role")}
               title="View Change History"
+              disabled={!isEditMode} // Disable button when not in edit mode
             >
               <History className="w-5 h-5" />
             </button>
@@ -260,7 +287,7 @@ const JobDetailsForm: React.FC<JobDetailsFormProps> = ({
             </p>
           )}
           {/* Change History Display */}
-          {openFields["role"] && (
+          {openFields["role"] && isEditMode && (
             <HistorySection
               field="role"
               label="Role"
@@ -281,8 +308,13 @@ const JobDetailsForm: React.FC<JobDetailsFormProps> = ({
             <Select
               onValueChange={handleSelectChange("employmentType")}
               value={formData.employmentType || ""}
+              disabled={!isEditMode} // Controlled via prop
             >
-              <SelectTrigger className="bg-white text-gray-900 border border-gray-300 focus:ring-blue-500 w-full mt-1">
+              <SelectTrigger
+                className={`bg-white text-gray-900 border border-gray-300 focus:ring-blue-500 w-full mt-1 ${
+                  !isEditMode ? "cursor-not-allowed opacity-50" : ""
+                }`}
+              >
                 <SelectValue placeholder="Select employment type" />
               </SelectTrigger>
               <SelectContent className="bg-white border border-gray-300 text-gray-700">
@@ -295,16 +327,19 @@ const JobDetailsForm: React.FC<JobDetailsFormProps> = ({
             {getFieldHistory("employmentType").length > 0 && (
               <button
                 type="button"
-                className="ml-2 text-gray-500 hover:text-gray-700"
+                className={`ml-2 text-gray-500 hover:text-gray-700 ${
+                  !isEditMode ? "cursor-not-allowed opacity-50" : ""
+                }`}
                 onClick={() => toggleFieldHistory("employmentType")}
                 title="View Change History"
+                disabled={!isEditMode} // Disable button when not in edit mode
               >
                 <History className="w-5 h-5" />
               </button>
             )}
           </div>
           {/* Change History Display */}
-          {openFields["employmentType"] && (
+          {openFields["employmentType"] && isEditMode && (
             <HistorySection
               field="employmentType"
               label="Employment Type"
@@ -325,8 +360,13 @@ const JobDetailsForm: React.FC<JobDetailsFormProps> = ({
             <Select
               onValueChange={handleSelectChange("workLocation")}
               value={formData.workLocation || ""}
+              disabled={!isEditMode} // Controlled via prop
             >
-              <SelectTrigger className="bg-white text-gray-900 border border-gray-300 focus:ring-blue-500 w-full mt-1">
+              <SelectTrigger
+                className={`bg-white text-gray-900 border border-gray-300 focus:ring-blue-500 w-full mt-1 ${
+                  !isEditMode ? "cursor-not-allowed opacity-50" : ""
+                }`}
+              >
                 <SelectValue placeholder="Select work location" />
               </SelectTrigger>
               <SelectContent className="bg-white border border-gray-300 text-gray-700">
@@ -340,16 +380,19 @@ const JobDetailsForm: React.FC<JobDetailsFormProps> = ({
             {getFieldHistory("workLocation").length > 0 && (
               <button
                 type="button"
-                className="ml-2 text-gray-500 hover:text-gray-700"
+                className={`ml-2 text-gray-500 hover:text-gray-700 ${
+                  !isEditMode ? "cursor-not-allowed opacity-50" : ""
+                }`}
                 onClick={() => toggleFieldHistory("workLocation")}
                 title="View Change History"
+                disabled={!isEditMode} // Disable button when not in edit mode
               >
                 <History className="w-5 h-5" />
               </button>
             )}
           </div>
           {/* Change History Display */}
-          {openFields["workLocation"] && (
+          {openFields["workLocation"] && isEditMode && (
             <HistorySection
               field="workLocation"
               label="Work Location"
@@ -378,22 +421,28 @@ const JobDetailsForm: React.FC<JobDetailsFormProps> = ({
               }
               onChange={handleInputChange}
               required
-              className="bg-white text-gray-900 border border-gray-300 focus:ring-blue-500 mt-1"
+              className={`bg-white text-gray-900 border border-gray-300 focus:ring-blue-500 mt-1 ${
+                !isEditMode ? "cursor-not-allowed opacity-50" : ""
+              }`}
+              disabled={!isEditMode} // Controlled via prop
             />
             {/* History Icon */}
             {getFieldHistory("joiningDate").length > 0 && (
               <button
                 type="button"
-                className="ml-2 text-gray-500 hover:text-gray-700"
+                className={`ml-2 text-gray-500 hover:text-gray-700 ${
+                  !isEditMode ? "cursor-not-allowed opacity-50" : ""
+                }`}
                 onClick={() => toggleFieldHistory("joiningDate")}
                 title="View Change History"
+                disabled={!isEditMode} // Disable button when not in edit mode
               >
                 <History className="w-5 h-5" />
               </button>
             )}
           </div>
           {/* Change History Display */}
-          {openFields["joiningDate"] && (
+          {openFields["joiningDate"] && isEditMode && (
             <HistorySection
               field="joiningDate"
               label="Joining Date"

@@ -1,3 +1,5 @@
+// src/components/EditUserTabs/PersonalInfoForm.tsx
+
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -19,7 +21,6 @@ import { Modal } from "@/components/ui/modal";
 
 export interface PersonalInfoData {
   firstName: string;
-  username: string; // Consider making this read-only if not editable
   middleName?: string;
   lastName: string;
   email: string;
@@ -43,7 +44,7 @@ export interface EmergencyContact {
   email: string;
 }
 
-interface ChangeHistoryEntry {
+export interface ChangeHistoryEntry {
   old: any;
   new: any;
   datePerformed: string;
@@ -54,6 +55,7 @@ interface PersonalInfoFormProps {
   formData: PersonalInfoData;
   setFormData: React.Dispatch<React.SetStateAction<PersonalInfoData>>;
   changeHistory: Record<string, ChangeHistoryEntry[]>;
+  isEditMode: boolean; // Received prop from parent
 }
 
 // ------------------ Constants ------------------
@@ -66,17 +68,14 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({
   formData,
   setFormData,
   changeHistory,
+  isEditMode, // Destructure isEditMode from props
 }) => {
-  const { data: session, status } = useSession(); // Destructure status for better handling
+  const { data: session } = useSession();
 
   // ------------------ State ------------------
 
-  // Keep a copy of original data so we can revert upon cancel
+  // Keep a copy of original data to revert upon cancel
   const [originalData, setOriginalData] = useState<PersonalInfoData>(formData);
-
-  // Local flags for editing and loading
-  const [isEditMode, setEditMode] = useState(false);
-  const [loading, setLoading] = useState(false);
 
   // Profile image preview & modal
   const [profilePreview, setProfilePreview] = useState<string | null>(
@@ -157,7 +156,8 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({
         permanentAddress: Object.values(residentialAddress).join(", "),
       }));
     }
-  }, [formData.sameAsResidential, residentialAddress, setFormData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.sameAsResidential, residentialAddress]);
 
   // ------------------ Address Handlers ------------------
 
@@ -232,7 +232,6 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({
       uploadData.append("oldImagePath", oldImagePath);
     }
 
-    setLoading(true);
     try {
       const username = session?.user?.username;
       if (!username) {
@@ -257,8 +256,6 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({
     } catch (error) {
       console.error("Error uploading image:", error);
       // Optionally, you can set an error state here to display to the user
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -287,10 +284,6 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({
     if (!formData.firstName.trim()) {
       newErrors.firstName = "First name is required.";
     }
-    if (!formData.middleName) {
-      // Not always required, remove if you want it optional
-      // newErrors.middleName = "Middle name is required.";
-    }
     if (!formData.lastName.trim()) {
       newErrors.lastName = "Last name is required.";
     }
@@ -317,24 +310,6 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  };
-
-  // ------------------ Save / Cancel / Edit ------------------
-
-  // Called when user switches from view mode to edit mode
-  const startEditing = () => {
-    setOriginalData(formData); // snapshot the current data
-    setEditMode(true);
-  };
-
-  // ------------------ Removed handleFinishEditing ------------------
-  // The handleFinishEditing function and its API call have been removed
-
-  // Revert to the original data
-  const handleCancel = () => {
-    setFormData(originalData);
-    setEditMode(false);
-    setErrors({});
   };
 
   // ------------------ Change History Helpers ------------------
@@ -392,38 +367,6 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({
 
   return (
     <div className="p-6 sm:p-8 bg-gradient-to-br from-white to-gray-50 rounded-lg shadow-lg space-y-8">
-      {/* Header & Edit/Cancel */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-3 md:space-y-0 md:space-x-4">
-        <h1 className="text-xl font-bold text-gray-700">Personal Information</h1>
-
-        {/* Edit / Cancel buttons */}
-        <div className="flex items-center space-x-2">
-          {isEditMode ? (
-            <>
-              {/* Removed "Finish" button */}
-              <Button
-                type="button"
-                onClick={handleCancel}
-                variant="secondary"
-                className="bg-gray-300 hover:bg-gray-400 text-gray-800 flex items-center"
-                disabled={loading} // Disable button while loading (if applicable)
-              >
-                <X className="w-4 h-4 mr-1" />
-                Cancel
-              </Button>
-            </>
-          ) : (
-            <Button
-              type="button"
-              onClick={startEditing}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold flex items-center space-x-2"
-            >
-              Edit
-            </Button>
-          )}
-        </div>
-      </div>
-
       {/* TOP SECTION: Profile Image (left) + Basic Info fields (right) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Left: Boxy Profile Image */}
@@ -462,7 +405,7 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({
                   type="file"
                   accept="image/*"
                   onChange={onProfileImageChange}
-                  disabled={loading}
+                  disabled={!isEditMode}
                   className="hidden"
                 />
               </>
@@ -1385,7 +1328,9 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({
                         `emergencyContacts.${index}.email`
                       )}
                       totalCount={
-                        getFieldHistory(`emergencyContacts.${index}.email`).length
+                        getFieldHistory(
+                          `emergencyContacts.${index}.email`
+                        ).length
                       }
                       currentPage={
                         pagination[`emergencyContacts.${index}.email`] || 1

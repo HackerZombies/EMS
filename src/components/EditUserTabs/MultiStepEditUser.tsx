@@ -1,4 +1,4 @@
-// src/components/MultiStepEditUser.tsx
+// src/components/EditUserTabs/MultiStepEditUser.tsx
 
 "use client";
 
@@ -9,14 +9,14 @@ import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import isEqual from "lodash.isequal";
-import PersonalInfoForm, { PersonalInfoData } from "./GeneralInfo";
-import JobDetailsForm, { JobDetailsData } from "./JobDetails";
-import QualificationsForm, { QualificationsData } from "./Qualifications";
-import DocumentsSection from "./Documents";
+import cloneDeep from "lodash.clonedeep"; // Import cloneDeep for deep cloning
+import PersonalInfoForm, { PersonalInfoData } from "./GeneralInfo"; // Adjusted import
+import JobDetailsForm, { JobDetailsData } from "./JobDetails"; // Adjusted import
+import QualificationsForm, { QualificationsData } from "./Qualifications"; // Adjusted import
+import DocumentsSection from "./Documents"; // Adjusted import
 import { TrashIcon, ExclamationTriangleIcon, ArrowPathIcon } from "@heroicons/react/24/outline";
 
 import { processAuditLogs } from "@/lib/processAuditLogs"; // Import the utility
-import useUnsavedChangesWarning from "@/hooks/useUnsavedChangesWarning";
 
 // Steps used for your stepper
 const steps = [
@@ -118,7 +118,6 @@ const MultiStepEditUser: React.FC = () => {
     firstName: "",
     middleName: "",
     lastName: "",
-    username:"",
     email: "",
     phoneNumber: "",
     dob: "",
@@ -158,10 +157,6 @@ const MultiStepEditUser: React.FC = () => {
   const [initialData, setInitialData] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [showConfirmation, setShowConfirmation] = useState<boolean>(false);
-
-  // Delete logic
-  const [deleteConfirm, setDeleteConfirm] = useState<boolean>(false);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   // Error Handling States
@@ -174,12 +169,18 @@ const MultiStepEditUser: React.FC = () => {
   // Reference to the container to manage scroll
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // State for Edit Mode
+  const [isEditMode, setIsEditMode] = useState<boolean>(false);
+
+  // State for Delete Confirmation Modal
+  const [deleteConfirm, setDeleteConfirm] = useState<boolean>(false);
+
   // 1) Derive the current user role from the session
   const userRole = session?.user?.role ?? "";
 
   // Fetch user data on mount (or when username changes)
   useEffect(() => {
-    if (username) {
+    if (username && typeof username === "string") {
       const fetchData = async () => {
         setIsLoading(true);
         setError(null);
@@ -214,9 +215,8 @@ const MultiStepEditUser: React.FC = () => {
             workLocation: data.workLocation || "",
           };
 
-          // Fill local states
-          setPersonalInfo((prev) => ({
-            ...prev,
+          // Fill local states with deep clones to prevent mutations
+          setPersonalInfo({
             firstName: userData.firstName,
             middleName: userData.middleName || "",
             lastName: userData.lastName,
@@ -227,28 +227,26 @@ const MultiStepEditUser: React.FC = () => {
             permanentAddress: userData.permanentAddress || "",
             gender: userData.gender || "",
             bloodGroup: userData.bloodGroup || "",
-            emergencyContacts: userData.emergencyContacts,
+            emergencyContacts: cloneDeep(userData.emergencyContacts),
             profileImageUrl: userData.profileImageUrl || "",
             nationality: userData.nationality || "",
             resetPassword: false,
-          }));
+          });
 
-          setJobDetails((prev) => ({
-            ...prev,
+          setJobDetails({
             department: userData.department || "",
             position: userData.position || "",
             role: userData.role || "",
             employmentType: userData.employmentType || "",
             joiningDate: userData.joiningDate || "",
             workLocation: userData.workLocation || "",
-          }));
+          });
 
-          setQualifications((prev) => ({
-            ...prev,
-            qualifications: userData.qualifications,
-            experiences: userData.experiences,
-            certifications: userData.certifications,
-          }));
+          setQualifications({
+            qualifications: cloneDeep(userData.qualifications),
+            experiences: cloneDeep(userData.experiences),
+            certifications: cloneDeep(userData.certifications),
+          });
 
           setInitialData(userData);
         } catch (error: any) {
@@ -268,7 +266,7 @@ const MultiStepEditUser: React.FC = () => {
   const [auditError, setAuditError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (username) {
+    if (username && typeof username === "string") {
       const fetchAuditLogs = async () => {
         setAuditLoading(true);
         setAuditError(null);
@@ -314,23 +312,20 @@ const MultiStepEditUser: React.FC = () => {
       gender: personalInfo.gender,
       bloodGroup: personalInfo.bloodGroup,
       nationality: personalInfo.nationality,
-      emergencyContacts: personalInfo.emergencyContacts,
+      emergencyContacts: cloneDeep(personalInfo.emergencyContacts),
       department: jobDetails.department,
       position: jobDetails.position,
       role: jobDetails.role,
       employmentType: jobDetails.employmentType,
       joiningDate: jobDetails.joiningDate,
       workLocation: jobDetails.workLocation,
-      qualifications: qualifications.qualifications,
-      experiences: qualifications.experiences,
-      certifications: qualifications.certifications,
+      qualifications: cloneDeep(qualifications.qualifications),
+      experiences: cloneDeep(qualifications.experiences),
+      certifications: cloneDeep(qualifications.certifications),
       profileImageUrl: personalInfo.profileImageUrl,
     };
     return !isEqual(initialData, currentUser);
   }, [initialData, personalInfo, jobDetails, qualifications]);
-
-  // Apply the unsaved changes warning
-  useUnsavedChangesWarning(changesMade);
 
   // Early returns (loading, unauthorized, not found, audit loading/error)
   if (status === "loading" || isLoading || auditLoading) {
@@ -409,16 +404,16 @@ const MultiStepEditUser: React.FC = () => {
         gender: personalInfo.gender,
         bloodGroup: personalInfo.bloodGroup,
         nationality: personalInfo.nationality,
-        emergencyContacts: personalInfo.emergencyContacts,
+        emergencyContacts: cloneDeep(personalInfo.emergencyContacts),
         department: jobDetails.department,
         position: jobDetails.position,
         role: jobDetails.role,
         employmentType: jobDetails.employmentType,
         joiningDate: jobDetails.joiningDate,
         workLocation: jobDetails.workLocation,
-        qualifications: qualifications.qualifications,
-        experiences: qualifications.experiences,
-        certifications: qualifications.certifications,
+        qualifications: cloneDeep(qualifications.qualifications),
+        experiences: cloneDeep(qualifications.experiences),
+        certifications: cloneDeep(qualifications.certifications),
       };
 
       if (personalInfo.resetPassword) {
@@ -432,16 +427,40 @@ const MultiStepEditUser: React.FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to update user.");
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to update user.");
       }
 
       await response.json(); // or destructure if needed
 
-      setShowConfirmation(true);
       setSuccessMessage("User updated successfully!");
-      setTimeout(() => {
-        router.push("/manage/users");
-      }, 2000);
+      setActiveStep(0); // Reset to first step if desired
+      setInitialData(cloneDeep({
+        username: initialData.username,
+        firstName: personalInfo.firstName,
+        middleName: personalInfo.middleName,
+        lastName: personalInfo.lastName,
+        email: personalInfo.email,
+        phoneNumber: personalInfo.phoneNumber,
+        dob: personalInfo.dob,
+        residentialAddress: personalInfo.residentialAddress,
+        permanentAddress: personalInfo.permanentAddress,
+        gender: personalInfo.gender,
+        bloodGroup: personalInfo.bloodGroup,
+        nationality: personalInfo.nationality,
+        emergencyContacts: cloneDeep(personalInfo.emergencyContacts),
+        department: jobDetails.department,
+        position: jobDetails.position,
+        role: jobDetails.role,
+        employmentType: jobDetails.employmentType,
+        joiningDate: jobDetails.joiningDate,
+        workLocation: jobDetails.workLocation,
+        qualifications: cloneDeep(qualifications.qualifications),
+        experiences: cloneDeep(qualifications.experiences),
+        certifications: cloneDeep(qualifications.certifications),
+        profileImageUrl: personalInfo.profileImageUrl,
+      }));
+      setIsEditMode(false); // Exit edit mode after saving
     } catch (error: any) {
       console.error("Error updating user:", error);
       setError(error.message || "An error occurred while updating the user.");
@@ -463,7 +482,8 @@ const MultiStepEditUser: React.FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to delete user.");
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to delete user.");
       }
       setSuccessMessage("User deleted successfully!");
       setTimeout(() => {
@@ -477,36 +497,89 @@ const MultiStepEditUser: React.FC = () => {
     }
   };
 
+  // Handle toggling edit mode
+  const toggleEditMode = () => {
+    if (isEditMode) {
+      // If exiting edit mode, revert changes by deeply cloning initialData
+      if (initialData) {
+        setPersonalInfo({
+          firstName: initialData.firstName,
+          middleName: initialData.middleName || "",
+          lastName: initialData.lastName,
+          email: initialData.email,
+          phoneNumber: initialData.phoneNumber || "",
+          dob: initialData.dob || "",
+          residentialAddress: initialData.residentialAddress || "",
+          permanentAddress: initialData.permanentAddress || "",
+          gender: initialData.gender || "",
+          bloodGroup: initialData.bloodGroup || "",
+          emergencyContacts: cloneDeep(initialData.emergencyContacts),
+          profileImageUrl: initialData.profileImageUrl || "",
+          nationality: initialData.nationality || "",
+          resetPassword: false,
+        });
+
+        setJobDetails({
+          department: initialData.department || "",
+          position: initialData.position || "",
+          role: initialData.role || "",
+          employmentType: initialData.employmentType || "",
+          joiningDate: initialData.joiningDate || "",
+          workLocation: initialData.workLocation || "",
+        });
+
+        setQualifications({
+          qualifications: cloneDeep(initialData.qualifications),
+          experiences: cloneDeep(initialData.experiences),
+          certifications: cloneDeep(initialData.certifications),
+        });
+      }
+    }
+    setIsEditMode(!isEditMode);
+  };
+
   // Render the current step's form
   const renderStep = () => {
     switch (activeStep) {
       case 0:
         return (
           <PersonalInfoForm
+            // Removed key prop
             formData={personalInfo}
             setFormData={setPersonalInfo}
-            changeHistory={changeHistory} // Pass changeHistory here
+            changeHistory={changeHistory}
+            isEditMode={isEditMode} // Passed prop
           />
         );
       case 1:
         return (
           <JobDetailsForm
+            // Removed key prop
             formData={jobDetails}
             setFormData={setJobDetails}
             currentUserRole={userRole}
-            changeHistory={changeHistory} // Pass changeHistory here
+            changeHistory={changeHistory}
+            isEditMode={isEditMode} // Passed prop
           />
         );
       case 2:
         return (
           <QualificationsForm
+            // Removed key prop
             formData={qualifications}
             setFormData={setQualifications}
-            changeHistory={changeHistory} // Pass changeHistory here
+            changeHistory={changeHistory}
+            isEditMode={isEditMode} // Passed prop
           />
         );
       case 3:
-        return <DocumentsSection userUsername={initialData.username} />;
+        return (
+          <DocumentsSection
+            // Removed key prop
+            userUsername={initialData.username}
+            isEditMode={isEditMode} // Passed prop
+          />
+        );
       default:
         return null;
     }
@@ -533,8 +606,40 @@ const MultiStepEditUser: React.FC = () => {
       >
         {/* Header */}
         <div className="flex justify-between items-center mb-2 sm:mb-4">
-          {/* Empty space to align delete button to the right */}
-          <div></div>
+          {/* Edit, Save, and Cancel Buttons */}
+          <div className="flex space-x-2">
+            {!isEditMode ? (
+              <Button
+                type="button"
+                onClick={toggleEditMode}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                Edit
+              </Button>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={isSubmitting}
+                  className={`bg-green-600 hover:bg-green-700 text-white ${
+                    isSubmitting ? "opacity-50 cursor-not-allowed" : ""
+                  }`}
+                >
+                  {isSubmitting ? "Saving..." : "Save"}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={toggleEditMode}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  Cancel
+                </Button>
+              </>
+            )}
+          </div>
+
+          {/* Delete Button */}
           <Button
             type="button"
             onClick={() => setDeleteConfirm(true)}
@@ -624,13 +729,6 @@ const MultiStepEditUser: React.FC = () => {
           </div>
         </div>
 
-        {/* Confirmation Message */}
-        {showConfirmation && (
-          <div className="mt-2 sm:mt-4 p-2 bg-green-500 text-white text-center rounded shadow-md">
-            User updated successfully! Redirecting...
-          </div>
-        )}
-
         {/* Navigation Buttons */}
         <div className="flex justify-end mt-2 sm:mt-4">
           {activeStep < steps.length - 1 ? (
@@ -639,16 +737,19 @@ const MultiStepEditUser: React.FC = () => {
                 setActiveStep((prev) => prev + 1);
                 scrollToTop();
               }}
-              className="bg-blue-600 text-white hover:bg-blue-700 transition-colors duration-300 px-3 py-1 rounded"
+              disabled={!isEditMode}
+              className={`bg-blue-600 text-white hover:bg-blue-700 transition-colors duration-300 px-3 py-1 rounded ${
+                !isEditMode ? "opacity-50 cursor-not-allowed" : ""
+              }`}
             >
               Next
             </Button>
           ) : (
             <Button
               onClick={handleSubmit}
-              disabled={isSubmitting}
+              disabled={!isEditMode || isSubmitting}
               className={`bg-green-600 text-white hover:bg-green-700 transition-colors duration-300 px-3 py-1 rounded ${
-                isSubmitting ? "opacity-50 cursor-not-allowed" : ""
+                (!isEditMode || isSubmitting) ? "opacity-50 cursor-not-allowed" : ""
               }`}
             >
               {isSubmitting ? "Submitting..." : "Submit"}
@@ -662,7 +763,7 @@ const MultiStepEditUser: React.FC = () => {
             <div className="bg-white p-3 sm:p-4 rounded-lg w-full max-w-xs sm:max-w-sm shadow-lg">
               <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-2">Confirm Deletion</h2>
               <p className="text-gray-700 mb-3">
-                Are you sure you want to delete user "{initialData.username}"? This action cannot be undone.
+                Are you sure you want to delete user "<strong>{initialData.username}</strong>"? This action cannot be undone.
               </p>
               <div className="flex space-x-2">
                 <Button

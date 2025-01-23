@@ -1,7 +1,10 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+// src/pages/api/users/employee-documents/[username].ts
+
+import type { NextApiRequest, NextApiResponse } from 'next';
+import multer from 'multer';
 import prisma from '@/lib/prisma';
 
-// Enum for Document Categories (matching the prisma model)
+// Enum for Document Categories (matching the Prisma model)
 enum DocumentCategory {
   resume = 'resume',
   education = 'education',
@@ -11,120 +14,260 @@ enum DocumentCategory {
   others = 'others',
 }
 
+// Disable Next.js's default body parser to handle multipart/form-data
 export const config = {
   api: {
-    bodyParser: {
-      sizeLimit: '20mb', // Adjust the size as needed
-    },
+    bodyParser: false,
   },
 };
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { username, documentId } = req.query;
-
-  if (req.method === 'GET') {
-    try {
-      // If documentId is provided, handle file download
-      if (documentId) {
-        const document = await prisma.employeeDocument.findUnique({
-          where: { id: documentId as string },
-          select: {
-            filename: true,
-            fileType: true,
-            data: true,
-          },
-        });
-
-        if (!document) {
-          return res.status(404).json({ error: 'Document not found' });
-        }
-
-        // Set headers for file download
-        res.setHeader('Content-Type', document.fileType || 'application/octet-stream');
-        res.setHeader('Content-Disposition', `attachment; filename="${document.filename}"`);
-
-        // Send the binary data as the response
-        return res.status(200).send(Buffer.from(document.data));
+// Helper function to run middleware
+const runMiddleware = (
+  req: NextApiRequest,
+  res: NextApiResponse,
+  fn: Function
+): Promise<void> => {
+  return new Promise<void>((resolve, reject) => {
+    fn(req, res, (result: any) => {
+      if (result instanceof Error) {
+        return reject(result);
       }
+      return resolve();
+    });
+  });
+};
 
-      // If no documentId, fetch documents for the user
-      const documents = await prisma.employeeDocument.findMany({
-        where: { userUsername: username as string },
+// Configure multer storage (store files in memory for simplicity)
+const storage = multer.memoryStorage();
+
+// Initialize multer with the storage configuration
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new multer.MulterError('LIMIT_UNEXPECTED_FILE', 'Invalid file type'));
+    }
+  },
+}).array('files'); // Expect 'files' field for uploads
+
+// Extend NextApiRequest to include 'files'
+interface NextApiRequestWithFiles extends NextApiRequest {
+  files: Express.Multer.File[];
+}
+
+// Handler Function
+const handler = async (
+  req: NextApiRequestWithFiles,
+  res: NextApiResponse
+) => {
+  const { username } = req.query;
+
+  if (!username || typeof username !== 'string') {
+    return res.status(400).json({ error: 'Invalid or missing username.' });
+  }
+
+  switch (req.method) {
+    case 'GET':
+      return handleGET(req, res, username);
+    case 'POST':
+      return handlePOST(req, res, username);
+    case 'DELETE':
+      return handleDELETE(req, res, username);
+    default:
+      res.setHeader('Allow', ['GET', 'POST', 'DELETE']);
+      return res
+        .status(405)
+        .json({ error: `Method ${req.method} Not Allowed` });
+  }
+};
+
+// GET Handler: Fetch or Download Documents
+const handleGET = async (
+  req: NextApiRequest,
+  res: NextApiResponse,
+  username: string
+) => {
+  const { documentId } = req.query;
+
+  try {
+    if (documentId && typeof documentId === 'string') {
+      const document = await prisma.employeeDocument.findUnique({
+        where: { id: documentId },
         select: {
-          id: true,
           filename: true,
           fileType: true,
-          size: true,
-          dateUploaded: true,
-          category: true,
+          data: true,
         },
       });
 
-      const formattedDocs = documents.map((doc) => ({
-        ...doc,
-        downloadUrl: `/api/users/employee-documents/${username}?documentId=${doc.id}`, // Adjusted URL for downloading
-        dateUploaded: doc.dateUploaded.toISOString().split('T')[0],
-      }));
+      if (!document) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
 
-      // Return the documents as JSON
-      return res.status(200).json(formattedDocs);
-    } catch (error) {
-      console.error('Error fetching documents:', error);
-      res.status(500).json({ error: 'Failed to fetch documents' });
-    }
-  } else if (req.method === 'POST') {
-    try {
-      const files = req.body.files; // Expecting files as part of the request body
-
-      const uploadedDocs = await Promise.all(
-        files.map(async (file: any) => {
-          const category: DocumentCategory = file.category && Object.values(DocumentCategory).includes(file.category)
-            ? file.category
-            : DocumentCategory.others;
-
-          const document = await prisma.employeeDocument.create({
-            data: {
-              filename: file.filename,
-              fileType: file.fileType,
-              size: file.size,
-              data: Buffer.from(file.fileData, 'base64'),
-              category: category,
-              userUsername: username as string,
-            },
-          });
-
-          return {
-            id: document.id,
-            filename: document.filename,
-            fileType: document.fileType,
-            size: document.size,
-            dateUploaded: document.dateUploaded.toISOString(),
-            category: document.category,
-            downloadUrl: `/api/users/employee-documents/${username}?documentId=${document.id}`,
-          };
-        })
+      // Set headers for file download
+      res.setHeader(
+        'Content-Type',
+        document.fileType || 'application/octet-stream'
+      );
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="${document.filename}"`
       );
 
-      res.status(200).json(uploadedDocs);
-    } catch (error) {
-      console.error('Error uploading documents:', error);
-      res.status(500).json({ error: 'Failed to upload documents' });
+      // Send the binary data as the response
+      return res.status(200).send(Buffer.from(document.data));
     }
-  } else if (req.method === 'DELETE') {
-    try {
-      const { documentId } = req.body;
 
-      await prisma.employeeDocument.delete({
-        where: { id: documentId },
-      });
+    // If no documentId, fetch documents for the user
+    const documents = await prisma.employeeDocument.findMany({
+      where: { userUsername: username },
+      select: {
+        id: true,
+        filename: true,
+        fileType: true,
+        size: true,
+        dateUploaded: true,
+        category: true,
+      },
+    });
 
-      res.status(200).json({ message: 'Document deleted successfully.' });
-    } catch (error) {
-      console.error('Error deleting document:', error);
-      res.status(500).json({ error: 'Failed to delete document.' });
-    }
-  } else {
-    res.setHeader('Allow', ['GET', 'POST', 'DELETE']);
-    res.status(405).end(`Method ${req.method} Not Allowed`);
+    const formattedDocs = documents.map((doc) => ({
+      ...doc,
+      downloadUrl: `/api/users/employee-documents/${username}?documentId=${doc.id}`,
+      dateUploaded: doc.dateUploaded.toISOString().split('T')[0],
+    }));
+
+    // Return the documents as JSON
+    return res.status(200).json(formattedDocs);
+  } catch (error: any) {
+    console.error('Error fetching documents:', error);
+    return res.status(500).json({ error: 'Failed to fetch documents' });
   }
-}
+};
+
+// POST Handler: Upload Documents
+const handlePOST = async (
+  req: NextApiRequestWithFiles,
+  res: NextApiResponse,
+  username: string
+) => {
+  // Run multer middleware
+  try {
+    await runMiddleware(req, res, upload);
+  } catch (error: any) {
+    if (error instanceof multer.MulterError) {
+      return res.status(400).json({ error: error.message });
+    }
+    console.error('Multer Error:', error);
+    return res.status(500).json({ error: 'Failed to process files' });
+  }
+
+  const files = req.files;
+
+  // Extract 'category' from the body
+  const category =
+    typeof req.body.category === 'string'
+      ? req.body.category
+      : Array.isArray(req.body.category)
+      ? req.body.category[0]
+      : DocumentCategory.others;
+
+  // Validate category
+  if (!Object.values(DocumentCategory).includes(category as DocumentCategory)) {
+    return res.status(400).json({ error: 'Invalid document category' });
+  }
+
+  if (!files || files.length === 0) {
+    return res.status(400).json({ error: 'No files uploaded' });
+  }
+
+  try {
+    const uploadedDocs = await Promise.all(
+      files.map(async (file) => {
+        // Create document entry in the database
+        const document = await prisma.employeeDocument.create({
+          data: {
+            filename: file.originalname,
+            fileType: file.mimetype,
+            size: file.size,
+            data: file.buffer,
+            category: category as DocumentCategory,
+            userUsername: username,
+          },
+        });
+
+        return {
+          id: document.id,
+          filename: document.filename,
+          fileType: document.fileType,
+          size: document.size,
+          dateUploaded: document.dateUploaded.toISOString(),
+          category: document.category,
+          downloadUrl: `/api/users/employee-documents/${username}?documentId=${document.id}`,
+        };
+      })
+    );
+
+    // Respond with the uploaded documents' details
+    return res.status(200).json(uploadedDocs);
+  } catch (error: any) {
+    console.error('Error uploading documents:', error);
+    return res.status(500).json({
+      error: error.message || 'Failed to upload documents',
+    });
+  }
+};
+
+// DELETE Handler: Delete Document
+const handleDELETE = async (
+  req: NextApiRequest,
+  res: NextApiResponse,
+  username: string
+) => {
+  // Parse JSON body
+  let body: { documentId?: string };
+  try {
+    const buffers: Uint8Array[] = [];
+    for await (const chunk of req) {
+      buffers.push(chunk);
+    }
+    const data = Buffer.concat(buffers).toString();
+    body = JSON.parse(data);
+  } catch (error) {
+    console.error('Error parsing JSON body:', error);
+    return res.status(400).json({ error: 'Invalid JSON body' });
+  }
+
+  const { documentId } = body;
+
+  if (!documentId || typeof documentId !== 'string') {
+    return res.status(400).json({ error: 'Invalid or missing document ID.' });
+  }
+
+  try {
+    // Verify that the document belongs to the user
+    const existingDocument = await prisma.employeeDocument.findUnique({
+      where: { id: documentId },
+      select: { userUsername: true },
+    });
+
+    if (!existingDocument || existingDocument.userUsername !== username) {
+      return res.status(403).json({ error: 'Unauthorized to delete this document.' });
+    }
+
+    await prisma.employeeDocument.delete({
+      where: { id: documentId },
+    });
+
+    return res.status(200).json({ message: 'Document deleted successfully.' });
+  } catch (error: any) {
+    console.error('Error deleting document:', error);
+    return res.status(500).json({ error: 'Failed to delete document.' });
+  }
+};
+
+export default handler;

@@ -1,10 +1,10 @@
-// src/components/EditUserTabs/DocumentsSection.tsx
+// src/components/EditUserTabs/Documents.tsx
 
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Trash2, ArrowUpSquare, ArrowDownSquare, XCircle } from 'lucide-react'; // Updated imports
+import { Trash2, ArrowUpSquare, ArrowDownSquare } from 'lucide-react';
 import { FiUpload } from 'react-icons/fi';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -23,7 +23,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Slot } from '@radix-ui/react-slot'; // Import Slot for asChild
 
 const DocumentCategories = [
   'resume',
@@ -48,20 +47,22 @@ interface Document {
 
 interface DocumentsSectionProps {
   userUsername: string;
+  isEditMode: boolean; // Added property
 }
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
-const DocumentsSection: React.FC<DocumentsSectionProps> = ({ userUsername }) => {
+const DocumentsSection: React.FC<DocumentsSectionProps> = ({ userUsername, isEditMode }) => { // Destructure isEditMode
   const [documents, setDocuments] = useState<{ [category: string]: Document[] }>({});
   const [uploading, setUploading] = useState<boolean>(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<DocumentCategory>('others');
-  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [uploadProgress, setUploadProgress] = useState<number>(0); // Added progress state
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [isModalOpen, setModalOpen] = useState<boolean>(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedDocs, setSelectedDocs] = useState<string[]>([]); // For bulk actions
 
   // Fetch Documents on Component Mount
   useEffect(() => {
@@ -78,9 +79,9 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ userUsername }) => 
         }, {});
 
         setDocuments(groupedDocs);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching documents:', error);
-        toast.error('Failed to fetch documents.');
+        toast.error(`Failed to fetch documents: ${error.message}`);
       }
     };
 
@@ -99,7 +100,7 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ userUsername }) => 
     }
   };
 
-  // Handle File Upload
+  // Handle File Upload with Progress using fetch and Axios (if needed)
   const handleUpload = async () => {
     if (selectedFiles.length === 0) {
       toast.info('Please select files to upload.');
@@ -107,37 +108,64 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ userUsername }) => 
     }
 
     setUploading(true);
-    setUploadProgress(0);
+    setUploadProgress(0); // Reset progress
     try {
       const formData = new FormData();
+      formData.append('category', selectedCategory); // Append category once
       selectedFiles.forEach((file) => {
         formData.append('files', file);
-        formData.append('category', selectedCategory);
       });
 
-      const response = await fetch(`/api/users/employee-documents/${userUsername}`, {
-        method: 'POST',
-        body: formData,
-      });
+      const xhr = new XMLHttpRequest();
 
-      if (!response.ok) throw new Error('Failed to upload documents');
+      xhr.open('POST', `/api/users/employee-documents/${userUsername}`, true);
 
-      const uploadedDocs: Document[] = await response.json();
-      setDocuments((prevDocs) => {
-        const updatedDocs = { ...prevDocs };
-        uploadedDocs.forEach((doc) => {
-          updatedDocs[doc.category] = updatedDocs[doc.category] || [];
-          updatedDocs[doc.category].push(doc);
-        });
-        return updatedDocs;
-      });
+      // Update progress state
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const percentCompleted = Math.round((event.loaded / event.total) * 100);
+          setUploadProgress(percentCompleted);
+        }
+      };
 
-      setSelectedFiles([]);
-      toast.success('Documents uploaded successfully!');
-    } catch (error) {
+      xhr.onload = async () => {
+        if (xhr.status === 200) {
+          const uploadedDocs: Document[] = JSON.parse(xhr.responseText);
+          setDocuments((prevDocs) => {
+            const updatedDocs = { ...prevDocs };
+            uploadedDocs.forEach((doc) => {
+              updatedDocs[doc.category] = updatedDocs[doc.category] || [];
+              updatedDocs[doc.category].push(doc);
+            });
+            return updatedDocs;
+          });
+
+          setSelectedFiles([]);
+          toast.success('Documents uploaded successfully!');
+        } else {
+          let errorMessage = 'Failed to upload documents';
+          try {
+            const errorData = JSON.parse(xhr.responseText);
+            errorMessage = errorData.error || errorMessage;
+          } catch (parseError) {
+            console.error('Error parsing error response:', parseError);
+          }
+          toast.error(`Failed to upload documents: ${errorMessage}`);
+        }
+        setUploading(false);
+        setUploadProgress(0);
+      };
+
+      xhr.onerror = () => {
+        setUploading(false);
+        setUploadProgress(0);
+        toast.error('An error occurred during the upload.');
+      };
+
+      xhr.send(formData);
+    } catch (error: any) {
       console.error('Error uploading documents:', error);
-      toast.error('Failed to upload documents.');
-    } finally {
+      toast.error(`Failed to upload documents: ${error.message}`);
       setUploading(false);
       setUploadProgress(0);
     }
@@ -145,6 +173,7 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ userUsername }) => 
 
   // Handle Document Deletion
   const handleDelete = async (id: string, category: DocumentCategory) => {
+    if (!isEditMode) return; // Prevent deletion if not in edit mode
     if (!window.confirm('Are you sure you want to delete this document?')) return;
 
     try {
@@ -154,7 +183,16 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ userUsername }) => 
         body: JSON.stringify({ documentId: id }),
       });
 
-      if (!response.ok) throw new Error('Failed to delete document');
+      if (!response.ok) {
+        let errorMessage = 'Failed to delete document';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch (parseError) {
+          console.error('Error parsing error response:', parseError);
+        }
+        throw new Error(errorMessage);
+      }
 
       setDocuments((prevDocs) => {
         const updatedDocs = { ...prevDocs };
@@ -164,10 +202,63 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ userUsername }) => 
       });
 
       toast.success('Document deleted successfully!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting document:', error);
-      toast.error('Failed to delete document.');
+      toast.error(`Failed to delete document: ${error.message}`);
     }
+  };
+
+  // Handle Bulk Delete
+  const handleBulkDelete = async () => {
+    if (selectedDocs.length === 0) {
+      toast.info('No documents selected for deletion.');
+      return;
+    }
+
+    if (!window.confirm(`Are you sure you want to delete ${selectedDocs.length} documents?`)) return;
+
+    try {
+      await Promise.all(
+        selectedDocs.map(async (id) => {
+          const response = await fetch(`/api/users/employee-documents/${userUsername}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ documentId: id }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to delete document');
+          }
+
+          // Remove document from state
+          const updatedCategory = Object.keys(documents).find((category) =>
+            documents[category].some((doc) => doc.id === id)
+          );
+          if (updatedCategory) {
+            setDocuments((prevDocs) => {
+              const updatedDocs = { ...prevDocs };
+              updatedDocs[updatedCategory] = updatedDocs[updatedCategory].filter((doc) => doc.id !== id);
+              if (updatedDocs[updatedCategory].length === 0) delete updatedDocs[updatedCategory];
+              return updatedDocs;
+            });
+          }
+        })
+      );
+
+      setSelectedDocs([]);
+      toast.success('Selected documents deleted successfully!');
+    } catch (error: any) {
+      console.error('Error deleting documents:', error);
+      toast.error(`Failed to delete some documents: ${error.message}`);
+    }
+  };
+
+  // Toggle Selection for Bulk Actions
+  const toggleSelectDoc = (id: string) => {
+    setSelectedDocs((prev) =>
+      prev.includes(id) ? prev.filter((docId) => docId !== id) : [...prev, id]
+    );
   };
 
   // Drag and Drop Handlers
@@ -219,13 +310,23 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ userUsername }) => 
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            fileInputRef.current?.click();
+          }
+        }}
+        aria-label="Drag and drop files here or click to upload"
       >
         <h3 className="text-xl font-semibold mb-4">Upload Documents</h3>
         <div className="flex flex-col md:flex-row items-center gap-4">
           {/* File Upload Button */}
           <label
             htmlFor="file-upload"
-            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700 transition"
+            className={`flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700 transition ${
+              !isEditMode ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
             aria-label="Upload Files"
           >
             <FiUpload className="w-5 h-5 mr-2" />
@@ -237,6 +338,7 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ userUsername }) => 
               className="hidden"
               onChange={handleFileChange}
               ref={fileInputRef}
+              disabled={!isEditMode}
             />
           </label>
 
@@ -248,6 +350,7 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ userUsername }) => 
             }
             className="p-2 rounded-lg bg-white text-gray-800 border border-gray-300 focus:ring-blue-500"
             aria-label="Select Document Category"
+            disabled={!isEditMode}
           >
             {DocumentCategories.map((category) => (
               <option key={category} value={category}>
@@ -259,8 +362,10 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ userUsername }) => 
           {/* Upload Button */}
           <Button
             onClick={handleUpload}
-            disabled={uploading || selectedFiles.length === 0}
-            className="flex items-center bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition"
+            disabled={!isEditMode || uploading || selectedFiles.length === 0}
+            className={`flex items-center bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition ${
+              (!isEditMode || uploading || selectedFiles.length === 0) ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
             aria-label="Upload Documents"
           >
             {uploading ? (
@@ -285,7 +390,9 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ userUsername }) => 
                     d="M4 12a8 8 0 018-8v8H4z"
                   ></path>
                 </svg>
-                Uploading...
+                {uploadProgress > 0 && uploadProgress < 100
+                  ? `Uploading... ${uploadProgress}%`
+                  : 'Uploading...'}
               </>
             ) : (
               <>
@@ -307,6 +414,15 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ userUsername }) => 
                 </li>
               ))}
             </ul>
+            {/* Progress Bar */}
+            {uploading && (
+              <div className="mt-2 w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                <div
+                  className="bg-blue-600 h-2.5 rounded-full"
+                  style={{ width: `${uploadProgress}%` }}
+                ></div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -327,15 +443,48 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ userUsername }) => 
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        {isEditMode && (
+                          <TableHead>
+                            <input
+                              type="checkbox"
+                              checked={docs.every((doc) => selectedDocs.includes(doc.id))}
+                              onChange={() => {
+                                if (docs.every((doc) => selectedDocs.includes(doc.id))) {
+                                  setSelectedDocs((prev) =>
+                                    prev.filter((id) => !docs.some((doc) => doc.id === id))
+                                  );
+                                } else {
+                                  setSelectedDocs((prev) => [
+                                    ...prev,
+                                    ...docs
+                                      .filter((doc) => !prev.includes(doc.id))
+                                      .map((doc) => doc.id),
+                                  ]);
+                                }
+                              }}
+                              aria-label={`Select all documents in ${category}`}
+                            />
+                          </TableHead>
+                        )}
                         <TableHead>Filename</TableHead>
                         <TableHead>Date Uploaded</TableHead>
                         <TableHead>Size</TableHead>
-                        <TableHead>Actions</TableHead>
+                        {isEditMode && <TableHead>Actions</TableHead>} {/* Conditionally render Actions */}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {docs.map((doc) => (
                         <TableRow key={doc.id}>
+                          {isEditMode && (
+                            <TableCell>
+                              <input
+                                type="checkbox"
+                                checked={selectedDocs.includes(doc.id)}
+                                onChange={() => toggleSelectDoc(doc.id)}
+                                aria-label={`Select ${doc.filename} for deletion`}
+                              />
+                            </TableCell>
+                          )}
                           <TableCell>
                             <span className="flex items-center">
                               <ArrowDownSquare className="w-5 h-5 mr-2 text-gray-400" />
@@ -348,36 +497,38 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ userUsername }) => 
                           <TableCell>
                             {(doc.size / (1024 * 1024)).toFixed(2)} MB
                           </TableCell>
-                          <TableCell>
-                            <div className="flex items-center space-x-3">
-                              {/* Download Button */}
-                              <Button
-                                asChild // Use asChild to render as <a>
-                                variant="outline"
-                                size="sm"
-                                className="flex items-center text-blue-600 hover:text-blue-500 transition"
-                                aria-label={`Download ${doc.filename}`}
-                              >
-                                <a href={doc.downloadUrl} download>
-                                  <ArrowDownSquare className="w-4 h-4 mr-1" />
-                                  Download
-                                </a>
-                              </Button>
+                          {isEditMode && (
+                            <TableCell>
+                              <div className="flex items-center space-x-3">
+                                {/* Download Button */}
+                                <Button
+                                  asChild // Use asChild to render as <a>
+                                  variant="outline"
+                                  size="sm"
+                                  className="flex items-center text-blue-600 hover:text-blue-500 transition"
+                                  aria-label={`Download ${doc.filename}`}
+                                >
+                                  <a href={doc.downloadUrl} download>
+                                    <ArrowDownSquare className="w-4 h-4 mr-1" />
+                                    Download
+                                  </a>
+                                </Button>
 
-                              {/* Delete Button */}
-                              <Button
-                                type="button"
-                                variant="destructive"
-                                size="sm"
-                                className="flex items-center text-white hover:text-red-500 transition"
-                                onClick={() => handleDelete(doc.id, doc.category)}
-                                aria-label={`Delete ${doc.filename}`}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                                Delete
-                              </Button>
-                            </div>
-                          </TableCell>
+                                {/* Delete Button */}
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="sm"
+                                  className="flex items-center text-white hover:text-red-500 transition"
+                                  onClick={() => handleDelete(doc.id, doc.category)}
+                                  aria-label={`Delete ${doc.filename}`}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                  Delete
+                                </Button>
+                              </div>
+                            </TableCell>
+                          )}
                         </TableRow>
                       ))}
                     </TableBody>
@@ -388,6 +539,17 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ userUsername }) => 
           </Accordion>
         )}
       </div>
+
+      {/* Bulk Delete Button */}
+      {isEditMode && selectedDocs.length > 0 && (
+        <Button
+          onClick={handleBulkDelete}
+          className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg mt-4"
+          aria-label="Delete selected documents"
+        >
+          Delete Selected
+        </Button>
+      )}
 
       {/* Image Preview Modal (Optional) */}
       {selectedImage && (

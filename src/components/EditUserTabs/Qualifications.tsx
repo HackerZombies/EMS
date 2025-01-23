@@ -1,6 +1,8 @@
+// src/components/EditUserTabs/QualificationsForm.tsx
+
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -58,6 +60,7 @@ interface QualificationsFormProps {
   formData: QualificationsData;
   setFormData: React.Dispatch<React.SetStateAction<QualificationsData>>;
   changeHistory: Record<string, ChangeHistoryEntry[]>;
+  isEditMode: boolean; // Received prop from parent
 }
 
 // Helper function to format ISO date to yyyy-MM-dd
@@ -68,25 +71,31 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
   formData,
   setFormData,
   changeHistory,
+  isEditMode, // Destructure isEditMode from props
 }) => {
-  // Whether the form is in edit mode
-  const [isEditMode, setIsEditMode] = useState(false);
-
   // Track which fields are toggled open (for collapsible)
-  const [openFields, setOpenFields] = useState<Record<string, boolean>>({});
+  const [openFields, setOpenFields] = React.useState<Record<string, boolean>>({});
 
-  // Get history for a particular field path (e.g. "qualifications.0.name")
+  // Get history for a particular field path (e.g., "qualifications.0.name")
   const getFieldHistory = (fieldPath: string): ChangeHistoryEntry[] => {
     return changeHistory[fieldPath] || [];
   };
 
   // Toggle collapsible for a specific field
   const toggleField = (fieldPath: string) => {
+    if (!isEditMode) return; // Prevent toggling history when not in edit mode
     setOpenFields((prev) => ({
       ...prev,
       [fieldPath]: !prev[fieldPath],
     }));
   };
+
+  // Reset openFields and pagination when edit mode is disabled
+  useEffect(() => {
+    if (!isEditMode) {
+      setOpenFields({});
+    }
+  }, [isEditMode]);
 
   // --- Qualifications Handlers ---
   const handleQualificationChange = (
@@ -97,9 +106,7 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
     const updated = [...formData.qualifications];
     if (field === "specializations") {
       // Convert comma-separated string to array
-      updated[index][field] = value
-        .split(",")
-        .map((s) => s.trim());
+      updated[index][field] = value.split(",").map((s) => s.trim());
     } else {
       updated[index][field] = value;
     }
@@ -179,33 +186,9 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
     setFormData({ ...formData, certifications: updated });
   };
 
-  // --- Save / Cancel ---
-  const handleSave = () => {
-    // Add any validation or server logic here
-    setIsEditMode(false);
-  };
-
-  const handleCancel = () => {
-    // Possibly revert changes
-    setIsEditMode(false);
-  };
-
   // ------------------ Render ------------------
   return (
     <div className="p-6 bg-white/80 rounded-lg shadow-md space-y-8">
-      {/* Edit / Cancel / Save */}
-      {!isEditMode && (
-        <div className="flex justify-end">
-          <Button
-            type="button"
-            onClick={() => setIsEditMode(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white"
-          >
-            Edit
-          </Button>
-        </div>
-      )}
-
       {/* Main Form Sections */}
       <div className="space-y-8">
         {/* Qualifications */}
@@ -256,7 +239,7 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                       }
                       disabled={!isEditMode}
                       className={`mt-1 bg-white text-gray-900 border border-gray-300 focus:ring-blue-500 ${
-                        !isEditMode && "cursor-not-allowed"
+                        !isEditMode && "cursor-not-allowed opacity-50"
                       } w-full`}
                     />
                     {/* HoverCard + Collapsible if there's history */}
@@ -267,7 +250,7 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                             type="button"
                             className="absolute top-[2.2rem] right-2 text-gray-500 hover:text-gray-700"
                             onClick={() => toggleField(`${basePath}.name`)}
-                            
+                            disabled={!isEditMode}
                           >
                             <ArrowPathIcon className="w-5 h-5" />
                           </button>
@@ -317,7 +300,7 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                     >
                       <SelectTrigger
                         className={`mt-1 bg-white text-gray-900 border border-gray-300 focus:ring-blue-500 ${
-                          !isEditMode && "cursor-not-allowed"
+                          !isEditMode && "cursor-not-allowed opacity-50"
                         } w-full`}
                       >
                         <SelectValue placeholder="Select level" />
@@ -337,7 +320,7 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                             type="button"
                             className="absolute top-[2.2rem] right-2 text-gray-500 hover:text-gray-700"
                             onClick={() => toggleField(`${basePath}.level`)}
-                            
+                            disabled={!isEditMode}
                           >
                             <ArrowPathIcon className="w-5 h-5" />
                           </button>
@@ -389,7 +372,7 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                       placeholder="e.g. Computer Science, Data Analysis"
                       disabled={!isEditMode}
                       className={`mt-1 bg-white text-gray-900 border border-gray-300 focus:ring-blue-500 ${
-                        !isEditMode && "cursor-not-allowed"
+                        !isEditMode && "cursor-not-allowed opacity-50"
                       } w-full`}
                     />
                     {getFieldHistory(`${basePath}.specializations`).length > 0 && (
@@ -399,13 +382,13 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                             type="button"
                             className="absolute top-[2.2rem] right-2 text-gray-500 hover:text-gray-700"
                             onClick={() => toggleField(`${basePath}.specializations`)}
-                            
+                            disabled={!isEditMode}
                           >
                             <ArrowPathIcon className="w-5 h-5" />
                           </button>
                         </HoverCardTrigger>
                         <HoverCardContent>
-                          <p className="text-sm"> Changes History</p>
+                          <p className="text-sm">Changes History</p>
                         </HoverCardContent>
 
                         <Collapsible open={openFields[`${basePath}.specializations`] || false}>
@@ -458,7 +441,7 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                       }
                       disabled={!isEditMode}
                       className={`mt-1 bg-white text-gray-900 border border-gray-300 focus:ring-blue-500 ${
-                        !isEditMode && "cursor-not-allowed"
+                        !isEditMode && "cursor-not-allowed opacity-50"
                       } w-full`}
                     />
                     {getFieldHistory(`${basePath}.institution`).length > 0 && (
@@ -468,7 +451,7 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                             type="button"
                             className="absolute top-[2.2rem] right-2 text-gray-500 hover:text-gray-700"
                             onClick={() => toggleField(`${basePath}.institution`)}
-                            
+                            disabled={!isEditMode}
                           >
                             <ArrowPathIcon className="w-5 h-5" />
                           </button>
@@ -555,7 +538,7 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                       }
                       disabled={!isEditMode}
                       className={`mt-1 bg-white text-gray-900 border border-gray-300 focus:ring-blue-500 ${
-                        !isEditMode && "cursor-not-allowed"
+                        !isEditMode && "cursor-not-allowed opacity-50"
                       } w-full`}
                     />
                     {getFieldHistory(`${basePath}.jobTitle`).length > 0 && (
@@ -565,13 +548,13 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                             type="button"
                             className="absolute top-[2.2rem] right-2 text-gray-500 hover:text-gray-700"
                             onClick={() => toggleField(`${basePath}.jobTitle`)}
-                            
+                            disabled={!isEditMode}
                           >
                             <ArrowPathIcon className="w-5 h-5" />
                           </button>
                         </HoverCardTrigger>
                         <HoverCardContent>
-                          <p className="text-sm">Changes History </p>
+                          <p className="text-sm">Changes History</p>
                         </HoverCardContent>
 
                         <Collapsible open={openFields[`${basePath}.jobTitle`] || false}>
@@ -613,7 +596,7 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                       }
                       disabled={!isEditMode}
                       className={`mt-1 bg-white text-gray-900 border border-gray-300 focus:ring-blue-500 ${
-                        !isEditMode && "cursor-not-allowed"
+                        !isEditMode && "cursor-not-allowed opacity-50"
                       } w-full`}
                     />
                     {getFieldHistory(`${basePath}.company`).length > 0 && (
@@ -623,7 +606,7 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                             type="button"
                             className="absolute top-[2.2rem] right-2 text-gray-500 hover:text-gray-700"
                             onClick={() => toggleField(`${basePath}.company`)}
-                            
+                            disabled={!isEditMode}
                           >
                             <ArrowPathIcon className="w-5 h-5" />
                           </button>
@@ -672,7 +655,7 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                       }
                       disabled={!isEditMode}
                       className={`mt-1 bg-white text-gray-900 border border-gray-300 focus:ring-blue-500 ${
-                        !isEditMode && "cursor-not-allowed"
+                        !isEditMode && "cursor-not-allowed opacity-50"
                       } w-full`}
                     />
                     {getFieldHistory(`${basePath}.startDate`).length > 0 && (
@@ -682,7 +665,7 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                             type="button"
                             className="absolute top-[2.2rem] right-2 text-gray-500 hover:text-gray-700"
                             onClick={() => toggleField(`${basePath}.startDate`)}
-                            
+                            disabled={!isEditMode}
                           >
                             <ArrowPathIcon className="w-5 h-5" />
                           </button>
@@ -737,7 +720,7 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                       }
                       disabled={!isEditMode}
                       className={`mt-1 bg-white text-gray-900 border border-gray-300 focus:ring-blue-500 ${
-                        !isEditMode && "cursor-not-allowed"
+                        !isEditMode && "cursor-not-allowed opacity-50"
                       } w-full`}
                     />
                     {getFieldHistory(`${basePath}.endDate`).length > 0 && (
@@ -747,7 +730,7 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                             type="button"
                             className="absolute top-[2.2rem] right-2 text-gray-500 hover:text-gray-700"
                             onClick={() => toggleField(`${basePath}.endDate`)}
-                            
+                            disabled={!isEditMode}
                           >
                             <ArrowPathIcon className="w-5 h-5" />
                           </button>
@@ -804,7 +787,7 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                       }
                       disabled={!isEditMode}
                       className={`mt-1 bg-white text-gray-900 border border-gray-300 focus:ring-blue-500 ${
-                        !isEditMode && "cursor-not-allowed"
+                        !isEditMode && "cursor-not-allowed opacity-50"
                       } w-full`}
                     />
                     {getFieldHistory(`${basePath}.description`).length > 0 && (
@@ -814,7 +797,7 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                             type="button"
                             className="absolute top-[2.2rem] right-2 text-gray-500 hover:text-gray-700"
                             onClick={() => toggleField(`${basePath}.description`)}
-                            
+                            disabled={!isEditMode}
                           >
                             <ArrowPathIcon className="w-5 h-5" />
                           </button>
@@ -901,7 +884,7 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                       }
                       disabled={!isEditMode}
                       className={`mt-1 bg-white text-gray-900 border border-gray-300 focus:ring-blue-500 ${
-                        !isEditMode && "cursor-not-allowed"
+                        !isEditMode && "cursor-not-allowed opacity-50"
                       } w-full`}
                     />
                     {getFieldHistory(`${basePath}.name`).length > 0 && (
@@ -911,7 +894,7 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                             type="button"
                             className="absolute top-[2.2rem] right-2 text-gray-500 hover:text-gray-700"
                             onClick={() => toggleField(`${basePath}.name`)}
-                            
+                            disabled={!isEditMode}
                           >
                             <ArrowPathIcon className="w-5 h-5" />
                           </button>
@@ -962,7 +945,7 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                       }
                       disabled={!isEditMode}
                       className={`mt-1 bg-white text-gray-900 border border-gray-300 focus:ring-blue-500 ${
-                        !isEditMode && "cursor-not-allowed"
+                        !isEditMode && "cursor-not-allowed opacity-50"
                       } w-full`}
                     />
                     {getFieldHistory(`${basePath}.issuingAuthority`).length > 0 && (
@@ -971,10 +954,8 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                           <button
                             type="button"
                             className="absolute top-[2.2rem] right-2 text-gray-500 hover:text-gray-700"
-                            onClick={() =>
-                              toggleField(`${basePath}.issuingAuthority`)
-                            }
-                            
+                            onClick={() => toggleField(`${basePath}.issuingAuthority`)}
+                            disabled={!isEditMode}
                           >
                             <ArrowPathIcon className="w-5 h-5" />
                           </button>
@@ -987,22 +968,20 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                           <CollapsibleContent>
                             <div className="mt-2 p-4 bg-gray-50 border border-gray-200 rounded-md">
                               <ScrollArea className="h-48 space-y-2 text-sm text-gray-700">
-                                {getFieldHistory(`${basePath}.issuingAuthority`).map(
-                                  (entry, i) => (
-                                    <div key={i} className="border-b pb-2">
-                                      <p>
-                                        <strong>{entry.performedBy}</strong> changed on{" "}
-                                        {new Date(entry.datePerformed).toLocaleString()}
-                                      </p>
-                                      <p>
-                                        <strong>From:</strong> {entry.old}
-                                      </p>
-                                      <p>
-                                        <strong>To:</strong> {entry.new}
-                                      </p>
-                                    </div>
-                                  )
-                                )}
+                                {getFieldHistory(`${basePath}.issuingAuthority`).map((entry, i) => (
+                                  <div key={i} className="border-b pb-2">
+                                    <p>
+                                      <strong>{entry.performedBy}</strong> changed on{" "}
+                                      {new Date(entry.datePerformed).toLocaleString()}
+                                    </p>
+                                    <p>
+                                      <strong>From:</strong> {entry.old}
+                                    </p>
+                                    <p>
+                                      <strong>To:</strong> {entry.new}
+                                    </p>
+                                  </div>
+                                ))}
                               </ScrollArea>
                             </div>
                           </CollapsibleContent>
@@ -1027,7 +1006,7 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                       }
                       disabled={!isEditMode}
                       className={`mt-1 bg-white text-gray-900 border border-gray-300 focus:ring-blue-500 ${
-                        !isEditMode && "cursor-not-allowed"
+                        !isEditMode && "cursor-not-allowed opacity-50"
                       } w-full`}
                     />
                     {getFieldHistory(`${basePath}.licenseNumber`).length > 0 && (
@@ -1037,7 +1016,7 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                             type="button"
                             className="absolute top-[2.2rem] right-2 text-gray-500 hover:text-gray-700"
                             onClick={() => toggleField(`${basePath}.licenseNumber`)}
-                            
+                            disabled={!isEditMode}
                           >
                             <ArrowPathIcon className="w-5 h-5" />
                           </button>
@@ -1086,7 +1065,7 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                       }
                       disabled={!isEditMode}
                       className={`mt-1 bg-white text-gray-900 border border-gray-300 focus:ring-blue-500 ${
-                        !isEditMode && "cursor-not-allowed"
+                        !isEditMode && "cursor-not-allowed opacity-50"
                       } w-full`}
                     />
                     {getFieldHistory(`${basePath}.issueDate`).length > 0 && (
@@ -1096,7 +1075,7 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                             type="button"
                             className="absolute top-[2.2rem] right-2 text-gray-500 hover:text-gray-700"
                             onClick={() => toggleField(`${basePath}.issueDate`)}
-                            
+                            disabled={!isEditMode}
                           >
                             <ArrowPathIcon className="w-5 h-5" />
                           </button>
@@ -1151,7 +1130,7 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                       }
                       disabled={!isEditMode}
                       className={`mt-1 bg-white text-gray-900 border border-gray-300 focus:ring-blue-500 ${
-                        !isEditMode && "cursor-not-allowed"
+                        !isEditMode && "cursor-not-allowed opacity-50"
                       } w-full`}
                     />
                     {getFieldHistory(`${basePath}.expiryDate`).length > 0 && (
@@ -1161,7 +1140,7 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
                             type="button"
                             className="absolute top-[2.2rem] right-2 text-gray-500 hover:text-gray-700"
                             onClick={() => toggleField(`${basePath}.expiryDate`)}
-                            
+                            disabled={!isEditMode}
                           >
                             <ArrowPathIcon className="w-5 h-5" />
                           </button>
@@ -1207,27 +1186,6 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({
           })}
         </section>
       </div>
-
-      {/* Save / Cancel in Edit Mode */}
-      {isEditMode && (
-        <div className="flex justify-end space-x-4 mt-6">
-          <Button
-            type="button"
-            onClick={handleCancel}
-            variant="secondary"
-            className="bg-gray-300 hover:bg-gray-400 text-gray-800"
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            onClick={handleSave}
-            className="bg-blue-600 hover:bg-blue-700 text-white"
-          >
-            Save
-          </Button>
-        </div>
-      )}
     </div>
   );
 };

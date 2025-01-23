@@ -327,31 +327,8 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({
     setEditMode(true);
   };
 
-  // ------------------ Updated handleFinishEditing ------------------
-  // This function now uses session.username instead of formData.username
-  const handleFinishEditing = async () => {
-    if (validate()) {
-      // Ensure the session is loaded and the user is authenticated
-      if (status === "authenticated" && session?.user?.username) {
-        // Removed the API call to prevent messing up the component
-        // Optionally, handle any additional logic here, such as showing a success message
-
-        // Example: Display a success message using console.log
-        console.log("Changes validated successfully. Edit mode will be exited.");
-
-        setEditMode(false);
-      } else if (status === "loading") {
-        // Optionally handle the loading state
-        console.log("Session is still loading...");
-      } else {
-        // Handle the case where the user is not authenticated
-        console.error("User is not authenticated or username is missing.");
-        // Optionally, redirect to the login page or display a message
-        // For example:
-        // router.push("/api/auth/signin");
-      }
-    }
-  };
+  // ------------------ Removed handleFinishEditing ------------------
+  // The handleFinishEditing function and its API call have been removed
 
   // Revert to the original data
   const handleCancel = () => {
@@ -415,28 +392,21 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({
 
   return (
     <div className="p-6 sm:p-8 bg-gradient-to-br from-white to-gray-50 rounded-lg shadow-lg space-y-8">
-      {/* Header & Edit/Finish/Cancel */}
+      {/* Header & Edit/Cancel */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-3 md:space-y-0 md:space-x-4">
         <h1 className="text-xl font-bold text-gray-700">Personal Information</h1>
 
-        {/* Edit / Finish / Cancel buttons */}
+        {/* Edit / Cancel buttons */}
         <div className="flex items-center space-x-2">
           {isEditMode ? (
             <>
-              <Button
-                type="button"
-                onClick={handleFinishEditing}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold flex items-center space-x-2"
-                disabled={loading} // Disable button while loading
-              >
-                {loading ? "Saving..." : "Finish"}
-              </Button>
+              {/* Removed "Finish" button */}
               <Button
                 type="button"
                 onClick={handleCancel}
                 variant="secondary"
                 className="bg-gray-300 hover:bg-gray-400 text-gray-800 flex items-center"
-                disabled={loading} // Disable button while loading
+                disabled={loading} // Disable button while loading (if applicable)
               >
                 <X className="w-4 h-4 mr-1" />
                 Cancel

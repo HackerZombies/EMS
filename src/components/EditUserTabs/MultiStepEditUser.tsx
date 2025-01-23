@@ -118,6 +118,7 @@ const MultiStepEditUser: React.FC = () => {
     firstName: "",
     middleName: "",
     lastName: "",
+    username:"",
     email: "",
     phoneNumber: "",
     dob: "",

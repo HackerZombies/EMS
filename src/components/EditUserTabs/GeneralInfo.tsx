@@ -19,7 +19,7 @@ import { Modal } from "@/components/ui/modal";
 
 export interface PersonalInfoData {
   firstName: string;
-  username: string;
+  username: string; // Consider making this read-only if not editable
   middleName?: string;
   lastName: string;
   email: string;
@@ -67,7 +67,7 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({
   setFormData,
   changeHistory,
 }) => {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession(); // Destructure status for better handling
 
   // ------------------ State ------------------
 
@@ -256,6 +256,7 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({
       setProfilePreview(imageUrl);
     } catch (error) {
       console.error("Error uploading image:", error);
+      // Optionally, you can set an error state here to display to the user
     } finally {
       setLoading(false);
     }
@@ -326,30 +327,51 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({
     setEditMode(true);
   };
 
- // Called when user clicks "Finish"
-const handleFinishEditing = async () => {
-  if (validate()) {
-    // Optionally, save to server here:
-    try {
-      const response = await fetch(`/api/users/user/${formData.username}`, { // Changed from email to username
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(formData),
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to save changes.");
+  // ------------------ Updated handleFinishEditing ------------------
+  // This function now uses session.username instead of formData.username
+  const handleFinishEditing = async () => {
+    if (validate()) {
+      // Ensure the session is loaded and the user is authenticated
+      if (status === "authenticated" && session?.user?.username) {
+        setLoading(true); // Optionally, set loading state during the API call
+        try {
+          const response = await fetch(`/api/users/user/${session.user.username}`, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(formData),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || "Failed to save changes.");
+          }
+
+          // Optionally handle successful update, e.g., show a success message
+          console.log("User details updated successfully.");
+          // You might want to use a toast notification or update local state
+        } catch (error: any) {
+          console.error("Error saving changes:", error);
+          // Optionally, display an error message to the user
+          // For example, using react-toastify:
+          // toast.error(error.message);
+        } finally {
+          setLoading(false); // Reset loading state
+        }
+        setEditMode(false);
+      } else if (status === "loading") {
+        // Optionally handle the loading state
+        console.log("Session is still loading...");
+      } else {
+        // Handle the case where the user is not authenticated
+        console.error("User is not authenticated or username is missing.");
+        // Optionally, redirect to the login page or display a message
+        // For example:
+        // router.push("/api/auth/signin");
       }
-      // Optionally handle successful update, e.g., show a success message
-    } catch (error) {
-      console.error("Error saving changes:", error);
-      // Optionally, display error message to the user
     }
-    setEditMode(false);
-  }
-};
+  };
 
   // Revert to the original data
   const handleCancel = () => {
@@ -425,14 +447,16 @@ const handleFinishEditing = async () => {
                 type="button"
                 onClick={handleFinishEditing}
                 className="bg-blue-600 hover:bg-blue-700 text-white font-semibold flex items-center space-x-2"
+                disabled={loading} // Disable button while loading
               >
-                Finish
+                {loading ? "Saving..." : "Finish"}
               </Button>
               <Button
                 type="button"
                 onClick={handleCancel}
                 variant="secondary"
                 className="bg-gray-300 hover:bg-gray-400 text-gray-800 flex items-center"
+                disabled={loading} // Disable button while loading
               >
                 <X className="w-4 h-4 mr-1" />
                 Cancel
@@ -755,7 +779,7 @@ const handleFinishEditing = async () => {
                 </SelectContent>
               </Select>
             </div>
-            {/* History Icon next to label (or next to the select)? We'll place it near the label. */}
+            {/* History Icon next to label */}
             {getFieldHistory("gender").length > 0 && (
               <button
                 type="button"

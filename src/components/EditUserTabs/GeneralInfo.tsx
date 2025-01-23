@@ -333,32 +333,12 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({
     if (validate()) {
       // Ensure the session is loaded and the user is authenticated
       if (status === "authenticated" && session?.user?.username) {
-        setLoading(true); // Optionally, set loading state during the API call
-        try {
-          const response = await fetch(`/api/users/user/${session.user.username}`, {
-            method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(formData),
-          });
+        // Removed the API call to prevent messing up the component
+        // Optionally, handle any additional logic here, such as showing a success message
 
-          if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.message || "Failed to save changes.");
-          }
+        // Example: Display a success message using console.log
+        console.log("Changes validated successfully. Edit mode will be exited.");
 
-          // Optionally handle successful update, e.g., show a success message
-          console.log("User details updated successfully.");
-          // You might want to use a toast notification or update local state
-        } catch (error: any) {
-          console.error("Error saving changes:", error);
-          // Optionally, display an error message to the user
-          // For example, using react-toastify:
-          // toast.error(error.message);
-        } finally {
-          setLoading(false); // Reset loading state
-        }
         setEditMode(false);
       } else if (status === "loading") {
         // Optionally handle the loading state

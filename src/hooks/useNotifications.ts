@@ -1,101 +1,75 @@
-import { useEffect, useRef, useState } from "react";
-import { toast } from "react-toastify";
-import { useRouter } from "next/router";
+// src/hooks/useNotifications.ts
+import { useState, useEffect } from "react";
+// Example: using axios for fetching. Replace with your own fetching logic.
+import axios from "axios";
 
 interface Notification {
-  id: string;
+  id: string; // or number, depending on your DB
   message: string;
-  createdAt: string;
+  createdAt: string; // ISO string
   isRead: boolean;
   recipientUsername: string;
 }
 
-/**
- * Polls unread notifications for an admin user every 10s and shows them as toast messages.
- * 
- * @param isAdmin boolean indicating if the current user is an admin (or HR).
- */
-export default function useNotifications(isAdmin: boolean) {
-  const router = useRouter();
-  const pollInterval = useRef<NodeJS.Timeout | null>(null);
+// Return type: customize as needed
+interface UseNotificationsReturn {
+  notifications: Notification[];
+  total: number;
+  isLoading: boolean;
+  isError: boolean;
+  markAsRead: (notificationIds: string[]) => Promise<void>;
+}
 
-  // Keep track of notification IDs that have already been shown
-  const [displayedNotifications, setDisplayedNotifications] = useState<Set<string>>(new Set());
+export default function useNotifications(): UseNotificationsReturn {
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isError, setIsError] = useState<boolean>(false);
 
-  useEffect(() => {
-    // Only run the polling if isAdmin is true
-    if (!isAdmin) return;
-
-    // Start polling
-    pollInterval.current = setInterval(() => {
-      fetchNotifications();
-    }, 10_000);
-
-    // Fetch immediately on mount too
-    fetchNotifications();
-
-    // Cleanup
-    return () => {
-      if (pollInterval.current) clearInterval(pollInterval.current);
-    };
-  }, [isAdmin]);
-
+  // Example function to fetch notifications from an API endpoint
   async function fetchNotifications() {
     try {
-      const res = await fetch("/api/notifications/unread");
-      const data = await res.json();
-
-      if (res.ok && Array.isArray(data.notifications)) {
-        const notifications: Notification[] = data.notifications;
-        
-        // Filter out notifications we've already displayed in this session
-        const newNotifications = notifications.filter(
-          (notif) => !displayedNotifications.has(notif.id)
-        );
-
-        // For each new notification, show a toast
-        newNotifications.forEach((notif) => {
-          // Add to displayedNotifications so we don't show it again
-          setDisplayedNotifications((prev) => new Set(prev).add(notif.id));
-
-          toast.info(notif.message, {
-            autoClose: 5000,
-            onClick: async () => {
-              // Mark single notification as read
-              await markAsRead([notif.id]);
-              // Remove from displayedNotifications set so if it reappears server-side, we could show it or ignore it
-              // but since we mark it as read, it won't reappear in /unread anyway
-              setDisplayedNotifications((prev) => {
-                const next = new Set(prev);
-                next.delete(notif.id);
-                return next;
-              });
-
-              // Optionally navigate the user
-              router.push("/activity");
-              toast.dismiss(); // close all toasts
-            },
-          });
-        });
-      } else {
-        console.error("Error fetching notifications:", data);
-      }
+      setIsLoading(true);
+      setIsError(false);
+      const response = await axios.get("/api/notifications"); // Adjust URL as needed
+      setNotifications(response.data); // Assume response.data is an array of Notification
     } catch (error) {
-      console.error("Error fetching notifications:", error);
+      console.error("Failed to fetch notifications:", error);
+      setIsError(true);
+    } finally {
+      setIsLoading(false);
     }
   }
 
-  // You can also provide a function for reading multiple at once if needed
+  // Example function to mark notifications as read
   async function markAsRead(notificationIds: string[]) {
-    if (notificationIds.length === 0) return;
     try {
-      await fetch("/api/notifications/markAsRead", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notificationIds }),
+      // Example PATCH/POST request to your server
+      await axios.patch("/api/notifications/mark-as-read", {
+        notificationIds,
       });
-    } catch (err) {
-      console.error("Failed to mark notifications as read", err);
+      // Optimistically update local state
+      setNotifications((prev) =>
+        prev.map((notif) =>
+          notificationIds.includes(notif.id) ? { ...notif, isRead: true } : notif
+        )
+      );
+    } catch (error) {
+      console.error("Failed to mark notifications as read:", error);
     }
   }
+
+  useEffect(() => {
+    // Fetch on mount
+    fetchNotifications();
+  }, []);
+
+  const total = notifications.length; // If you need the total count
+
+  return {
+    notifications,
+    total,
+    isLoading,
+    isError,
+    markAsRead,
+  };
 }

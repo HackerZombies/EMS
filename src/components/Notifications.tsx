@@ -4,16 +4,10 @@ import useNotifications from "@/hooks/useNotifications";
 import { FaBell } from "react-icons/fa";
 import { Transition } from "@headlessui/react";
 
-interface Notification {
-  id: string; // Serialized ObjectId as string
-  message: string;
-  createdAt: string; // ISO string
-  isRead: boolean;
-  recipientUsername: string;
-}
-
 export default function Notifications() {
+  // Destructure values from the hook:
   const { notifications, total, isLoading, isError, markAsRead } = useNotifications();
+
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -25,24 +19,32 @@ export default function Notifications() {
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
   }, []);
 
+  // Count of unread notifications
   const unreadCount = notifications.filter((notif) => !notif.isRead).length;
 
+  // Mark all unread notifications as read
   const handleMarkAllAsRead = () => {
-    const unreadIds = notifications.filter((n) => !n.isRead).map((n) => n.id);
+    const unreadIds = notifications
+      .filter((n) => !n.isRead)
+      .map((n) => n.id);
     if (unreadIds.length > 0) {
       markAsRead(unreadIds);
     }
   };
 
+  // Mark a single notification as read
   const handleMarkAsRead = (id: string) => {
     markAsRead([id]);
   };
 
   return (
     <div className="relative" ref={dropdownRef}>
+      {/* Bell button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="relative text-gray-600 hover:text-gray-800 focus:outline-none"
@@ -56,6 +58,7 @@ export default function Notifications() {
         )}
       </button>
 
+      {/* Dropdown */}
       <Transition
         show={isOpen}
         enter="transition ease-out duration-200"
@@ -66,6 +69,7 @@ export default function Notifications() {
         leaveTo="transform opacity-0 scale-95"
       >
         <div className="absolute right-0 z-50 w-80 mt-2 bg-white border border-gray-200 rounded-md shadow-lg">
+          {/* Header */}
           <div className="flex items-center justify-between px-4 py-2 border-b">
             <h3 className="text-lg font-semibold text-gray-800">Notifications</h3>
             {unreadCount > 0 && (
@@ -77,15 +81,22 @@ export default function Notifications() {
               </button>
             )}
           </div>
+
+          {/* Content */}
           <div className="max-h-80 overflow-y-auto">
+            {/* Loading, Error, or Notification List */}
             {isLoading && (
               <div className="p-4 text-center text-gray-500">Loading...</div>
             )}
             {isError && (
-              <div className="p-4 text-center text-red-500">Failed to load notifications.</div>
+              <div className="p-4 text-center text-red-500">
+                Failed to load notifications.
+              </div>
             )}
             {!isLoading && notifications.length === 0 && (
-              <div className="p-4 text-center text-gray-500">No notifications.</div>
+              <div className="p-4 text-center text-gray-500">
+                No notifications.
+              </div>
             )}
             {!isLoading && notifications.length > 0 && (
               <ul>
@@ -115,6 +126,11 @@ export default function Notifications() {
               </ul>
             )}
           </div>
+
+          {/* If you want to show total or something else, you can use `total` here */}
+          {/* <div className="px-4 py-2 text-sm text-gray-500">
+              Total notifications: {total}
+          </div> */}
         </div>
       </Transition>
     </div>

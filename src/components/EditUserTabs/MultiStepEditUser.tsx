@@ -2,21 +2,31 @@
 
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  useCallback,
+} from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import isEqual from "lodash.isequal";
-import cloneDeep from "lodash.clonedeep"; // Import cloneDeep for deep cloning
-import PersonalInfoForm, { PersonalInfoData } from "./GeneralInfo"; // Adjusted import
-import JobDetailsForm, { JobDetailsData } from "./JobDetails"; // Adjusted import
-import QualificationsForm, { QualificationsData } from "./Qualifications"; // Adjusted import
-import DocumentsSection from "./Documents"; // Adjusted import
-import { TrashIcon, ExclamationTriangleIcon, ArrowPathIcon } from "@heroicons/react/24/outline";
+import cloneDeep from "lodash.clonedeep";
+import PersonalInfoForm, { PersonalInfoData } from "./GeneralInfo";
+import JobDetailsForm, { JobDetailsData } from "./JobDetails";
+import QualificationsForm, { QualificationsData } from "./Qualifications";
+import DocumentsSection from "./Documents";
+import {
+  TrashIcon,
+  ExclamationTriangleIcon,
+  ArrowPathIcon,
+} from "@heroicons/react/24/outline";
 
-import { processAuditLogs } from "@/lib/processAuditLogs"; // Import the utility
+import { processAuditLogs } from "@/lib/processAuditLogs";
 
 // Steps used for your stepper
 const steps = [
@@ -105,15 +115,12 @@ interface ChangeHistoryEntry {
 }
 
 const MultiStepEditUser: React.FC = () => {
-  // Next.js / NextAuth
   const router = useRouter();
   const { username } = router.query;
   const { data: session, status } = useSession();
 
-  // Steps
   const [activeStep, setActiveStep] = useState<number>(0);
 
-  // Child state slices
   const [personalInfo, setPersonalInfo] = useState<PersonalInfoData>({
     firstName: "",
     middleName: "",
@@ -153,29 +160,22 @@ const MultiStepEditUser: React.FC = () => {
     certifications: [],
   });
 
-  // Data from API
   const [initialData, setInitialData] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
-  // Error Handling States
   const [error, setError] = useState<string | null>(null);
   const [retryFetch, setRetryFetch] = useState<boolean>(false);
 
-  // Success Message State
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Reference to the container to manage scroll
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // State for Edit Mode
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
 
-  // State for Delete Confirmation Modal
   const [deleteConfirm, setDeleteConfirm] = useState<boolean>(false);
 
-  // 1) Derive the current user role from the session
   const userRole = session?.user?.role ?? "";
 
   // Fetch user data on mount (or when username changes)
@@ -215,7 +215,6 @@ const MultiStepEditUser: React.FC = () => {
             workLocation: data.workLocation || "",
           };
 
-          // Fill local states with deep clones to prevent mutations
           setPersonalInfo({
             firstName: userData.firstName,
             middleName: userData.middleName || "",
@@ -251,7 +250,9 @@ const MultiStepEditUser: React.FC = () => {
           setInitialData(userData);
         } catch (error: any) {
           console.error("Error fetching user data:", error);
-          setError(error.message || "An error occurred while fetching user data.");
+          setError(
+            error.message || "An error occurred while fetching user data."
+          );
         } finally {
           setIsLoading(false);
         }
@@ -273,7 +274,7 @@ const MultiStepEditUser: React.FC = () => {
         try {
           const response = await fetch(
             `/api/users/user/${username}/auditLogs?page=1&limit=100`
-          ); // Adjust pagination as needed
+          );
           if (!response.ok) {
             throw new Error("Failed to fetch audit logs");
           }
@@ -327,66 +328,13 @@ const MultiStepEditUser: React.FC = () => {
     return !isEqual(initialData, currentUser);
   }, [initialData, personalInfo, jobDetails, qualifications]);
 
-  // Early returns (loading, unauthorized, not found, audit loading/error)
-  if (status === "loading" || isLoading || auditLoading) {
-    return (
-      <div className="flex justify-center items-center h-screen bg-gradient-to-r from-purple-500 to-indigo-600">
-        <span className="text-lg sm:text-xl text-white flex items-center">
-          <ArrowPathIcon className="w-5 h-5 animate-spin mr-2" />
-          Loading...
-        </span>
-      </div>
-    );
-  }
-
-  const allowedRoles = ["HR", "ADMIN"];
-  if (!session || !session.user || !allowedRoles.includes(session.user.role)) {
-    return (
-      <div className="flex justify-center items-center h-screen bg-gradient-to-r from-red-500 to-yellow-500 px-4">
-        <div className="flex flex-col items-center">
-          <ExclamationTriangleIcon className="w-10 h-10 text-white mb-2" />
-          <span className="text-lg sm:text-xl text-white text-center">Unauthorized</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (!initialData) {
-    return (
-      <div className="flex justify-center items-center h-screen bg-gradient-to-r from-red-400 to-pink-500 px-4">
-        <div className="flex flex-col items-center">
-          <ExclamationTriangleIcon className="w-10 h-10 text-white mb-2" />
-          <span className="text-lg sm:text-xl text-white text-center">User not found</span>
-          <Button
-            onClick={() => setRetryFetch((prev) => !prev)}
-            className="mt-2 bg-white text-red-600 hover:bg-gray-100 px-3 py-1 rounded"
-          >
-            Retry
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  if (auditError) {
-    return (
-      <div className="flex justify-center items-center h-screen bg-gradient-to-r from-yellow-400 to-orange-500 px-4">
-        <div className="flex flex-col items-center">
-          <ExclamationTriangleIcon className="w-10 h-10 text-white mb-2" />
-          <span className="text-lg sm:text-xl text-white text-center">{auditError}</span>
-          <Button
-            onClick={() => router.reload()}
-            className="mt-2 bg-white text-yellow-600 hover:bg-gray-100 px-3 py-1 rounded"
-          >
-            Retry
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
   // Handle form submission
-  const handleSubmit = async () => {
+  const handleSubmit = useCallback(async () => {
+    if (!initialData) {
+      setError("User data is not loaded.");
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
     setSuccessMessage(null);
@@ -431,46 +379,78 @@ const MultiStepEditUser: React.FC = () => {
         throw new Error(errorData.message || "Failed to update user.");
       }
 
-      await response.json(); // or destructure if needed
+      await response.json();
 
       setSuccessMessage("User updated successfully!");
       setActiveStep(0); // Reset to first step if desired
-      setInitialData(cloneDeep({
-        username: initialData.username,
-        firstName: personalInfo.firstName,
-        middleName: personalInfo.middleName,
-        lastName: personalInfo.lastName,
-        email: personalInfo.email,
-        phoneNumber: personalInfo.phoneNumber,
-        dob: personalInfo.dob,
-        residentialAddress: personalInfo.residentialAddress,
-        permanentAddress: personalInfo.permanentAddress,
-        gender: personalInfo.gender,
-        bloodGroup: personalInfo.bloodGroup,
-        nationality: personalInfo.nationality,
-        emergencyContacts: cloneDeep(personalInfo.emergencyContacts),
-        department: jobDetails.department,
-        position: jobDetails.position,
-        role: jobDetails.role,
-        employmentType: jobDetails.employmentType,
-        joiningDate: jobDetails.joiningDate,
-        workLocation: jobDetails.workLocation,
-        qualifications: cloneDeep(qualifications.qualifications),
-        experiences: cloneDeep(qualifications.experiences),
-        certifications: cloneDeep(qualifications.certifications),
-        profileImageUrl: personalInfo.profileImageUrl,
-      }));
-      setIsEditMode(false); // Exit edit mode after saving
+      setInitialData(
+        cloneDeep({
+          username: initialData.username,
+          firstName: personalInfo.firstName,
+          middleName: personalInfo.middleName,
+          lastName: personalInfo.lastName,
+          email: personalInfo.email,
+          phoneNumber: personalInfo.phoneNumber,
+          dob: personalInfo.dob,
+          residentialAddress: personalInfo.residentialAddress,
+          permanentAddress: personalInfo.permanentAddress,
+          gender: personalInfo.gender,
+          bloodGroup: personalInfo.bloodGroup,
+          nationality: personalInfo.nationality,
+          emergencyContacts: cloneDeep(personalInfo.emergencyContacts),
+          department: jobDetails.department,
+          position: jobDetails.position,
+          role: jobDetails.role,
+          employmentType: jobDetails.employmentType,
+          joiningDate: jobDetails.joiningDate,
+          workLocation: jobDetails.workLocation,
+          qualifications: cloneDeep(qualifications.qualifications),
+          experiences: cloneDeep(qualifications.experiences),
+          certifications: cloneDeep(qualifications.certifications),
+          profileImageUrl: personalInfo.profileImageUrl,
+        })
+      );
+      setIsEditMode(false);
     } catch (error: any) {
       console.error("Error updating user:", error);
       setError(error.message || "An error occurred while updating the user.");
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [
+    initialData,
+    personalInfo.firstName,
+    personalInfo.middleName,
+    personalInfo.lastName,
+    personalInfo.email,
+    personalInfo.phoneNumber,
+    personalInfo.dob,
+    personalInfo.residentialAddress,
+    personalInfo.permanentAddress,
+    personalInfo.gender,
+    personalInfo.bloodGroup,
+    personalInfo.nationality,
+    personalInfo.emergencyContacts,
+    personalInfo.resetPassword,
+    personalInfo.profileImageUrl,
+    jobDetails.department,
+    jobDetails.position,
+    jobDetails.role,
+    jobDetails.employmentType,
+    jobDetails.joiningDate,
+    jobDetails.workLocation,
+    qualifications.qualifications,
+    qualifications.experiences,
+    qualifications.certifications,
+  ]);
 
   // Handle user deletion
-  const handleDeleteUser = async () => {
+  const handleDeleteUser = useCallback(async () => {
+    if (!initialData) {
+      setError("User data is not loaded.");
+      return;
+    }
+
     setIsDeleting(true);
     setError(null);
     setSuccessMessage(null);
@@ -495,89 +475,85 @@ const MultiStepEditUser: React.FC = () => {
     } finally {
       setIsDeleting(false);
     }
-  };
+  }, [initialData, router]);
 
   // Handle toggling edit mode
-  const toggleEditMode = () => {
-    if (isEditMode) {
+  const toggleEditMode = useCallback(() => {
+    if (isEditMode && initialData) {
       // If exiting edit mode, revert changes by deeply cloning initialData
-      if (initialData) {
-        setPersonalInfo({
-          firstName: initialData.firstName,
-          middleName: initialData.middleName || "",
-          lastName: initialData.lastName,
-          email: initialData.email,
-          phoneNumber: initialData.phoneNumber || "",
-          dob: initialData.dob || "",
-          residentialAddress: initialData.residentialAddress || "",
-          permanentAddress: initialData.permanentAddress || "",
-          gender: initialData.gender || "",
-          bloodGroup: initialData.bloodGroup || "",
-          emergencyContacts: cloneDeep(initialData.emergencyContacts),
-          profileImageUrl: initialData.profileImageUrl || "",
-          nationality: initialData.nationality || "",
-          resetPassword: false,
-        });
+      setPersonalInfo({
+        firstName: initialData.firstName,
+        middleName: initialData.middleName || "",
+        lastName: initialData.lastName,
+        email: initialData.email,
+        phoneNumber: initialData.phoneNumber || "",
+        dob: initialData.dob || "",
+        residentialAddress: initialData.residentialAddress || "",
+        permanentAddress: initialData.permanentAddress || "",
+        gender: initialData.gender || "",
+        bloodGroup: initialData.bloodGroup || "",
+        emergencyContacts: cloneDeep(initialData.emergencyContacts),
+        profileImageUrl: initialData.profileImageUrl || "",
+        nationality: initialData.nationality || "",
+        resetPassword: false,
+      });
 
-        setJobDetails({
-          department: initialData.department || "",
-          position: initialData.position || "",
-          role: initialData.role || "",
-          employmentType: initialData.employmentType || "",
-          joiningDate: initialData.joiningDate || "",
-          workLocation: initialData.workLocation || "",
-        });
+      setJobDetails({
+        department: initialData.department || "",
+        position: initialData.position || "",
+        role: initialData.role || "",
+        employmentType: initialData.employmentType || "",
+        joiningDate: initialData.joiningDate || "",
+        workLocation: initialData.workLocation || "",
+      });
 
-        setQualifications({
-          qualifications: cloneDeep(initialData.qualifications),
-          experiences: cloneDeep(initialData.experiences),
-          certifications: cloneDeep(initialData.certifications),
-        });
-      }
+      setQualifications({
+        qualifications: cloneDeep(initialData.qualifications),
+        experiences: cloneDeep(initialData.experiences),
+        certifications: cloneDeep(initialData.certifications),
+      });
     }
     setIsEditMode(!isEditMode);
-  };
+  }, [isEditMode, initialData]);
 
   // Render the current step's form
   const renderStep = () => {
+    if (!initialData) return null; // Safety check
+
     switch (activeStep) {
       case 0:
         return (
           <PersonalInfoForm
-            // Removed key prop
             formData={personalInfo}
             setFormData={setPersonalInfo}
             changeHistory={changeHistory}
-            isEditMode={isEditMode} // Passed prop
+            isEditMode={isEditMode}
           />
         );
       case 1:
         return (
           <JobDetailsForm
-            // Removed key prop
             formData={jobDetails}
             setFormData={setJobDetails}
             currentUserRole={userRole}
             changeHistory={changeHistory}
-            isEditMode={isEditMode} // Passed prop
+            isEditMode={isEditMode}
           />
         );
       case 2:
         return (
           <QualificationsForm
-            // Removed key prop
             formData={qualifications}
             setFormData={setQualifications}
             changeHistory={changeHistory}
-            isEditMode={isEditMode} // Passed prop
+            isEditMode={isEditMode}
           />
         );
       case 3:
         return (
           <DocumentsSection
-            // Removed key prop
             userUsername={initialData.username}
-            isEditMode={isEditMode} // Passed prop
+            isEditMode={isEditMode}
           />
         );
       default:
@@ -594,16 +570,29 @@ const MultiStepEditUser: React.FC = () => {
     containerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  // Determine if loading states are active
+  const isAnyLoading = status === "loading" || isLoading || auditLoading;
+
   return (
     <>
       <Head>
-        <title>Edit User - {initialData.username}</title>
+        <title>Edit User - {initialData?.username || "Loading..."}</title>
       </Head>
 
       <div
         ref={containerRef}
-        className="container mx-auto p-2 sm:p-4 bg-gradient-to-r from-blue-50 to-purple-100 min-h-screen flex flex-col"
+        className="container mx-auto p-2 sm:p-4 bg-gradient-to-r from-blue-50 to-purple-100 min-h-screen flex flex-col relative"
       >
+        {/* Overlay Spinner */}
+        {isAnyLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-transparent pointer-events-none">
+            <ArrowPathIcon
+              className="w-8 h-8 text-blue-600 animate-spin"
+              aria-label="Loading"
+            />
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex justify-between items-center mb-2 sm:mb-4">
           {/* Edit, Save, and Cancel Buttons */}
@@ -613,6 +602,7 @@ const MultiStepEditUser: React.FC = () => {
                 type="button"
                 onClick={toggleEditMode}
                 className="bg-blue-600 hover:bg-blue-700 text-white"
+                disabled={isAnyLoading}
               >
                 Edit
               </Button>
@@ -621,9 +611,11 @@ const MultiStepEditUser: React.FC = () => {
                 <Button
                   type="button"
                   onClick={handleSubmit}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isAnyLoading}
                   className={`bg-green-600 hover:bg-green-700 text-white ${
-                    isSubmitting ? "opacity-50 cursor-not-allowed" : ""
+                    isSubmitting || isAnyLoading
+                      ? "opacity-50 cursor-not-allowed"
+                      : ""
                   }`}
                 >
                   {isSubmitting ? "Saving..." : "Save"}
@@ -632,6 +624,7 @@ const MultiStepEditUser: React.FC = () => {
                   type="button"
                   onClick={toggleEditMode}
                   className="bg-red-600 hover:bg-red-700 text-white"
+                  disabled={isAnyLoading}
                 >
                   Cancel
                 </Button>
@@ -644,6 +637,7 @@ const MultiStepEditUser: React.FC = () => {
             type="button"
             onClick={() => setDeleteConfirm(true)}
             className="bg-red-600 hover:bg-red-700 text-white flex items-center px-2 py-1 rounded"
+            disabled={isAnyLoading}
           >
             <TrashIcon className="w-4 h-4 mr-1" />
             Delete
@@ -715,6 +709,7 @@ const MultiStepEditUser: React.FC = () => {
                     ? "text-blue-600"
                     : "text-gray-500 hover:text-blue-500"
                 } focus:outline-none`}
+                disabled={isAnyLoading}
               >
                 <span>{step.name}</span>
               </button>
@@ -737,9 +732,11 @@ const MultiStepEditUser: React.FC = () => {
                 setActiveStep((prev) => prev + 1);
                 scrollToTop();
               }}
-              disabled={!isEditMode}
+              disabled={!isEditMode || isAnyLoading}
               className={`bg-blue-600 text-white hover:bg-blue-700 transition-colors duration-300 px-3 py-1 rounded ${
-                !isEditMode ? "opacity-50 cursor-not-allowed" : ""
+                !isEditMode || isAnyLoading
+                  ? "opacity-50 cursor-not-allowed"
+                  : ""
               }`}
             >
               Next
@@ -747,9 +744,11 @@ const MultiStepEditUser: React.FC = () => {
           ) : (
             <Button
               onClick={handleSubmit}
-              disabled={!isEditMode || isSubmitting}
+              disabled={!isEditMode || isSubmitting || isAnyLoading}
               className={`bg-green-600 text-white hover:bg-green-700 transition-colors duration-300 px-3 py-1 rounded ${
-                (!isEditMode || isSubmitting) ? "opacity-50 cursor-not-allowed" : ""
+                !isEditMode || isSubmitting || isAnyLoading
+                  ? "opacity-50 cursor-not-allowed"
+                  : ""
               }`}
             >
               {isSubmitting ? "Submitting..." : "Submit"}
@@ -758,27 +757,34 @@ const MultiStepEditUser: React.FC = () => {
         </div>
 
         {/* Delete Confirmation Modal */}
-        {deleteConfirm && (
+        {deleteConfirm && initialData && (
           <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 px-2">
             <div className="bg-white p-3 sm:p-4 rounded-lg w-full max-w-xs sm:max-w-sm shadow-lg">
-              <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-2">Confirm Deletion</h2>
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-2">
+                Confirm Deletion
+              </h2>
               <p className="text-gray-700 mb-3">
-                Are you sure you want to delete user "<strong>{initialData.username}</strong>"? This action cannot be undone.
+                Are you sure you want to delete user "
+                <strong>{initialData.username}</strong>"? This action cannot be
+                undone.
               </p>
               <div className="flex space-x-2">
                 <Button
                   type="button"
                   onClick={() => setDeleteConfirm(false)}
                   className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded"
+                  disabled={isAnyLoading}
                 >
                   Cancel
                 </Button>
                 <Button
                   type="button"
                   onClick={handleDeleteUser}
-                  disabled={isDeleting}
+                  disabled={isDeleting || isAnyLoading}
                   className={`bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded ${
-                    isDeleting ? "opacity-50 cursor-not-allowed" : ""
+                    isDeleting || isAnyLoading
+                      ? "opacity-50 cursor-not-allowed"
+                      : ""
                   }`}
                 >
                   {isDeleting ? "Deleting..." : "Delete"}

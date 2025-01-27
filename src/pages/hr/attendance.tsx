@@ -13,8 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { AlertCircle, Clock, Download, Users } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
-import DatePicker from 'react-datepicker'
-import 'react-datepicker/dist/react-datepicker.css'
+import { DayPicker } from 'react-day-picker'
 import { saveAs } from 'file-saver'
 import * as XLSX from 'xlsx'
 
@@ -52,10 +51,13 @@ export default function AllAttendancePage({ initialAttendance, users }: AllAtten
   const [isServerReady, setIsServerReady] = useState(false)
 
   // For filtering by date range
-  const [startDate, setStartDate] = useState<Date | null>(null)
-  const [endDate, setEndDate] = useState<Date | null>(null)
+  const [startDate, setStartDate] = useState<Date | undefined>(undefined)
+  const [endDate, setEndDate] = useState<Date | undefined>(undefined)
   const [selectedUser, setSelectedUser] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
+
+  // New state for validation errors
+  const [dateError, setDateError] = useState<string | null>(null)
 
   // 1) Connect to WebSocket to receive real-time attendance updates
   useEffect(() => {
@@ -134,14 +136,26 @@ export default function AllAttendancePage({ initialAttendance, users }: AllAtten
   useEffect(() => {
     const filtered = attendanceData.filter(record => {
       const recordDate = new Date(record.date)
-      const isAfterStart = startDate ? recordDate >= startDate : true
-      const isBeforeEnd = endDate ? recordDate <= endDate : true
+      const start = startDate
+      const end = endDate
+
+      const isAfterStart = start ? recordDate >= start : true
+      const isBeforeEnd = end ? recordDate <= end : true
       const matchesUser = selectedUser ? record.user.id === selectedUser : true
       return isAfterStart && isBeforeEnd && matchesUser
     })
     setFilteredData(filtered)
     setCurrentPage(1) // Reset to page 1 whenever filters change
   }, [attendanceData, startDate, endDate, selectedUser])
+
+  // 3) Validation: Ensure end date is not earlier than start date
+  useEffect(() => {
+    if (startDate && endDate && endDate < startDate) {
+      setDateError('End date cannot be earlier than start date.')
+    } else {
+      setDateError(null)
+    }
+  }, [startDate, endDate])
 
   const getStatusBadge = (record: AttendanceRecord) => {
     if (!record.checkInTime) {
@@ -224,21 +238,24 @@ export default function AllAttendancePage({ initialAttendance, users }: AllAtten
           <div className="flex flex-col md:flex-row items-center justify-between">
             <CardTitle className="text-2xl font-bold">Employee Attendance</CardTitle>
             <div className="flex flex-col sm:flex-row items-center gap-4 mt-4 md:mt-0 w-full md:w-auto">
+              
               {/* Start Date Picker */}
               <div className="flex flex-col">
                 <label htmlFor="startDate" className="text-sm text-gray-400 mb-1">
                   Start Date
                 </label>
-                <DatePicker
+                <DayPicker
+                  mode="single"
                   selected={startDate}
-                  onChange={(date: Date | null) => {
+                  onSelect={(date) => {
                     setStartDate(date)
+                    // If endDate is before the new startDate, reset endDate
+                    if (endDate && date && endDate < date) {
+                      setEndDate(undefined)
+                    }
                   }}
-                  className="px-4 py-2 rounded-md bg-gray-700 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full md:w-auto"
-                  dateFormat="MMMM d, yyyy"
-                  maxDate={new Date()}
-                  placeholderText="Select start date"
-                  isClearable
+                  disabled={{ after: new Date() }}
+                  className="bg-gray-700 text-gray-100 rounded-md"
                 />
               </div>
 
@@ -247,18 +264,19 @@ export default function AllAttendancePage({ initialAttendance, users }: AllAtten
                 <label htmlFor="endDate" className="text-sm text-gray-400 mb-1">
                   End Date
                 </label>
-                <DatePicker
+                <DayPicker
+                  mode="single"
                   selected={endDate}
-                  onChange={(date: Date | null) => {
-                    setEndDate(date)
-                  }}
-                  className="px-4 py-2 rounded-md bg-gray-700 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full md:w-auto"
-                  dateFormat="MMMM d, yyyy"
-                  maxDate={new Date()}
-                  placeholderText="Select end date"
-                  isClearable
+                  onSelect={(date) => setEndDate(date)}
+                  disabled={startDate ? { before: startDate, after: new Date() } : { after: new Date() }}
+                  className="bg-gray-700 text-gray-100 rounded-md"
                 />
               </div>
+
+              {/* Display Validation Error */}
+              {dateError && (
+                <p className="text-red-500 text-sm mt-2">{dateError}</p>
+              )}
 
               {/* User Filter */}
               <div className="flex flex-col">

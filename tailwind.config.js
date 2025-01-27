@@ -1,15 +1,12 @@
-const {heroui} = require('@heroui/theme');
 /** @type {import('tailwindcss').Config} */
 module.exports = {
 	darkMode: ["class", "class"], // Enables dark mode via a CSS class
-  content: [
-    "./pages/**/*.{ts,tsx}",
-    "// Includes all TS and TSX files in pages\n\t  './components/**/*.{ts,tsx}'",
-    "// Includes all TS and TSX files in components\n\t  './app/**/*.{ts,tsx}'",
-    "// Includes all TS and TSX files in app\n\t  './src/**/*.{ts,tsx}'",
-    "// Includes all TS and TSX files in src",
-    "./node_modules/@heroui/theme/dist/components/(card|ripple).js"
-  ],
+	content: [
+	  './pages/**/*.{ts,tsx}',      // Includes all TS and TSX files in pages
+	  './components/**/*.{ts,tsx}', // Includes all TS and TSX files in components
+	  './app/**/*.{ts,tsx}',        // Includes all TS and TSX files in app
+	  './src/**/*.{ts,tsx}',        // Includes all TS and TSX files in src
+	],
 	theme: {
     	container: {
     		center: true,
@@ -105,7 +102,9 @@ module.exports = {
     		}
     	}
     },
-  plugins: [require("tailwindcss-animate"),// Keeps the animate plugin for animations
-	  // Remove any additional plugins that are not being used,heroui()],
+	plugins: [
+	  require("tailwindcss-animate"), // Keeps the animate plugin for animations
+	  // Remove any additional plugins that are not being used
+	],
   }
   

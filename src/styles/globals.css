@@ -6,7 +6,7 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
+@import "react-datepicker/dist/react-datepicker.css";
 /* -------------------------------------------
    CUSTOM BASE LAYER & VARIABLES
    -------------------------------------------

@@ -1,85 +1,148 @@
-'use client'
+"use client";
 
-import React, { useEffect, useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { getServerSession } from 'next-auth/next'
-import { authOptions } from "../api/auth/[...nextauth]"
-import prisma from '@/lib/prisma'
-import { Attendance } from '@prisma/client'
-import { GetServerSideProps } from 'next'
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { AlertCircle, Clock, Download, Users } from "lucide-react"
-import { Skeleton } from "@/components/ui/skeleton"
-import { DayPicker } from 'react-day-picker'
-import { saveAs } from 'file-saver'
-import * as XLSX from 'xlsx'
+import React, { useEffect, useState, useRef } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import Image from "next/image";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "../api/auth/[...nextauth]";
+import prisma from "@/lib/prisma";
+import { Attendance } from "@prisma/client";
+import { GetServerSideProps } from "next";
 
+// shadcn/ui components
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator"; // Adjust import to your structure
+
+import { AlertCircle, Clock, Download, Users, MapPin } from "lucide-react";
+
+import ReactDatePicker from "react-datepicker";
+import { saveAs } from "file-saver";
+import * as XLSX from "xlsx";
+
+// ----------------------------------------------------------------------------------
+// Types & Interfaces
+// ----------------------------------------------------------------------------------
 type AttendanceRecord = {
-  id: string
-  date: string
-  checkInTime: string | null
-  checkOutTime: string | null
-  checkInLatitude: number | null
-  checkInLongitude: number | null
-  checkOutLatitude: number | null
-  checkOutLongitude: number | null
+  id: string;
+  date: string;
+  checkInTime: string | null;
+  checkOutTime: string | null;
+  checkInLatitude: number | null;
+  checkInLongitude: number | null;
+  checkOutLatitude: number | null;
+  checkOutLongitude: number | null;
   user: {
-    id: string
-    username: string
-    firstName: string
-    lastName: string
-    role: string
-  }
-}
+    id: string;
+    username: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+    department?: string | null;
+    position?: string | null;
+    workLocation?: string | null;
+    profileImageUrl?: string | null;
+  };
+};
 
 interface AllAttendancePageProps {
-  initialAttendance: AttendanceRecord[]
-  users: { id: string; username: string; firstName: string; lastName: string; role: string }[]
+  initialAttendance: AttendanceRecord[];
+  users: {
+    id: string;
+    username: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+    department?: string | null;
+    position?: string | null;
+    workLocation?: string | null;
+    profileImageUrl?: string | null;
+  }[];
 }
 
-const ITEMS_PER_PAGE = 10
+const ITEMS_PER_PAGE = 10;
 
-export default function AllAttendancePage({ initialAttendance, users }: AllAttendancePageProps) {
-  const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>(initialAttendance)
-  const [filteredData, setFilteredData] = useState<AttendanceRecord[]>([])
-  const [loading, setLoading] = useState(false)
-  const router = useRouter()
-  const socketRef = useRef<WebSocket | null>(null)
-  const [isServerReady, setIsServerReady] = useState(false)
+// For the 9:00 AM to 6:00 PM logic (if needed).
+const WORK_START_HOUR = 9;
+const WORK_END_HOUR = 18; // 6 PM
 
-  // For filtering by date range
-  const [startDate, setStartDate] = useState<Date | undefined>(undefined)
-  const [endDate, setEndDate] = useState<Date | undefined>(undefined)
-  const [selectedUser, setSelectedUser] = useState<string | null>(null)
-  const [currentPage, setCurrentPage] = useState(1)
+// Helper: startOfDay / endOfDay
+function setToStartOfDay(date: Date) {
+  const newDate = new Date(date);
+  newDate.setHours(0, 0, 0, 0);
+  return newDate;
+}
 
-  // New state for validation errors
-  const [dateError, setDateError] = useState<string | null>(null)
+function setToEndOfDay(date: Date) {
+  const newDate = new Date(date);
+  newDate.setHours(23, 59, 59, 999);
+  return newDate;
+}
 
-  // 1) Connect to WebSocket to receive real-time attendance updates
+// ----------------------------------------------------------------------------------
+// Component
+// ----------------------------------------------------------------------------------
+export default function AllAttendancePage({
+  initialAttendance,
+  users,
+}: AllAttendancePageProps) {
+  const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>(initialAttendance);
+  const [filteredData, setFilteredData] = useState<AttendanceRecord[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const router = useRouter();
+  const socketRef = useRef<WebSocket | null>(null);
+  const [isServerReady, setIsServerReady] = useState(false);
+
+  // Default: Show only today's attendance
+  const [startDate, setStartDate] = useState<Date | null>(new Date());
+  const [endDate, setEndDate] = useState<Date | null>(new Date());
+  const [selectedUser, setSelectedUser] = useState<string | null>(null);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [dateError, setDateError] = useState<string | null>(null);
+
+  // ----------------------------------------------------------------------------------
+  // 1) WebSocket Setup
+  // ----------------------------------------------------------------------------------
   useEffect(() => {
-    const connectWebSocket = async () => {
+    const connectWebSocket = () => {
       socketRef.current = new WebSocket(
-        `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/api/socket`
-      )
+        `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/api/socket`
+      );
 
       socketRef.current.onopen = () => {
-        console.log('WebSocket connection opened')
-      }
+        console.log("WebSocket connection opened");
+      };
 
       socketRef.current.onmessage = (event) => {
         try {
-          const message = JSON.parse(event.data)
-          if (message.type === 'serverReady') {
-            console.log('WebSocket server is ready, requesting initial data')
-            setIsServerReady(true)
-            socketRef.current?.send(JSON.stringify({ type: 'request-all-attendance' }))
-          } else if (message.type === 'attendanceUpdate') {
-            const updatedRecord = message.payload as Attendance
-            const user = users.find(user => user.username === updatedRecord.userUsername)
+          const message = JSON.parse(event.data);
+          if (message.type === "serverReady") {
+            console.log("WebSocket server is ready, requesting initial data");
+            setIsServerReady(true);
+            socketRef.current?.send(JSON.stringify({ type: "request-all-attendance" }));
+          } else if (message.type === "attendanceUpdate") {
+            const updatedRecord = message.payload as Attendance;
+            // Attempt to find the matching user
+            const user = users.find((u) => u.username === updatedRecord.userUsername);
             if (user) {
               const updatedRecordData: AttendanceRecord = {
                 id: updatedRecord.id,
@@ -91,367 +154,485 @@ export default function AllAttendancePage({ initialAttendance, users }: AllAtten
                 checkOutLatitude: updatedRecord.checkOutLatitude,
                 checkOutLongitude: updatedRecord.checkOutLongitude,
                 user: {
-                  id: user.id,
-                  username: user.username,
-                  firstName: user.firstName,
-                  lastName: user.lastName,
-                  role: user.role || 'USER',
+                  ...user,
+                  role: user.role || "USER", // fallback
                 },
-              }
+              };
 
               setAttendanceData((prevData) => {
-                const existingIndex = prevData.findIndex((item) => item.id === updatedRecord.id)
+                const existingIndex = prevData.findIndex((item) => item.id === updatedRecord.id);
                 if (existingIndex > -1) {
-                  const newData = [...prevData]
-                  newData[existingIndex] = updatedRecordData
-                  return newData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                  // Update existing
+                  const newData = [...prevData];
+                  newData[existingIndex] = updatedRecordData;
+                  return newData.sort(
+                    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+                  );
                 } else {
-                  return [updatedRecordData, ...prevData].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                  // Insert
+                  return [updatedRecordData, ...prevData].sort(
+                    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+                  );
                 }
-              })
+              });
             }
           }
         } catch (error) {
-          console.error('Error processing WebSocket message:', error)
+          console.error("Error processing WebSocket message:", error);
         }
-      }
+      };
 
       socketRef.current.onclose = () => {
-        console.log('WebSocket connection closed')
-      }
+        console.log("WebSocket connection closed");
+      };
 
       socketRef.current.onerror = (error) => {
-        console.error('WebSocket error:', error)
-      }
-    }
+        console.error("WebSocket error:", error);
+      };
+    };
 
-    connectWebSocket()
+    connectWebSocket();
 
     return () => {
-      socketRef.current?.close()
-    }
-  }, [users])
+      socketRef.current?.close();
+    };
+  }, [users]);
 
-  // 2) Filter logic: filter by selected user and date range
+  // ----------------------------------------------------------------------------------
+  // 2) Filter by User + Date Range (inclusive of same-day picks)
+  // ----------------------------------------------------------------------------------
   useEffect(() => {
-    const filtered = attendanceData.filter(record => {
-      const recordDate = new Date(record.date)
-      const start = startDate
-      const end = endDate
+    if (!startDate || !endDate) {
+      // If either date is null, show empty until both are set
+      setFilteredData([]);
+      return;
+    }
 
-      const isAfterStart = start ? recordDate >= start : true
-      const isBeforeEnd = end ? recordDate <= end : true
-      const matchesUser = selectedUser ? record.user.id === selectedUser : true
-      return isAfterStart && isBeforeEnd && matchesUser
-    })
-    setFilteredData(filtered)
-    setCurrentPage(1) // Reset to page 1 whenever filters change
-  }, [attendanceData, startDate, endDate, selectedUser])
+    // For inclusive filtering, use startOfDay / endOfDay.
+    const startDay = setToStartOfDay(startDate);
+    const endDay = setToEndOfDay(endDate);
 
-  // 3) Validation: Ensure end date is not earlier than start date
+    const filtered = attendanceData.filter((record) => {
+      const recordDate = new Date(record.date);
+      const isAfterStart = recordDate >= startDay;
+      const isBeforeEnd = recordDate <= endDay;
+      const matchesUser = selectedUser ? record.user.id === selectedUser : true;
+      return isAfterStart && isBeforeEnd && matchesUser;
+    });
+
+    setFilteredData(filtered);
+    setCurrentPage(1); // reset page when filters change
+  }, [attendanceData, startDate, endDate, selectedUser]);
+
+  // ----------------------------------------------------------------------------------
+  // 3) Validate date range (start <= end)
+  // ----------------------------------------------------------------------------------
   useEffect(() => {
     if (startDate && endDate && endDate < startDate) {
-      setDateError('End date cannot be earlier than start date.')
+      setDateError("End date cannot be earlier than start date.");
     } else {
-      setDateError(null)
+      setDateError(null);
     }
-  }, [startDate, endDate])
+  }, [startDate, endDate]);
 
-  const getStatusBadge = (record: AttendanceRecord) => {
-    if (!record.checkInTime) {
-      return <Badge variant="destructive">Not Checked In</Badge>
-    }
-    if (record.checkInTime && !record.checkOutTime) {
-      return <Badge variant="secondary">Currently Working</Badge>
-    }
-    return <Badge variant="default">Completed</Badge>
-  }
-
-  // Export only the filtered data (now without any addresses from Mapbox)
+  // ----------------------------------------------------------------------------------
+  // 4) Export Data
+  // ----------------------------------------------------------------------------------
   const handleExport = () => {
-    const dataToExport = filteredData.map(record => ({
+    const dataToExport = filteredData.map((record) => ({
       ID: record.id,
       Date: new Date(record.date).toLocaleDateString(),
-      'Check-In Time': record.checkInTime ? new Date(record.checkInTime).toLocaleTimeString() : 'N/A',
-      'Check-Out Time': record.checkOutTime ? new Date(record.checkOutTime).toLocaleTimeString() : 'N/A',
-      // Since we removed Mapbox functionality, we’ll just list lat/long or N/A
-      'Check-In Location':
+      "Check-In Time": record.checkInTime
+        ? new Date(record.checkInTime).toLocaleTimeString()
+        : "N/A",
+      "Check-Out Time": record.checkOutTime
+        ? new Date(record.checkOutTime).toLocaleTimeString()
+        : "N/A",
+      "Check-In Location":
         record.checkInLatitude && record.checkInLongitude
           ? `${record.checkInLatitude}, ${record.checkInLongitude}`
-          : 'N/A',
-      'Check-Out Location':
+          : "N/A",
+      "Check-Out Location":
         record.checkOutLatitude && record.checkOutLongitude
           ? `${record.checkOutLatitude}, ${record.checkOutLongitude}`
-          : 'N/A',
+          : "N/A",
       User: `${record.user.firstName} ${record.user.lastName}`,
       Role: record.user.role,
-    }))
+    }));
 
     if (dataToExport.length === 0) {
-      alert('No data to export for the selected filters.')
-      return
+      alert("No data to export for the selected filters.");
+      return;
     }
 
-    const worksheet = XLSX.utils.json_to_sheet(dataToExport)
-    const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Attendance')
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Attendance");
 
-    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
-    const data = new Blob([excelBuffer], { type: 'application/octet-stream' })
+    const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+    const data = new Blob([excelBuffer], { type: "application/octet-stream" });
 
-    // Construct a filename based on date range and user
-    const filenameParts: string[] = []
-    if (startDate) {
-      filenameParts.push(`from_${startDate.toISOString().split('T')[0]}`)
-    }
-    if (endDate) {
-      filenameParts.push(`to_${endDate.toISOString().split('T')[0]}`)
-    }
+    // Construct a filename
+    const filenameParts: string[] = [];
+    if (startDate) filenameParts.push(`from_${startDate.toISOString().split("T")[0]}`);
+    if (endDate) filenameParts.push(`to_${endDate.toISOString().split("T")[0]}`);
     if (selectedUser) {
-      const user = users.find(user => user.id === selectedUser)
-      if (user) {
-        filenameParts.push(`${user.username}`)
-      }
+      const user = users.find((u) => u.id === selectedUser);
+      if (user) filenameParts.push(user.username);
     }
 
     const filename =
       filenameParts.length > 0
-        ? `attendance_${filenameParts.join('_')}.xlsx`
-        : 'attendance.xlsx'
-    saveAs(data, filename)
-  }
+        ? `attendance_${filenameParts.join("_")}.xlsx`
+        : "attendance.xlsx";
 
-  // Pagination Logic
-  const indexOfLastItem = currentPage * ITEMS_PER_PAGE
-  const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE
-  const currentItems = filteredData.slice(indexOfFirstItem, indexOfLastItem)
-  const totalPages = Math.ceil(filteredData.length / ITEMS_PER_PAGE)
+    saveAs(data, filename);
+  };
+
+  // ----------------------------------------------------------------------------------
+  // 5) Pagination
+  // ----------------------------------------------------------------------------------
+  const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
+  const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
+  const currentItems = filteredData.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredData.length / ITEMS_PER_PAGE);
 
   const handlePageChange = (page: number) => {
-    setCurrentPage(page)
+    setCurrentPage(page);
+  };
+
+  // ----------------------------------------------------------------------------------
+  // New "Late" logic:
+  // - If no checkIn => Not In
+  // - If checkIn & no checkOut => Late
+  // - If checkIn & checkOut >= 6 PM => Late
+  // - Else => Done
+  // ----------------------------------------------------------------------------------
+  const getStatusBadge = (record: AttendanceRecord) => {
+    if (!record.checkInTime) {
+      return <Badge variant="destructive">Not In</Badge>;
+    }
+    if (!record.checkOutTime) {
+      return <Badge variant="destructive">NO CHECK OUT</Badge>;
+    }
+    const checkOutDate = new Date(record.checkOutTime);
+    if (checkOutDate.getHours() >= WORK_END_HOUR) {
+      return <Badge variant="destructive">Late</Badge>;
+    }
+    return <Badge variant="default">Done</Badge>;
+  };
+
+  // ----------------------------------------------------------------------------------
+  // Coordinates popover for each check-in/out
+  // ----------------------------------------------------------------------------------
+  function CoordinatesPopover({
+    label,
+    lat,
+    lng,
+  }: {
+    label: string;
+    lat: number | null;
+    lng: number | null;
+  }) {
+    if (!lat || !lng) {
+      return <span className="text-xs text-gray-500">No {label}</span>;
+    }
+
+    return (
+      <Popover>
+        <PopoverTrigger asChild>
+          <button className="flex items-center gap-1 text-blue-600 hover:underline text-xs sm:text-sm">
+            <MapPin className="w-4 h-4" />
+            {label}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="center"
+          sideOffset={6}
+          className="p-3 w-52 bg-white border border-gray-200 shadow-md rounded-md text-xs sm:text-sm"
+        >
+          <p className="text-gray-700 mb-2">
+            <strong>{label} Coordinates:</strong> {lat}, {lng}
+          </p>
+          <Link
+            href={`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`}
+            target="_blank"
+            className="text-blue-600 underline"
+          >
+            View on Map
+          </Link>
+        </PopoverContent>
+      </Popover>
+    );
   }
 
+  // ----------------------------------------------------------------------------------
+  // Render
+  // ----------------------------------------------------------------------------------
   return (
-    <div className="container mx-auto">
-      <Card className="bg-gray-800 text-gray-100">
-        <CardHeader className="space-y-1">
-          <div className="flex flex-col md:flex-row items-center justify-between">
-            <CardTitle className="text-2xl font-bold">Employee Attendance</CardTitle>
-            <div className="flex flex-col sm:flex-row items-center gap-4 mt-4 md:mt-0 w-full md:w-auto">
-              
-              {/* Start Date Picker */}
+    <div className="container mx-auto p-2 sm:p-4">
+      <Card className="border border-gray-200 shadow-sm bg-white text-gray-900">
+        {/* Compact Header Row: filter + export */}
+        <CardHeader className="p-3 sm:p-4 border-b">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            {/* Title */}
+            <CardTitle className="text-base sm:text-lg font-semibold">
+              Attendance
+            </CardTitle>
+
+            {/* Filter Row */}
+            <div className="flex flex-wrap items-end gap-2 sm:gap-4 text-xs sm:text-sm">
+              {/* Start Date */}
               <div className="flex flex-col">
-                <label htmlFor="startDate" className="text-sm text-gray-400 mb-1">
-                  Start Date
+                <label htmlFor="startDate" className="font-semibold text-gray-600">
+                  Start
                 </label>
-                <DayPicker
-                  mode="single"
+                <ReactDatePicker
+                  id="startDate"
                   selected={startDate}
-                  onSelect={(date) => {
-                    setStartDate(date)
-                    // If endDate is before the new startDate, reset endDate
-                    if (endDate && date && endDate < date) {
-                      setEndDate(undefined)
-                    }
-                  }}
-                  disabled={{ after: new Date() }}
-                  className="bg-gray-700 text-gray-100 rounded-md"
+                  onChange={(date) => setStartDate(date)}
+                  maxDate={new Date()}
+                  className="border border-gray-300 rounded px-2 py-1"
                 />
               </div>
 
-              {/* End Date Picker */}
+              {/* End Date */}
               <div className="flex flex-col">
-                <label htmlFor="endDate" className="text-sm text-gray-400 mb-1">
-                  End Date
+                <label htmlFor="endDate" className="font-semibold text-gray-600">
+                  End
                 </label>
-                <DayPicker
-                  mode="single"
+                <ReactDatePicker
+                  id="endDate"
                   selected={endDate}
-                  onSelect={(date) => setEndDate(date)}
-                  disabled={startDate ? { before: startDate, after: new Date() } : { after: new Date() }}
-                  className="bg-gray-700 text-gray-100 rounded-md"
+                  onChange={(date) => setEndDate(date)}
+                  maxDate={new Date()}
+                  minDate={startDate || undefined}
+                  className="border border-gray-300 rounded px-2 py-1"
                 />
               </div>
 
-              {/* Display Validation Error */}
+              {/* Date Error */}
               {dateError && (
-                <p className="text-red-500 text-sm mt-2">{dateError}</p>
+                <span className="text-red-500 font-medium self-center">
+                  {dateError}
+                </span>
               )}
 
               {/* User Filter */}
               <div className="flex flex-col">
-                <label htmlFor="userFilter" className="text-sm text-gray-400 mb-1">
+                <label htmlFor="userFilter" className="font-semibold text-gray-600">
                   Employee
                 </label>
                 <select
                   id="userFilter"
-                  value={selectedUser || ''}
+                  value={selectedUser || ""}
                   onChange={(e) => setSelectedUser(e.target.value || null)}
-                  className="px-4 py-2 rounded-md bg-gray-700 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full md:w-auto"
+                  className="border border-gray-300 rounded px-2 py-1"
                 >
-                  <option value="">All Users</option>
-                  {users.map(user => (
-                    <option key={user.id} value={user.id}>
-                      {user.firstName} {user.lastName} ({user.username})
+                  <option value="">All</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.firstName} {u.lastName}
                     </option>
                   ))}
                 </select>
               </div>
 
               {/* Export Button */}
-              <button
+              <Button
+                variant="default"
+                size="sm"
                 onClick={handleExport}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md w-full md:w-auto"
+                className="bg-gray-200"
               >
-                <Download className="h-5 w-5" />
-                Export Excel
-              </button>
+                <Download className="h-4 w-4 mr-1" />
+                Export
+              </Button>
             </div>
           </div>
         </CardHeader>
 
-        <CardContent>
+        <CardContent className="p-2 sm:p-4">
+          {/* Horizontal separator for a cleaner look */}
+          <Separator className="my-3" />
+
           {loading ? (
-            <div className="space-y-4">
+            <div className="space-y-2">
               {[...Array(5)].map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full" />
+                <Skeleton key={i} className="h-8 w-full" />
               ))}
             </div>
           ) : isServerReady && filteredData.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <AlertCircle className="h-12 w-12 text-gray-400 mb-4" />
-              <p className="text-lg font-medium">No attendance data available for the selected criteria</p>
-              <p className="text-sm text-gray-400">
-                Attendance records will appear here once employees start checking in
+            <div className="flex flex-col items-center justify-center py-8 text-center text-gray-600">
+              <AlertCircle className="h-8 w-8 text-gray-400 mb-2" />
+              <p className="text-sm font-medium">
+                No attendance data found for selected filters
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-md border border-gray-700">
-              <Table className="min-w-full">
+            <div className="border border-gray-200 rounded-md overflow-x-auto">
+              <Table className="w-full table-auto text-xs sm:text-sm">
+                {/* Table Header */}
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Employee</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Check-In</TableHead>
-                    <TableHead>Check-Out</TableHead>
-                    {/* Simplified column name since Mapbox is removed */}
-                    <TableHead>Location</TableHead>
+                  <TableRow className="bg-gray-50">
+                    <TableHead className="px-2 py-2 whitespace-nowrap">Date</TableHead>
+                    <TableHead className="px-2 py-2 whitespace-nowrap">Employee</TableHead>
+                    <TableHead className="px-2 py-2 whitespace-nowrap">Status</TableHead>
+                    <TableHead className="px-2 py-2 whitespace-nowrap">Check-In</TableHead>
+                    <TableHead className="px-2 py-2 whitespace-nowrap">Check-Out</TableHead>
+                    <TableHead className="px-2 py-2 whitespace-nowrap">Coords</TableHead>
                   </TableRow>
                 </TableHeader>
+
+                {/* Table Body */}
                 <TableBody>
                   {currentItems.map((record) => {
-                    return (
-                      <TableRow key={record.id} className="hover:bg-gray-700">
-                        <TableCell className="font-medium">
-                          {new Date(record.date).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          <Link
-                            href={`/manage/users/user/${record.user.username}`}
-                            className="flex items-center gap-2 text-blue-400 hover:underline text-base"
-                          >
-                            <Users className="h-5 w-5" />
-                            <span className="whitespace-nowrap overflow-hidden text-ellipsis">
-                              {record.user.firstName} {record.user.lastName}
-                            </span>
-                          </Link>
-                        </TableCell>
-                        <TableCell>{getStatusBadge(record)}</TableCell>
-                        <TableCell>
-                          {record.checkInTime ? (
-                            <div className="flex items-center gap-2">
-                              <Clock className="h-4 w-4 text-gray-400" />
-                              {new Date(record.checkInTime).toLocaleTimeString()}
-                            </div>
-                          ) : (
-                            'N/A'
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {record.checkOutTime ? (
-                            <div className="flex items-center gap-2">
-                              <Clock className="h-4 w-4 text-gray-400" />
-                              {new Date(record.checkOutTime).toLocaleTimeString()}
-                            </div>
-                          ) : (
-                            'N/A'
-                          )}
-                        </TableCell>
-                        {/* Location column (show lat/long + Google Maps link if present) */}
-                        <TableCell>
-                          <div className="flex flex-col gap-2 text-sm">
-                            {/* Check-In */}
-                            {record.checkInLatitude && record.checkInLongitude ? (
-                              <div>
-                                <strong>Check-In:</strong>{" "}
-                                {record.checkInLatitude}, {record.checkInLongitude}
-                                {" "}
-                                <Link
-                                  href={`https://www.google.com/maps/search/?api=1&query=${record.checkInLatitude},${record.checkInLongitude}`}
-                                  target="_blank"
-                                  className="text-blue-400 underline ml-1"
-                                >
-                                  Show on Google Maps
-                                </Link>
-                              </div>
-                            ) : (
-                              <span>No Check-In Location</span>
-                            )}
+                    const dateStr = new Date(record.date).toLocaleDateString();
+                    const userFullName = `${record.user.firstName} ${record.user.lastName}`;
+                    const checkInTimeStr = record.checkInTime
+                      ? new Date(record.checkInTime).toLocaleTimeString()
+                      : "N/A";
+                    const checkOutTimeStr = record.checkOutTime
+                      ? new Date(record.checkOutTime).toLocaleTimeString()
+                      : "N/A";
 
-                            {/* Check-Out */}
-                            {record.checkOutLatitude && record.checkOutLongitude ? (
-                              <div>
-                                <strong>Check-Out:</strong>{" "}
-                                {record.checkOutLatitude}, {record.checkOutLongitude}
-                                {" "}
-                                <Link
-                                  href={`https://www.google.com/maps/search/?api=1&query=${record.checkOutLatitude},${record.checkOutLongitude}`}
-                                  target="_blank"
-                                  className="text-blue-400 underline ml-1"
-                                >
-                                  Show on Google Maps
-                                </Link>
+                    return (
+                      <TableRow key={record.id} className="hover:bg-gray-50">
+                        {/* Date */}
+                        <TableCell className="px-2 py-2 font-medium">{dateStr}</TableCell>
+
+                        {/* Employee + Popover */}
+                        <TableCell className="px-2 py-2 font-medium">
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button className="flex items-center gap-1 text-blue-600 hover:underline">
+                                <Users className="h-4 w-4" />
+                                <span>{userFullName}</span>
+                              </button>
+                            </PopoverTrigger>
+
+                            <PopoverContent
+                              align="start"
+                              sideOffset={8}
+                              className="w-64 p-3 bg-white border border-gray-200 shadow-md rounded-md text-xs sm:text-sm"
+                            >
+                              {/* User Info */}
+                              <div className="flex items-center gap-2 mb-2">
+                                <Image
+                                  src={
+                                    record.user.profileImageUrl
+                                      ? record.user.profileImageUrl
+                                      : "/default-avatar.png"
+                                  }
+                                  alt={`${record.user.username}-avatar`}
+                                  width={36}
+                                  height={36}
+                                  className="rounded-full object-cover"
+                                />
+                                <div className="flex-1">
+                                  <p className="font-semibold text-gray-800">{userFullName}</p>
+                                  <p className="text-[10px] text-gray-500">
+                                    {record.user.department ?? "No Dept"} &bull;{" "}
+                                    {record.user.position ?? "No Pos"}
+                                  </p>
+                                </div>
                               </div>
-                            ) : (
-                              <span>No Check-Out Location</span>
-                            )}
+
+                              <p className="text-gray-700 mb-1">
+                                <strong>Date:</strong> {dateStr}
+                              </p>
+                              <p className="text-gray-700 mb-1">
+                                <strong>Check-In:</strong> {checkInTimeStr}
+                              </p>
+                              <p className="text-gray-700 mb-2">
+                                <strong>Check-Out:</strong> {checkOutTimeStr}
+                              </p>
+
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-full"
+                                onClick={() =>
+                                  router.push(`/manage/users/user/${record.user.username}`)
+                                }
+                              >
+                                View Profile
+                              </Button>
+                            </PopoverContent>
+                          </Popover>
+                        </TableCell>
+
+                        {/* Status */}
+                        <TableCell className="px-2 py-2">{getStatusBadge(record)}</TableCell>
+
+                        {/* Check-In Time */}
+                        <TableCell className="px-2 py-2">
+                          {record.checkInTime ? (
+                            <div className="flex items-center gap-1">
+                              <Clock className="h-4 w-4 text-gray-400" />
+                              {checkInTimeStr}
+                            </div>
+                          ) : (
+                            "N/A"
+                          )}
+                        </TableCell>
+
+                        {/* Check-Out Time */}
+                        <TableCell className="px-2 py-2">
+                          {record.checkOutTime ? (
+                            <div className="flex items-center gap-1">
+                              <Clock className="h-4 w-4 text-gray-400" />
+                              {checkOutTimeStr}
+                            </div>
+                          ) : (
+                            "N/A"
+                          )}
+                        </TableCell>
+
+                        {/* Coordinates Popover */}
+                        <TableCell className="px-2 py-2">
+                          <div className="flex flex-col gap-1">
+                            <CoordinatesPopover
+                              label="In"
+                              lat={record.checkInLatitude}
+                              lng={record.checkInLongitude}
+                            />
+                            <CoordinatesPopover
+                              label="Out"
+                              lat={record.checkOutLatitude}
+                              lng={record.checkOutLongitude}
+                            />
                           </div>
                         </TableCell>
                       </TableRow>
-                    )
+                    );
                   })}
                 </TableBody>
               </Table>
+
               {/* Pagination Controls */}
               {totalPages > 1 && (
-                <div className="flex justify-between items-center mt-4 px-2">
-                  <p className="text-sm text-gray-400">
+                <div className="flex flex-col items-center justify-between gap-2 sm:flex-row mt-4 px-4 py-2">
+                  <p className="text-xs sm:text-sm text-gray-600">
                     Page {currentPage} of {totalPages}
                   </p>
                   <div className="flex gap-2">
-                    <button
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() => handlePageChange(currentPage - 1)}
                       disabled={currentPage === 1}
-                      className={`px-3 py-1 rounded-md ${
-                        currentPage === 1
-                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                          : 'bg-blue-600 text-white hover:bg-blue-700'
-                      }`}
                     >
                       Previous
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() => handlePageChange(currentPage + 1)}
                       disabled={currentPage === totalPages}
-                      className={`px-3 py-1 rounded-md ${
-                        currentPage === totalPages
-                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                          : 'bg-blue-600 text-white hover:bg-blue-700'
-                      }`}
                     >
                       Next
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}
@@ -460,20 +641,22 @@ export default function AllAttendancePage({ initialAttendance, users }: AllAtten
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
 
-// Server-side fetching logic remains the same
+// ----------------------------------------------------------------------------------
+// getServerSideProps
+// ----------------------------------------------------------------------------------
 export const getServerSideProps: GetServerSideProps = async (context) => {
-  const session = await getServerSession(context.req, context.res, authOptions)
+  const session = await getServerSession(context.req, context.res, authOptions);
 
   if (!session?.user || !["HR", "ADMIN"].includes(session?.user.role)) {
     return {
       redirect: {
-        destination: '/unauthorized',
+        destination: "/unauthorized",
         permanent: false,
       },
-    }
+    };
   }
 
   try {
@@ -487,12 +670,14 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
               firstName: true,
               lastName: true,
               role: true,
+              department: true,
+              position: true,
+              workLocation: true,
+              profileImageUrl: true,
             },
           },
         },
-        orderBy: {
-          date: 'desc',
-        },
+        orderBy: { date: "desc" },
       }),
       prisma.user.findMany({
         select: {
@@ -501,41 +686,49 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
           firstName: true,
           lastName: true,
           role: true,
+          department: true,
+          position: true,
+          workLocation: true,
+          profileImageUrl: true,
         },
       }),
-    ])
+    ]);
 
-    const attendanceDataForProps: AttendanceRecord[] = attendanceRecords.map(record => ({
-      id: record.id,
-      date: record.date.toISOString(),
-      checkInTime: record.checkInTime?.toISOString() || null,
-      checkOutTime: record.checkOutTime?.toISOString() || null,
-      checkInLatitude: record.checkInLatitude,
-      checkInLongitude: record.checkInLongitude,
-      checkOutLatitude: record.checkOutLatitude,
-      checkOutLongitude: record.checkOutLongitude,
+    const attendanceDataForProps: AttendanceRecord[] = attendanceRecords.map((r) => ({
+      id: r.id,
+      date: r.date.toISOString(),
+      checkInTime: r.checkInTime?.toISOString() || null,
+      checkOutTime: r.checkOutTime?.toISOString() || null,
+      checkInLatitude: r.checkInLatitude,
+      checkInLongitude: r.checkInLongitude,
+      checkOutLatitude: r.checkOutLatitude,
+      checkOutLongitude: r.checkOutLongitude,
       user: {
-        id: record.user.id,
-        username: record.user.username,
-        firstName: record.user.firstName,
-        lastName: record.user.lastName,
-        role: record.user.role,
+        id: r.user.id,
+        username: r.user.username,
+        firstName: r.user.firstName,
+        lastName: r.user.lastName,
+        role: r.user.role,
+        department: r.user.department,
+        position: r.user.position,
+        workLocation: r.user.workLocation,
+        profileImageUrl: r.user.profileImageUrl,
       },
-    }))
+    }));
 
     return {
       props: {
         initialAttendance: attendanceDataForProps,
         users: userRecords,
       },
-    }
+    };
   } catch (error) {
-    console.error('Error fetching attendance data for HR and ADMIN page:', error)
+    console.error("Error fetching attendance data:", error);
     return {
       props: {
         initialAttendance: [],
         users: [],
       },
-    }
+    };
   }
-}
+};

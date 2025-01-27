@@ -19,7 +19,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import FallbackUI from "@/components/FallbackUI";
 
 // 4) Import the Notifications component
-import Notifications from "@/components/Notifications";
+
 
 TimeAgo.addLocale(en);
 
@@ -49,8 +49,8 @@ function App({ Component, pageProps }: AppProps) {
           </Layout>
         </ErrorBoundary>
 
-        {/* Place the Notifications component, ideally in a layout or header */}
-        <Notifications />
+        
+      
 
         {/* Place the ToastContainer once in your app (if you still need it for other toasts) */}
         <ToastContainer

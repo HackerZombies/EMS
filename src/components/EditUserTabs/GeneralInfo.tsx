@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Camera, History, X } from "lucide-react";
+import { Camera, History } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 
 // ------------------ Interfaces ------------------
@@ -55,7 +55,7 @@ interface PersonalInfoFormProps {
   formData: PersonalInfoData;
   setFormData: React.Dispatch<React.SetStateAction<PersonalInfoData>>;
   changeHistory: Record<string, ChangeHistoryEntry[]>;
-  isEditMode: boolean; // Received prop from parent
+  isEditMode: boolean;
 }
 
 // ------------------ Constants ------------------
@@ -68,11 +68,9 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({
   formData,
   setFormData,
   changeHistory,
-  isEditMode, // Destructure isEditMode from props
+  isEditMode,
 }) => {
   const { data: session } = useSession();
-
-  // ------------------ State ------------------
 
   // Keep a copy of original data to revert upon cancel
   const [originalData, setOriginalData] = useState<PersonalInfoData>(formData);
@@ -281,6 +279,7 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
 
+    // Basic required fields
     if (!formData.firstName.trim()) {
       newErrors.firstName = "First name is required.";
     }
@@ -307,6 +306,7 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({
     if (!formData.phoneNumber) {
       newErrors.phoneNumber = "Phone number is required.";
     }
+    // You could also add extra validations, e.g. phone must be 10 digits, etc.
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -350,7 +350,7 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({
   // Helper to render a small history icon if any history is present
   const renderHistoryIcon = (fieldKey: string) => {
     const count = getFieldHistory(fieldKey).length;
-    if (count === 0) return null; // No changes, no icon
+    if (count === 0) return null; // No changes => no icon
     return (
       <button
         type="button"
@@ -369,7 +369,7 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({
     <div className="p-6 sm:p-8 bg-gradient-to-br from-white to-gray-50 rounded-lg shadow-lg space-y-8">
       {/* TOP SECTION: Profile Image (left) + Basic Info fields (right) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Left: Boxy Profile Image */}
+        {/* Left: Profile Image */}
         <div className="relative flex flex-col items-center bg-white/80 p-4 rounded-md shadow-sm">
           <Label className="mb-2 text-sm font-semibold text-gray-700">
             Profile Image
@@ -672,7 +672,6 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({
                 </SelectContent>
               </Select>
             </div>
-            {/* History Icon next to label */}
             {getFieldHistory("gender").length > 0 && (
               <button
                 type="button"
@@ -797,7 +796,7 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({
             )}
           </div>
 
-          {/* Reset Password (optional to keep here, or move) */}
+          {/* Reset Password */}
           {isEditMode && (
             <div className="flex items-center pt-6">
               <input
@@ -839,9 +838,7 @@ const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({
             />
             <Input
               value={residentialAddress.street}
-              onChange={(e) =>
-                handleResidentialChange("street", e.target.value)
-              }
+              onChange={(e) => handleResidentialChange("street", e.target.value)}
               onBlur={syncResidentialToParent}
               placeholder="Street"
               disabled={!isEditMode}
@@ -1376,7 +1373,9 @@ const HistorySection: React.FC<HistorySectionProps> = ({
     <div className="mt-2 p-4 bg-gray-50 border border-gray-200 rounded-lg space-y-2">
       <h4 className="text-sm font-semibold text-gray-700 flex items-center space-x-1">
         <History className="w-4 h-4 text-blue-500" />
-        <span>{customLabel ? `${customLabel} Change History` : "Change History"}</span>
+        <span>
+          {customLabel ? `${customLabel} Change History` : "Change History"}
+        </span>
       </h4>
       <ul className="space-y-2">
         {historyList.map((entry, index) => (
@@ -1386,12 +1385,16 @@ const HistorySection: React.FC<HistorySectionProps> = ({
             </div>
             <div>
               <p className="text-sm text-gray-700">
-                <strong>{entry.performedBy}</strong>{" "}
-                changed <strong>{customLabel || field}</strong> on{" "}
+                <strong>{entry.performedBy}</strong> changed{" "}
+                <strong>{customLabel || field}</strong> on{" "}
                 {new Date(entry.datePerformed).toLocaleString()}
               </p>
-              <p className="text-sm text-gray-600">From: {entry.old ?? "N/A"}</p>
-              <p className="text-sm text-gray-600">To: {entry.new ?? "N/A"}</p>
+              <p className="text-sm text-gray-600">
+                From: {entry.old ?? "N/A"}
+              </p>
+              <p className="text-sm text-gray-600">
+                To: {entry.new ?? "N/A"}
+              </p>
             </div>
           </li>
         ))}

@@ -332,18 +332,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       },
     });
 
-    // Create exactly one notification for all changes
-    const admins = await prisma.user.findMany({
-      where: { role: "ADMIN" },
-      select: { username: true },
-    });
-    if (admins.length > 0) {
-      const notificationsData = admins.map((admin) => ({
-        recipientUsername: admin.username,
-        message: `User '${username}' was updated by ${session.user.username}`,
-      }));
-      await prisma.notification.createMany({ data: notificationsData });
-    }
+    
 
     // 13) Return response
     return res.status(200).json({

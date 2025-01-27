@@ -16,7 +16,6 @@ import {
   WorkLocation,
   Department,
   Position
-
 } from "@prisma/client";
 
 // Disable default body parser to handle multipart/form-data
@@ -93,13 +92,23 @@ interface FormFields {
   avatarImageUrl: string;
 
   // Dynamic keys for documents
-  [key: `documentName[${number}]`]: string | undefined;
-  [key: `documentCategory[${number}]`]: string | undefined; // For category
+  [key: `documents[${string}][${number}][file]`]: any;
+  [key: `documents[${string}][${number}][displayName]`]: any;
+  [key: `documents[${string}][${number}][category]`]: any;
+  [key: `documents[${string}][${number}][id]`]: any;
 }
 
 interface FileEntry {
   filename: string;
   buffer: Buffer;
+}
+
+interface EmployeeDocumentData {
+  filename: string;
+  data: Buffer;
+  size: number;
+  userUsername: string;
+  category: DocumentCategory;
 }
 
 // Main Handler Function
@@ -119,7 +128,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
   // Initialize Busboy
   const bb = busboy({
     headers: req.headers,
-    limits: { files: 10, fileSize: 50 * 1024 * 1024 }, // 50MB per file
+    limits: { files: 100, fileSize: 50 * 1024 * 1024 }, // 50MB per file, up to 100 files
   });
 
   const fields: Partial<FormFields> = {};
@@ -190,21 +199,21 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
         Object.keys(fields).forEach((fieldKey) => {
           const match = fieldKey.match(/^documents\[(.+?)\]\[(\d+)\]\[category\]$/);
           if (match) {
-            const providedCategory = (fields as Record<string, any>)[fieldKey] as DocumentCategory;
-            if (files[fileCounter]) {
+            const providedCategory = match[1] as DocumentCategory;
+            const index = parseInt(match[2], 10);
+            if (files[index]) {
               if (Object.values(DocumentCategory).includes(providedCategory)) {
-                files[fileCounter].category = providedCategory;
+                files[index].category = providedCategory;
               } else {
-                files[fileCounter].category = DocumentCategory.others;
+                files[index].category = DocumentCategory.others;
               }
             }
-            fileCounter++;
           }
         });
       
         // Assign custom names and ensure a default category is set
         files.forEach((fileObj, index) => {
-          const customNameField = `documentName[${index}]`;
+          const customNameField = `documents[${fileObj.category}][${index}][displayName]`;
           if ((fields as Record<string, any>).hasOwnProperty(customNameField)) {
             fileObj.customName = (fields as Record<string, any>)[customNameField];
           }
@@ -342,7 +351,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       ]
       if (!validPositions.includes(position as Position)) { 
         return res.status(400).json({ message: "Invalid position" });
-    }
+      }
 
       const validWorkLocations: WorkLocation[] = [
         WorkLocation.NaviMumbai,
@@ -354,45 +363,43 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
         return res.status(400).json({ message: "Invalid work location" });
       }
 
-      // <-- Add department validation here -->
-  const validDepartments: Department[] = [
-    Department.Admin,
-    Department.HR,
-    Department.Software,
-    Department.Hardware,
-    Department.Production,
-  ];
-  if (!validDepartments.includes(department as Department)) {
-    return res.status(400).json({ message: "Invalid department" });
-  }
+      const validDepartments: Department[] = [
+        Department.Admin,
+        Department.HR,
+        Department.Software,
+        Department.Hardware,
+        Department.Production,
+      ];
+      if (!validDepartments.includes(department as Department)) {
+        return res.status(400).json({ message: "Invalid department" });
+      }
 
-       const newUser = await prisma.user.create({
-    data: {
-      username,
-      firstName: firstName as string,
-      middleName: middleName,
-      lastName: lastName as string,
-      password: hashedPassword,
-      email: email as string,
-      phoneNumber: phoneNumber as string,
-      leaveBalance: 28,
-      role: role as UserRole,
-      gender: gender as Gender,
-      bloodGroup: bloodGroup as BloodGroup,
-      employmentType: employmentType as EmploymentType,
-      dob: dob ? new Date(dob as string) : null,
-      residentialAddress: residentialAddress as string,
-      permanentAddress: permanentAddress as string,
-      department: department as Department, // Use enum here
-      position: position as Position,
-      nationality: nationality as string,
-      workLocation: workLocation as WorkLocation,
-      joiningDate: joiningDate ? new Date(joiningDate as string) : null,
-      profileImageUrl: profileImageUrl as string,
-      avatarImageUrl: avatarImageUrl as string,
-    },
-  });
-
+      const newUser = await prisma.user.create({
+        data: {
+          username,
+          firstName: firstName as string,
+          middleName: middleName,
+          lastName: lastName as string,
+          password: hashedPassword,
+          email: email as string,
+          phoneNumber: phoneNumber as string,
+          leaveBalance: 28,
+          role: role as UserRole,
+          gender: gender as Gender,
+          bloodGroup: bloodGroup as BloodGroup,
+          employmentType: employmentType as EmploymentType,
+          dob: dob ? new Date(dob as string) : null,
+          residentialAddress: residentialAddress as string,
+          permanentAddress: permanentAddress as string,
+          department: department as Department, // Use enum here
+          position: position as Position,
+          nationality: nationality as string,
+          workLocation: workLocation as WorkLocation,
+          joiningDate: joiningDate ? new Date(joiningDate as string) : null,
+          profileImageUrl: profileImageUrl as string,
+          avatarImageUrl: avatarImageUrl as string,
+        },
+      });
 
       // Create emergency contacts
       if (parsedEmergencyContacts.length > 0) {
@@ -457,12 +464,11 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
 
       // Handle file uploads (EmployeeDocuments), including category
       if (files.length > 0) {
-        const employeeDocumentsData = files.map((fileObj) => ({
+        const employeeDocumentsData: EmployeeDocumentData[] = files.map((fileObj) => ({
           filename: fileObj.customName || fileObj.file.filename,
           data: fileObj.file.buffer,
           size: fileObj.file.buffer.length,
           userUsername: newUser.username,
-          // Ensure a valid category is assigned, fallback to 'others' if not set
           category: fileObj.category || DocumentCategory.others,
         }));
       

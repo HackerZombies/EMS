@@ -1,11 +1,12 @@
-// pages/api/users/user/[username].ts
+// src/pages/api/users/user/[username].ts
 
 import { NextApiRequest, NextApiResponse } from "next";
 import prisma from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../auth/[...nextauth]";
+import { DocumentCategory } from "@prisma/client"; // Import DocumentCategory from Prisma
 
-const ALLOWED_ROLES = [ "HR" , "ADMIN"];
+const ALLOWED_ROLES = ["HR", "ADMIN"];
 
 export default async function handler(
   req: NextApiRequest,
@@ -27,7 +28,7 @@ export default async function handler(
     }
 
     const { username } = req.query;
-    if (!username) {
+    if (!username || typeof username !== "string") {
       return res.status(400).json({ message: "Username is required" });
     }
 
@@ -57,7 +58,7 @@ export default async function handler(
     }
 
     return res.status(200).json(user);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error fetching user:", error);
     return res.status(500).json({ message: "Internal Server Error" });
   }

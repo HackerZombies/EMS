@@ -3,16 +3,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import multer from 'multer';
 import prisma from '@/lib/prisma';
-
-// Enum for Document Categories (matching the Prisma model)
-enum DocumentCategory {
-  resume = 'resume',
-  education = 'education',
-  identity = 'identity',
-  certifications = 'certifications',
-  skills = 'skills',
-  others = 'others',
-}
+import { DocumentCategory } from '@prisma/client'; // Import DocumentCategory from Prisma
+import path from 'path'; // Import the 'path' module
+import { v4 as uuidv4 } from 'uuid'; // Import UUID for unique identifiers
+import { fileTypeFromBuffer, FileTypeResult } from 'file-type'; // Import file-type for content validation
 
 // Disable Next.js's default body parser to handle multipart/form-data
 export const config = {
@@ -37,6 +31,24 @@ const runMiddleware = (
   });
 };
 
+// Enhanced sanitizeFilename Function with UUID
+const sanitizeFileName = (fileName: string): string => {
+  const name = path.basename(fileName, path.extname(fileName)); // Extract name without extension
+  const extension = path.extname(fileName).toLowerCase(); // Get and lowercase extension
+
+  // Sanitize the base name
+  const sanitizedBase = name
+    .toLowerCase()
+    .replace(/[^a-z0-9.-]/g, '_') // Replace invalid characters with '_'
+    .replace(/_+/g, '_'); // Replace multiple '_' with single '_'
+
+  // Generate a unique identifier
+  const uniqueSuffix = uuidv4(); // Alternatively, use Date.now() for simpler uniqueness
+
+  // Reconstruct the sanitized filename with unique suffix
+  return `${sanitizedBase}_${uniqueSuffix}${extension}`;
+};
+
 // Configure multer storage (store files in memory for simplicity)
 const storage = multer.memoryStorage();
 
@@ -45,11 +57,17 @@ const upload = multer({
   storage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
   fileFilter: (req, file, cb) => {
+    // Initial MIME type check
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new multer.MulterError('LIMIT_UNEXPECTED_FILE', 'Invalid file type'));
+      cb(
+        new multer.MulterError(
+          'LIMIT_UNEXPECTED_FILE',
+          'Invalid file type. Only PDF, JPEG, and PNG are allowed.'
+        )
+      );
     }
   },
 }).array('files'); // Expect 'files' field for uploads
@@ -79,9 +97,7 @@ const handler = async (
       return handleDELETE(req, res, username);
     default:
       res.setHeader('Allow', ['GET', 'POST', 'DELETE']);
-      return res
-        .status(405)
-        .json({ error: `Method ${req.method} Not Allowed` });
+      return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
   }
 };
 
@@ -101,11 +117,17 @@ const handleGET = async (
           filename: true,
           fileType: true,
           data: true,
+          userUsername: true,
         },
       });
 
       if (!document) {
         return res.status(404).json({ error: 'Document not found' });
+      }
+
+      // Ensure the document belongs to the user
+      if (document.userUsername !== username) {
+        return res.status(403).json({ error: 'Unauthorized access to document' });
       }
 
       // Set headers for file download
@@ -174,7 +196,7 @@ const handlePOST = async (
       ? req.body.category
       : Array.isArray(req.body.category)
       ? req.body.category[0]
-      : DocumentCategory.others;
+      : DocumentCategory.others; // Updated to match enum
 
   // Validate category
   if (!Object.values(DocumentCategory).includes(category as DocumentCategory)) {
@@ -185,14 +207,39 @@ const handlePOST = async (
     return res.status(400).json({ error: 'No files uploaded' });
   }
 
+  // Define allowed file types based on 'file-type' detection
+  const allowedFileTypes: { mime: string; ext: string }[] = [
+    { mime: 'application/pdf', ext: '.pdf' },
+    { mime: 'image/jpeg', ext: '.jpg' },
+    { mime: 'image/png', ext: '.png' },
+  ];
+
   try {
     const uploadedDocs = await Promise.all(
       files.map(async (file) => {
+        // Advanced File Type Validation using 'file-type'
+        const fileTypeResult: FileTypeResult | undefined = await fileTypeFromBuffer(file.buffer);
+
+        if (!fileTypeResult) {
+          throw new Error(`Unable to determine the file type of ${file.originalname}`);
+        }
+
+        const isAllowed = allowedFileTypes.some(
+          (type) => type.mime === fileTypeResult.mime && path.extname(file.originalname).toLowerCase() === type.ext
+        );
+
+        if (!isAllowed) {
+          throw new Error(`Invalid file type for ${file.originalname}. Allowed types are PDF, JPEG, PNG.`);
+        }
+
+        // Sanitize the filename
+        const sanitizedFilename = sanitizeFileName(file.originalname);
+
         // Create document entry in the database
         const document = await prisma.employeeDocument.create({
           data: {
-            filename: file.originalname,
-            fileType: file.mimetype,
+            filename: sanitizedFilename, // Use sanitized filename
+            fileType: fileTypeResult.mime, // Use detected MIME type
             size: file.size,
             data: file.buffer,
             category: category as DocumentCategory,
@@ -216,7 +263,7 @@ const handlePOST = async (
     return res.status(200).json(uploadedDocs);
   } catch (error: any) {
     console.error('Error uploading documents:', error);
-    return res.status(500).json({
+    return res.status(400).json({
       error: error.message || 'Failed to upload documents',
     });
   }

@@ -18,6 +18,7 @@ import QualificationsForm, {
 } from "@/components/add-New-Employee/QualificationsForm";
 import DocumentsForm, {
   UploadedDocuments,
+  UploadedDocument,
 } from "@/components/add-New-Employee/DocumentsForm";
 
 export interface CreateUserFormData {
@@ -57,7 +58,7 @@ export default function CreateUserPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Authorization logic
-  const allowedRoles = ["ADMIN"];
+  const allowedRoles = ["ADMIN"]; // Updated to lowercase to match the enum
   if (status === "loading") {
     return (
       <div className="flex justify-center items-center h-screen bg-gray-900">
@@ -72,6 +73,111 @@ export default function CreateUserPage() {
   }
 
   const [activeTab, setActiveTab] = useState("personal");
+
+  // Initialize UploadedDocuments with all categories as empty arrays
+  const initialUploadedDocuments: UploadedDocuments = {
+    // **Identity Documents**
+    aadhaar_card: [],
+    pan_card: [],
+    passport: [],
+    voter_id: [],
+    driving_license: [],
+    other_identity_documents: [],
+
+    // **Educational Documents**
+    tenth_marksheet: [],
+    twelfth_marksheet: [],
+    graduation_degree: [],
+    masters_degree: [],
+    postgraduate_degree: [],
+    diploma_certificate: [],
+    educational_transcript: [],
+    other_educational_documents: [],
+
+    // **Employment Documents**
+    resume: [],
+    previous_employment_certificate: [],
+    experience_letter: [],
+    relieving_letter: [],
+    salary_slip: [],
+    offer_letter: [],
+    appointment_letter: [],
+    employment_contract: [],
+    other_employment_documents: [],
+
+    // **Certification Documents**
+    professional_certifications: [],
+    language_certifications: [],
+    technical_certifications: [],
+    industry_specific_certifications: [],
+    other_certifications: [],
+
+    // **Address Proof Documents**
+    utility_bill: [],
+    rental_agreement: [],
+    bank_statement: [],
+    passport_copy: [],
+    ration_card: [],
+    lease_agreement: [],
+    other_address_proof: [],
+
+    // **Skills Documents**
+    portfolio: [],
+    project_documents: [],
+    skill_certificates: [],
+    training_completion_certificates: [],
+    other_skills_documents: [],
+
+    // **Financial Documents**
+    form_16: [],
+    it_return: [],
+    bank_passbook: [],
+    canceled_cheque: [],
+    salary_certificate: [],
+    other_financial_documents: [],
+
+    // **Insurance Documents**
+    health_insurance_policy: [],
+    life_insurance_policy: [],
+    motor_insurance: [],
+    other_insurance_documents: [],
+
+    // **Legal Documents**
+    nda_agreement: [],
+    legal_contracts: [],
+    court_clearance_certificate: [],
+    police_clearance_certificate: [],
+    other_legal_documents: [],
+
+    // **Professional Licenses**
+    engineering_license: [],
+    medical_license: [],
+    teaching_license: [],
+    other_professional_licenses: [],
+
+    // **Company-Specific Documents**
+    signed_policies: [],
+    employee_handbook: [],
+    non_disclosure_agreement: [],
+    non_compete_agreement: [],
+    other_company_documents: [],
+
+    // **Dependents' Documents**
+    spouse_aadhaar_card: [],
+    spouse_pan_card: [],
+    child_birth_certificate: [],
+    child_school_certificate: [],
+    other_dependents_documents: [],
+
+    // **Additional Documents**
+    photo: [],
+    medical_certificate: [],
+    reference_letters: [],
+    birth_certificate: [],
+    marriage_certificate: [],
+    resignation_letter: [],
+    other_documents: [],
+  };
 
   const [formData, setFormData] = useState<CreateUserFormData>({
     firstName: "",
@@ -95,56 +201,86 @@ export default function CreateUserPage() {
     qualifications: [],
     experiences: [],
     certifications: [],
-    documents: {
-      resume: [],
-      education: [],
-      identity: [],
-      certification: [],
-      skills: [],
-      others: [],
-    },
+    documents: initialUploadedDocuments,
     profileImageUrl: "",
     avatarImageUrl: "",
+    sameAsResidential: false,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-  
+
     // Clear previous messages
     setSuccessMessage(null);
     setErrorMessage(null);
-  
+
     const formDataToSend = new FormData();
-    Object.entries(formData).forEach(([key, value]) => {
-      if (key === "documents") {
-        Object.entries(value as UploadedDocuments).forEach(
-          ([docType, docArray]) => {
-            docArray.forEach(
-              (doc: { file: File; displayName: string }, index: number) => {
-                formDataToSend.append(
-                  `documents[${docType}][${index}][file]`,
-                  doc.file
-                );
-                formDataToSend.append(
-                  `documents[${docType}][${index}][displayName]`,
-                  doc.displayName
-                );
-                // Directly use docType as the category without converting to lowercase
-                formDataToSend.append(
-                  `documents[${docType}][${index}][category]`,
-                  docType
-                );
-              }
-            );
-          }
-        );
-      } else if (Array.isArray(value)) {
-        formDataToSend.append(key, JSON.stringify(value));
-      } else {
-        formDataToSend.append(key, value as string);
+
+    // Append simple fields
+    const simpleFields: Array<keyof CreateUserFormData> = [
+      "firstName",
+      "middleName",
+      "lastName",
+      "email",
+      "phoneNumber",
+      "dob",
+      "residentialAddress",
+      "permanentAddress",
+      "nationality",
+      "gender",
+      "bloodGroup",
+      "role",
+      "department",
+      "position",
+      "workLocation",
+      "employmentType",
+      "joiningDate",
+      "profileImageUrl",
+      "avatarImageUrl",
+      "sameAsResidential",
+    ];
+
+    simpleFields.forEach((field) => {
+      const value = formData[field];
+      if (value !== undefined && value !== null) {
+        formDataToSend.append(field, String(value));
       }
     });
-  
+
+    // Append complex fields (arrays)
+    const complexFields: Array<keyof CreateUserFormData> = [
+      "emergencyContacts",
+      "qualifications",
+      "experiences",
+      "certifications",
+    ];
+
+    complexFields.forEach((field) => {
+      const value = formData[field];
+      if (Array.isArray(value)) {
+        formDataToSend.append(field, JSON.stringify(value));
+      }
+    });
+
+    // Append documents
+    Object.entries(formData.documents).forEach(([docType, docsArray]) => {
+      docsArray.forEach((doc: UploadedDocument, index: number) => {
+        formDataToSend.append(`documents[${docType}][${index}][file]`, doc.file);
+        formDataToSend.append(
+          `documents[${docType}][${index}][displayName]`,
+          doc.displayName
+        );
+        formDataToSend.append(
+          `documents[${docType}][${index}][category]`,
+          docType
+        );
+        formDataToSend.append(
+          `documents[${docType}][${index}][id]`,
+          doc.id
+        ); // Optional: If you need to track IDs on the backend
+      });
+    });
+
     try {
       const response = await fetch("/api/users/newUser", {
         method: "POST",
@@ -157,7 +293,6 @@ export default function CreateUserPage() {
         setErrorMessage(errorData.message || "Conflict: User may already exist.");
         return;
       }
-    
 
       if (!response.ok) {
         throw new Error("Failed to create user");
@@ -176,7 +311,7 @@ export default function CreateUserPage() {
 
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-3xl font-bold mb-4">Add New Employee</h1>
+      
       
       {/* Notification Messages */}
       {successMessage && (

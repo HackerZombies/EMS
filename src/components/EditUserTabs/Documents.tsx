@@ -2,7 +2,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Trash2, ArrowUpSquare, ArrowDownSquare } from 'lucide-react';
 import { FiUpload } from 'react-icons/fi';
@@ -24,13 +24,109 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
+// Define Document Categories
 const DocumentCategories = [
+  // Identity Documents
+  'aadhaar_card',
+  'pan_card',
+  'passport',
+  'voter_id',
+  'driving_license',
+  'other_identity_documents',
+
+  // Educational Documents
+  'tenth_marksheet',
+  'twelfth_marksheet',
+  'graduation_degree',
+  'masters_degree',
+  'postgraduate_degree',
+  'diploma_certificate',
+  'educational_transcript',
+  'other_educational_documents',
+
+  // Employment Documents
   'resume',
-  'education',
-  'identity',
-  'certifications',
-  'skills',
-  'others',
+  'previous_employment_certificate',
+  'experience_letter',
+  'relieving_letter',
+  'salary_slip',
+  'offer_letter',
+  'appointment_letter',
+  'employment_contract',
+  'other_employment_documents',
+
+  // Certification Documents
+  'professional_certifications',
+  'language_certifications',
+  'technical_certifications',
+  'industry_specific_certifications',
+  'other_certifications',
+
+  // Address Proof Documents
+  'utility_bill',
+  'rental_agreement',
+  'bank_statement',
+  'passport_copy',
+  'ration_card',
+  'lease_agreement',
+  'other_address_proof',
+
+  // Skills Documents
+  'portfolio',
+  'project_documents',
+  'skill_certificates',
+  'training_completion_certificates',
+  'other_skills_documents',
+
+  // Financial Documents
+  'form_16',
+  'it_return',
+  'bank_passbook',
+  'canceled_cheque',
+  'salary_certificate',
+  'other_financial_documents',
+
+  // Insurance Documents
+  'health_insurance_policy',
+  'life_insurance_policy',
+  'motor_insurance',
+  'other_insurance_documents',
+
+  // Legal Documents
+  'nda_agreement',
+  'legal_contracts',
+  'court_clearance_certificate',
+  'police_clearance_certificate',
+  'other_legal_documents',
+
+  // Professional Licenses
+  'engineering_license',
+  'medical_license',
+  'teaching_license',
+  'other_professional_licenses',
+
+  // Company-Specific Documents
+  'signed_policies',
+  'employee_handbook',
+  'non_disclosure_agreement',
+  'non_compete_agreement',
+  'other_company_documents',
+
+  // Dependents' Documents
+  'spouse_aadhaar_card',
+  'spouse_pan_card',
+  'child_birth_certificate',
+  'child_school_certificate',
+  'other_dependents_documents',
+
+  // Additional Documents
+  'photo',
+  'medical_certificate',
+  'reference_letters',
+  'birth_certificate',
+  'marriage_certificate',
+  'resignation_letter',
+  'other_documents',
 ] as const;
 
 type DocumentCategory = typeof DocumentCategories[number];
@@ -47,22 +143,22 @@ interface Document {
 
 interface DocumentsSectionProps {
   userUsername: string;
-  isEditMode: boolean; // Added property
+  isEditMode: boolean;
 }
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
-const DocumentsSection: React.FC<DocumentsSectionProps> = ({ userUsername, isEditMode }) => { // Destructure isEditMode
+const DocumentsSection: React.FC<DocumentsSectionProps> = ({ userUsername, isEditMode }) => {
   const [documents, setDocuments] = useState<{ [category: string]: Document[] }>({});
   const [uploading, setUploading] = useState<boolean>(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<DocumentCategory>('others');
-  const [uploadProgress, setUploadProgress] = useState<number>(0); // Added progress state
+  const [selectedCategory, setSelectedCategory] = useState<DocumentCategory>('other_documents'); // Fixed initial value
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [isModalOpen, setModalOpen] = useState<boolean>(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [selectedDocs, setSelectedDocs] = useState<string[]>([]); // For bulk actions
+  const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
 
   // Fetch Documents on Component Mount
   useEffect(() => {
@@ -72,7 +168,7 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ userUsername, isEdi
         if (!response.ok) throw new Error('Failed to fetch documents');
         const data: Document[] = await response.json();
 
-        const groupedDocs = data.reduce((acc: any, doc: Document) => {
+        const groupedDocs = data.reduce((acc: { [key: string]: Document[] }, doc: Document) => {
           acc[doc.category] = acc[doc.category] || [];
           acc[doc.category].push(doc);
           return acc;
@@ -100,7 +196,7 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ userUsername, isEdi
     }
   };
 
-  // Handle File Upload with Progress using fetch and Axios (if needed)
+  // Handle File Upload with Progress using XMLHttpRequest
   const handleUpload = async () => {
     if (selectedFiles.length === 0) {
       toast.info('Please select files to upload.');
@@ -108,10 +204,10 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ userUsername, isEdi
     }
 
     setUploading(true);
-    setUploadProgress(0); // Reset progress
+    setUploadProgress(0);
     try {
       const formData = new FormData();
-      formData.append('category', selectedCategory); // Append category once
+      formData.append('category', selectedCategory);
       selectedFiles.forEach((file) => {
         formData.append('files', file);
       });
@@ -173,7 +269,7 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ userUsername, isEdi
 
   // Handle Document Deletion
   const handleDelete = async (id: string, category: DocumentCategory) => {
-    if (!isEditMode) return; // Prevent deletion if not in edit mode
+    if (!isEditMode) return;
     if (!window.confirm('Are you sure you want to delete this document?')) return;
 
     try {
@@ -354,7 +450,10 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ userUsername, isEdi
           >
             {DocumentCategories.map((category) => (
               <option key={category} value={category}>
-                {category.charAt(0).toUpperCase() + category.slice(1)}
+                {category
+                  .split('_')
+                  .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+                  .join(' ')}
               </option>
             ))}
           </select>
@@ -437,7 +536,10 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ userUsername, isEdi
             {Object.entries(documents).map(([category, docs]) => (
               <AccordionItem key={category} value={category}>
                 <AccordionTrigger className="text-lg font-medium text-gray-800">
-                  {category.charAt(0).toUpperCase() + category.slice(1)}
+                  {category
+                    .split('_')
+                    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+                    .join(' ')}
                 </AccordionTrigger>
                 <AccordionContent>
                   <Table>
@@ -469,7 +571,7 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ userUsername, isEdi
                         <TableHead>Filename</TableHead>
                         <TableHead>Date Uploaded</TableHead>
                         <TableHead>Size</TableHead>
-                        {isEditMode && <TableHead>Actions</TableHead>} {/* Conditionally render Actions */}
+                        {isEditMode && <TableHead>Actions</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -502,7 +604,7 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ userUsername, isEdi
                               <div className="flex items-center space-x-3">
                                 {/* Download Button */}
                                 <Button
-                                  asChild // Use asChild to render as <a>
+                                  asChild
                                   variant="outline"
                                   size="sm"
                                   className="flex items-center text-blue-600 hover:text-blue-500 transition"

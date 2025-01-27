@@ -77,13 +77,110 @@ enum Department {
 }
 
 enum DocumentCategory {
+  // **Identity Documents**
+  aadhaar_card
+  pan_card
+  passport
+  voter_id
+  driving_license
+  other_identity_documents
+
+  // **Educational Documents**
+  tenth_marksheet
+  twelfth_marksheet
+  graduation_degree
+  masters_degree
+  postgraduate_degree
+  diploma_certificate
+  educational_transcript
+  other_educational_documents
+
+  // **Employment Documents**
   resume
-  education
-  identity
-  certifications
-  skills
+  previous_employment_certificate
+  experience_letter
+  relieving_letter
+  salary_slip
+  offer_letter
+  appointment_letter
+  employment_contract
+  other_employment_documents
+
+  // **Certification Documents**
+  professional_certifications
+  language_certifications
+  technical_certifications
+  industry_specific_certifications
+  other_certifications
+
+  // **Address Proof Documents**
+  utility_bill
+  rental_agreement
+  bank_statement
+  passport_copy
+  ration_card
+  lease_agreement
+  other_address_proof
+
+  // **Skills Documents**
+  portfolio
+  project_documents
+  skill_certificates
+  training_completion_certificates
+  other_skills_documents
+
+  // **Financial Documents**
+  form_16
+  it_return
+  bank_passbook
+  canceled_cheque
+  salary_certificate
+  other_financial_documents
+
+  // **Insurance Documents**
+  health_insurance_policy
+  life_insurance_policy
+  motor_insurance
+  other_insurance_documents
+
+  // **Legal Documents**
+  nda_agreement
+  legal_contracts
+  court_clearance_certificate
+  police_clearance_certificate
+  other_legal_documents
+
+  // **Professional Licenses**
+  engineering_license
+  medical_license
+  teaching_license
+  other_professional_licenses
+
+  // **Company-Specific Documents**
+  signed_policies
+  employee_handbook
+  non_disclosure_agreement
+  non_compete_agreement
+  other_company_documents
+
+  // **Dependents' Documents**
+  spouse_aadhaar_card
+  spouse_pan_card
+  child_birth_certificate
+  child_school_certificate
+  other_dependents_documents
+
+  // **Additional Documents**
+  photo
+  medical_certificate
+  reference_letters
+  birth_certificate
+  marriage_certificate
+  resignation_letter
+  other_documents
   others
 }
+
 
 // ──────────────────────────────────────────────────────────
 // Models

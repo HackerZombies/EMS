@@ -1,3 +1,4 @@
+// pages/add-New-Employee/index.tsx
 import React, { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -43,7 +44,7 @@ export interface CreateUserFormData {
   qualifications: QualificationsFormData["qualifications"];
   experiences: any[];
   certifications: any[];
-  documents: UploadedDocuments;
+  documents: UploadedDocuments; // Our typed object containing arrays of files per category
   profileImageUrl: string;
   avatarImageUrl: string;
   sameAsResidential?: boolean;
@@ -58,7 +59,7 @@ export default function CreateUserPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Authorization logic
-  const allowedRoles = ["ADMIN"]; // Updated to lowercase to match the enum
+  const allowedRoles = ["ADMIN"]; 
   if (status === "loading") {
     return (
       <div className="flex justify-center items-center h-screen bg-gray-900">
@@ -263,9 +264,17 @@ export default function CreateUserPage() {
     });
 
     // Append documents
+    // For each category, for each document in that category, we append:
+    //   documents[category][index][file]
+    //   documents[category][index][displayName]
+    //   documents[category][index][category]
+    //   documents[category][index][id]  (optional if you need it)
     Object.entries(formData.documents).forEach(([docType, docsArray]) => {
       docsArray.forEach((doc: UploadedDocument, index: number) => {
-        formDataToSend.append(`documents[${docType}][${index}][file]`, doc.file);
+        formDataToSend.append(
+          `documents[${docType}][${index}][file]`,
+          doc.file
+        );
         formDataToSend.append(
           `documents[${docType}][${index}][displayName]`,
           doc.displayName
@@ -274,10 +283,11 @@ export default function CreateUserPage() {
           `documents[${docType}][${index}][category]`,
           docType
         );
+        // Optional ID field:
         formDataToSend.append(
           `documents[${docType}][${index}][id]`,
           doc.id
-        ); // Optional: If you need to track IDs on the backend
+        );
       });
     });
 
@@ -289,8 +299,9 @@ export default function CreateUserPage() {
 
       if (response.status === 409) {
         const errorData = await response.json();
-        // Use a notification or inline message to display conflict information
-        setErrorMessage(errorData.message || "Conflict: User may already exist.");
+        setErrorMessage(
+          errorData.message || "Conflict: User may already exist."
+        );
         return;
       }
 
@@ -301,7 +312,7 @@ export default function CreateUserPage() {
       const data = await response.json();
       // Show success message
       setSuccessMessage(`New user created with username: ${data.username}`);
-      // Redirect using dynamic route
+      // Optionally navigate to the newly created user’s page
       router.push(`/manage/users/user/${data.username}`);
     } catch (error) {
       console.error("Error creating user:", error);
@@ -311,8 +322,6 @@ export default function CreateUserPage() {
 
   return (
     <div className="container mx-auto p-4">
-      
-      
       {/* Notification Messages */}
       {successMessage && (
         <div className="mb-4 p-4 bg-green-100 text-green-800 rounded">
@@ -349,11 +358,17 @@ export default function CreateUserPage() {
               </TabsList>
 
               <TabsContent value="personal">
-                <PersonalInfoForm formData={formData} setFormData={setFormData} />
+                <PersonalInfoForm
+                  formData={formData}
+                  setFormData={setFormData}
+                />
               </TabsContent>
 
               <TabsContent value="job">
-                <JobDetailsForm formData={formData} setFormData={setFormData} />
+                <JobDetailsForm
+                  formData={formData}
+                  setFormData={setFormData}
+                />
               </TabsContent>
 
               <TabsContent value="qualifications">

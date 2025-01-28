@@ -27,32 +27,17 @@ export const config = {
 
 // Utility Functions
 
-/**
- * Generates a unique username based on the user's first name.
- * @param firstName - The user's first name.
- * @returns A unique username string.
- */
 function generateUsername(firstName: string): string {
   const randomNumber = Math.floor(Math.random() * 90000) + 10000;
   const formattedFirstName = firstName.toLowerCase().replace(/\s+/g, "");
   return `${formattedFirstName}${randomNumber}`;
 }
 
-/**
- * Validates the format of an email address.
- * @param email - The email address to validate.
- * @returns A boolean indicating whether the email is valid.
- */
 function validateEmail(email: string): boolean {
-  const re = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  const re = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
   return re.test(String(email).toLowerCase());
 }
 
-/**
- * Generates a secure random password.
- * @param length - The desired length of the password.
- * @returns A secure password string.
- */
 function generateSecurePassword(length = 12): string {
   const charset =
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+";
@@ -67,40 +52,41 @@ function generateSecurePassword(length = 12): string {
 // Type Definitions
 
 interface FormFields {
-  firstName: string;
+  firstName?: string;
   middleName?: string;
-  lastName: string;
-  dob: string;
-  phoneNumber: string;
-  email: string;
-  residentialAddress: string;
-  permanentAddress: string;
-  nationality: string;
-  gender: string;
-  bloodGroup: string;
-  role: string;
-  department: string;
-  position: string;
-  workLocation: string;
-  employmentType: string;
-  joiningDate: string;
-  emergencyContacts: string;
-  qualifications: string;
-  experiences: string;
-  certifications: string;
-  profileImageUrl: string;
-  avatarImageUrl: string;
-
-  // Dynamic keys for documents
-  [key: `documents[${string}][${number}][file]`]: any;
-  [key: `documents[${string}][${number}][displayName]`]: any;
-  [key: `documents[${string}][${number}][category]`]: any;
-  [key: `documents[${string}][${number}][id]`]: any;
+  lastName?: string;
+  dob?: string;
+  phoneNumber?: string;
+  email?: string;
+  residentialAddress?: string;
+  permanentAddress?: string;
+  nationality?: string;
+  gender?: string;
+  bloodGroup?: string;
+  role?: string;
+  department?: string;
+  position?: string;
+  workLocation?: string;
+  employmentType?: string;
+  joiningDate?: string;
+  emergencyContacts?: string;
+  qualifications?: string;
+  experiences?: string;
+  certifications?: string;
+  profileImageUrl?: string;
+  avatarImageUrl?: string;
+  [key: string]: any; // allow indexing
 }
 
 interface FileEntry {
   filename: string;
   buffer: Buffer;
+}
+
+interface DocumentUpload {
+  file?: FileEntry;
+  displayName?: string;
+  category: DocumentCategory;
 }
 
 interface EmployeeDocumentData {
@@ -110,8 +96,6 @@ interface EmployeeDocumentData {
   userUsername: string;
   category: DocumentCategory;
 }
-
-// Main Handler Function
 
 export default async function handle(req: NextApiRequest, res: NextApiResponse) {
   // Authentication Check
@@ -125,32 +109,75 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     return res.status(405).json({ message: "Method Not Allowed" });
   }
 
-  // Initialize Busboy
+  // Initialize Busboy with higher file-size limits (e.g., 200MB)
   const bb = busboy({
     headers: req.headers,
-    limits: { files: 100, fileSize: 50 * 1024 * 1024 }, // 50MB per file, up to 100 files
+    limits: {
+      files: 100,             // up to 100 files
+      fileSize: 200 * 1024 * 1024, // 200MB per file
+    },
   });
 
-  const fields: Partial<FormFields> = {};
-  const files: {
-    file: FileEntry;
-    customName?: string;
-    category?: DocumentCategory;
-  }[] = [];
+  // We'll store all non-file fields here
+  const fields: FormFields = {};
+
+  // We'll store each uploaded document in a structure keyed by:
+  //   documents[<categoryName>][<index>]
+  //
+  // Example:
+  //   documents[resume][0][file], documents[resume][0][displayName], etc.
+  //
+  // The data shape is:
+  //   documentsMap[categoryName][index] = { file, displayName, category }
+  //
+  const documentsMap: Record<
+    string,
+    Record<number, DocumentUpload>
+  > = {};
 
   /**
-   * Parses the incoming form data using Busboy.
-   * @returns A promise that resolves when parsing is complete.
+   * Parse form using Busboy
    */
   const parseForm = () =>
     new Promise<void>((resolve, reject) => {
-      // Handle non-file fields
-      bb.on("field", (name, val) => {
-        fields[name as keyof FormFields] = val;
+      // Handle text fields
+      bb.on("field", (fieldname, value) => {
+        // e.g. fieldname = "documents[resume][0][displayName]"
+        // or a normal field like "firstName", "lastName", etc.
+        const docMatch = fieldname.match(/^documents\[(.+?)\]\[(\d+)\]\[(.+?)\]$/);
+        if (docMatch) {
+          const [_, docCategory, docIndexStr, docField] = docMatch;
+          const docIndex = parseInt(docIndexStr, 10);
+          if (!documentsMap[docCategory]) {
+            documentsMap[docCategory] = {};
+          }
+          if (!documentsMap[docCategory][docIndex]) {
+            documentsMap[docCategory][docIndex] = {
+              category: (Object.values(DocumentCategory).includes(docCategory as DocumentCategory)
+                ? (docCategory as DocumentCategory)
+                : DocumentCategory.others),
+            };
+          }
+
+          // If this is "displayName", store it; if it is "category", we can override
+          // the category if the user specifically wants to pass it. (Optional)
+          if (docField === "displayName") {
+            documentsMap[docCategory][docIndex].displayName = value;
+          } else if (docField === "category") {
+            // user might explicitly pass a category string as well
+            documentsMap[docCategory][docIndex].category = (Object.values(DocumentCategory).includes(value as DocumentCategory)
+              ? (value as DocumentCategory)
+              : DocumentCategory.others);
+          }
+        } else {
+          // Normal field
+          fields[fieldname] = value;
+        }
       });
 
       // Handle file uploads
-      bb.on("file", (name, file, info) => {
+      bb.on("file", (fieldname, file, info) => {
+        // fieldname = "documents[resume][0][file]"
         const { filename, mimeType } = info;
         const allowedFileTypes = [
           "application/pdf",
@@ -165,74 +192,62 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
         ];
 
         if (!allowedFileTypes.includes(mimeType)) {
-          file.resume(); // Discard the file
+          file.resume(); // Discard
           return reject(new Error(`Invalid file type: ${mimeType}`));
         }
 
+        const docMatch = fieldname.match(/^documents\[(.+?)\]\[(\d+)\]\[file\]$/);
+        if (!docMatch) {
+          // If a file doesn't match our documents pattern, skip it
+          file.resume();
+          return;
+        }
+
+        const [_, docCategory, docIndexStr] = docMatch;
+        const docIndex = parseInt(docIndexStr, 10);
+
+        if (!documentsMap[docCategory]) {
+          documentsMap[docCategory] = {};
+        }
+        if (!documentsMap[docCategory][docIndex]) {
+          documentsMap[docCategory][docIndex] = {
+            category: (Object.values(DocumentCategory).includes(docCategory as DocumentCategory)
+              ? (docCategory as DocumentCategory)
+              : DocumentCategory.others),
+          };
+        }
+
         const fileBuffers: Buffer[] = [];
-
-        file.on("data", (data: Buffer) => {
-          fileBuffers.push(data);
-        });
-
-        file.on("end", () => {
-          const buffer = Buffer.concat(fileBuffers);
-          files.push({ file: { filename, buffer } });
-        });
-
+        file.on("data", (data: Buffer) => fileBuffers.push(data));
         file.on("error", (err) => {
           console.error("File stream error:", err);
-          reject(new Error("File upload error"));
+          reject(err);
+        });
+        file.on("end", () => {
+          const buffer = Buffer.concat(fileBuffers);
+          documentsMap[docCategory][docIndex].file = {
+            filename,
+            buffer,
+          };
         });
       });
 
-      // Handle parsing errors
       bb.on("error", (err) => {
         console.error("Busboy error:", err);
         reject(err);
       });
 
-      // After parsing all fields and files
       bb.on("finish", () => {
-        // Iterate over field keys to find category fields in the nested structure
-        let fileCounter = 0;
-        Object.keys(fields).forEach((fieldKey) => {
-          const match = fieldKey.match(/^documents\[(.+?)\]\[(\d+)\]\[category\]$/);
-          if (match) {
-            const providedCategory = match[1] as DocumentCategory;
-            const index = parseInt(match[2], 10);
-            if (files[index]) {
-              if (Object.values(DocumentCategory).includes(providedCategory)) {
-                files[index].category = providedCategory;
-              } else {
-                files[index].category = DocumentCategory.others;
-              }
-            }
-          }
-        });
-      
-        // Assign custom names and ensure a default category is set
-        files.forEach((fileObj, index) => {
-          const customNameField = `documents[${fileObj.category}][${index}][displayName]`;
-          if ((fields as Record<string, any>).hasOwnProperty(customNameField)) {
-            fileObj.customName = (fields as Record<string, any>)[customNameField];
-          }
-          if (!fileObj.category) {
-            fileObj.category = DocumentCategory.others;
-          }
-        });
-      
         resolve();
       });
-      
+
       req.pipe(bb);
     });
 
   try {
-    // Parse the incoming form data
     await parseForm();
 
-    // Destructure form fields
+    // Now we have all fields in `fields` and all documents in `documentsMap`
     const {
       firstName,
       middleName,
@@ -272,6 +287,11 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(400).json({ message: "Missing required fields" });
     }
 
+    // Validate email format
+    if (!validateEmail(email)) {
+      return res.status(400).json({ message: "Invalid email format" });
+    }
+
     // Helper function to safely parse JSON arrays
     const safeJsonParse = <T>(str: string | undefined): T[] => {
       if (!str) return [];
@@ -283,7 +303,6 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       }
     };
 
-    // Parse arrays
     const parsedEmergencyContacts = safeJsonParse<any>(emergencyContacts);
     const parsedQualifications = safeJsonParse<any>(qualifications).map(
       (q: any) => ({
@@ -296,204 +315,216 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     const parsedExperiences = safeJsonParse<any>(experiences);
     const parsedCertifications = safeJsonParse<any>(certifications);
 
-    // Validate email format
-    if (!validateEmail(email as string)) {
-      return res.status(400).json({ message: "Invalid email format" });
+    // Generate username and password
+    const username = generateUsername(firstName);
+    const generatedPassword = generateSecurePassword();
+    const hashedPassword = await bcrypt.hash(generatedPassword, 10);
+
+    // Validate enumerations
+    const validRoles: UserRole[] = ["ADMIN", "HR", "EMPLOYEE"];
+    if (!validRoles.includes(role as UserRole)) {
+      return res.status(400).json({ message: "Invalid role" });
     }
 
-    try {
-      // Generate username and password
-      const username = generateUsername(firstName as string);
-      const generatedPassword = generateSecurePassword();
-      const hashedPassword = await bcrypt.hash(generatedPassword, 10);
+    const validGenders: Gender[] = ["M", "F", "Other"];
+    if (!validGenders.includes(gender as Gender)) {
+      return res.status(400).json({ message: "Invalid gender" });
+    }
 
-      // Validate enumerations
-      const validRoles: UserRole[] = ["ADMIN", "HR", "EMPLOYEE"];
-      if (!validRoles.includes(role as UserRole)) {
-        return res.status(400).json({ message: "Invalid role" });
-      }
+    const validBloodGroups: BloodGroup[] = [
+      "A_POSITIVE",
+      "B_POSITIVE",
+      "AB_POSITIVE",
+      "O_POSITIVE",
+      "A_NEGATIVE",
+      "B_NEGATIVE",
+      "AB_NEGATIVE",
+      "O_NEGATIVE",
+    ];
+    if (!validBloodGroups.includes(bloodGroup as BloodGroup)) {
+      return res.status(400).json({ message: "Invalid blood group" });
+    }
 
-      const validGenders: Gender[] = ["M", "F", "Other"];
-      if (!validGenders.includes(gender as Gender)) {
-        return res.status(400).json({ message: "Invalid gender" });
-      }
+    const validEmploymentTypes: EmploymentType[] = [
+      "FULL_TIME",
+      "PART_TIME",
+      "CONTRACT",
+    ];
+    if (!validEmploymentTypes.includes(employmentType as EmploymentType)) {
+      return res.status(400).json({ message: "Invalid employment type" });
+    }
 
-      const validBloodGroups: BloodGroup[] = [
-        "A_POSITIVE",
-        "B_POSITIVE",
-        "AB_POSITIVE",
-        "O_POSITIVE",
-        "A_NEGATIVE",
-        "B_NEGATIVE",
-        "AB_NEGATIVE",
-        "O_NEGATIVE",
-      ];
-      if (!validBloodGroups.includes(bloodGroup as BloodGroup)) {
-        return res.status(400).json({ message: "Invalid blood group" });
-      }
+    const validPositions: Position[] = [
+      Position.Software_Development_Engineer,
+      Position.Embedded_Software_Development_Engineer,
+      Position.Hardware_Engineer,
+      Position.Chief_Technology_Officer,
+      Position.Chief_Executive_Officer,
+      Position.Project_Manager,
+    ];
+    if (!validPositions.includes(position as Position)) {
+      return res.status(400).json({ message: "Invalid position" });
+    }
 
-      const validEmploymentTypes: EmploymentType[] = [
-        "FULL_TIME",
-        "PART_TIME",
-        "CONTRACT",
-      ];
-      if (!validEmploymentTypes.includes(employmentType as EmploymentType)) {
-        return res.status(400).json({ message: "Invalid employment type" });
-      }
+    const validWorkLocations: WorkLocation[] = [
+      WorkLocation.NaviMumbai,
+      WorkLocation.Delhi,
+      WorkLocation.Kochi,
+      WorkLocation.Remote,
+    ];
+    if (!validWorkLocations.includes(workLocation as WorkLocation)) {
+      return res.status(400).json({ message: "Invalid work location" });
+    }
 
-      const validPositions: Position[] = [
-        Position.Software_Development_Engineer,
-        Position.Embedded_Software_Development_Engineer,
-        Position.Hardware_Engineer,
-        Position.Chief_Technology_Officer,
-        Position.Chief_Executive_Officer,
-        Position.Project_Manager
-      ]
-      if (!validPositions.includes(position as Position)) { 
-        return res.status(400).json({ message: "Invalid position" });
-      }
+    const validDepartments: Department[] = [
+      Department.Admin,
+      Department.HR,
+      Department.Software,
+      Department.Hardware,
+      Department.Production,
+    ];
+    if (!validDepartments.includes(department as Department)) {
+      return res.status(400).json({ message: "Invalid department" });
+    }
 
-      const validWorkLocations: WorkLocation[] = [
-        WorkLocation.NaviMumbai,
-        WorkLocation.Delhi,
-        WorkLocation.Kochi,
-        WorkLocation.Remote,
-      ];
-      if (!validWorkLocations.includes(workLocation as WorkLocation)) {
-        return res.status(400).json({ message: "Invalid work location" });
-      }
+    // Create the user
+    const newUser = await prisma.user.create({
+      data: {
+        username,
+        firstName,
+        middleName,
+        lastName,
+        password: hashedPassword,
+        email,
+        phoneNumber,
+        leaveBalance: 28,
+        role: role as UserRole,
+        gender: gender as Gender,
+        bloodGroup: bloodGroup as BloodGroup,
+        employmentType: employmentType as EmploymentType,
+        dob: dob ? new Date(dob) : null,
+        residentialAddress,
+        permanentAddress,
+        department: department as Department,
+        position: position as Position,
+        nationality,
+        workLocation: workLocation as WorkLocation,
+        joiningDate: joiningDate ? new Date(joiningDate) : null,
+        profileImageUrl: profileImageUrl || "",
+        avatarImageUrl: avatarImageUrl || "",
+      },
+    });
 
-      const validDepartments: Department[] = [
-        Department.Admin,
-        Department.HR,
-        Department.Software,
-        Department.Hardware,
-        Department.Production,
-      ];
-      if (!validDepartments.includes(department as Department)) {
-        return res.status(400).json({ message: "Invalid department" });
-      }
-
-      const newUser = await prisma.user.create({
-        data: {
-          username,
-          firstName: firstName as string,
-          middleName: middleName,
-          lastName: lastName as string,
-          password: hashedPassword,
-          email: email as string,
-          phoneNumber: phoneNumber as string,
-          leaveBalance: 28,
-          role: role as UserRole,
-          gender: gender as Gender,
-          bloodGroup: bloodGroup as BloodGroup,
-          employmentType: employmentType as EmploymentType,
-          dob: dob ? new Date(dob as string) : null,
-          residentialAddress: residentialAddress as string,
-          permanentAddress: permanentAddress as string,
-          department: department as Department, // Use enum here
-          position: position as Position,
-          nationality: nationality as string,
-          workLocation: workLocation as WorkLocation,
-          joiningDate: joiningDate ? new Date(joiningDate as string) : null,
-          profileImageUrl: profileImageUrl as string,
-          avatarImageUrl: avatarImageUrl as string,
-        },
-      });
-
-      // Create emergency contacts
-      if (parsedEmergencyContacts.length > 0) {
-        await prisma.emergencyContact.createMany({
-          data: parsedEmergencyContacts.map((ec) => ({
-            name: ec.name,
-            relationship: ec.relationship,
-            phoneNumber: ec.phoneNumber,
-            email: ec.email,
-            userUsername: newUser.username,
-          })),
-        });
-      }
-
-      // Create qualifications
-      if (parsedQualifications.length > 0) {
-        await prisma.qualification.createMany({
-          data: parsedQualifications.map((q) => ({
-            name: q.name,
-            level: q.level,
-            specializations: q.specializations || [],
-            institution: q.institution,
-            username: newUser.username,
-          })),
-        });
-      }
-
-      // Create experiences
-      if (parsedExperiences.length > 0) {
-        await prisma.experience.createMany({
-          data: parsedExperiences.map((exp) => {
-            const experienceData: any = {
-              jobTitle: exp.jobTitle,
-              company: exp.company,
-              description: exp.description,
-              username: newUser.username,
-            };
-            if (exp.startDate) {
-              experienceData.startDate = new Date(exp.startDate);
-            }
-            if (exp.endDate) {
-              experienceData.endDate = new Date(exp.endDate);
-            }
-            return experienceData;
-          }),
-        });
-      }
-
-      // Create certifications
-      if (parsedCertifications.length > 0) {
-        await prisma.certification.createMany({
-          data: parsedCertifications.map((cert) => ({
-            name: cert.name,
-            issuingAuthority: cert.issuingAuthority,
-            licenseNumber: cert.licenseNumber,
-            issueDate: cert.issueDate ? new Date(cert.issueDate) : undefined,
-            expiryDate: cert.expiryDate ? new Date(cert.expiryDate) : undefined,
-            username: newUser.username,
-          })),
-        });
-      }
-
-      // Handle file uploads (EmployeeDocuments), including category
-      if (files.length > 0) {
-        const employeeDocumentsData: EmployeeDocumentData[] = files.map((fileObj) => ({
-          filename: fileObj.customName || fileObj.file.filename,
-          data: fileObj.file.buffer,
-          size: fileObj.file.buffer.length,
+    // Create emergency contacts
+    if (parsedEmergencyContacts.length > 0) {
+      await prisma.emergencyContact.createMany({
+        data: parsedEmergencyContacts.map((ec) => ({
+          name: ec.name,
+          relationship: ec.relationship,
+          phoneNumber: ec.phoneNumber,
+          email: ec.email,
           userUsername: newUser.username,
-          category: fileObj.category || DocumentCategory.others,
-        }));
-      
-        await prisma.employeeDocument.createMany({
-          data: employeeDocumentsData,
+        })),
+      });
+    }
+
+    // Create qualifications
+    if (parsedQualifications.length > 0) {
+      await prisma.qualification.createMany({
+        data: parsedQualifications.map((q) => ({
+          name: q.name,
+          level: q.level,
+          specializations: q.specializations || [],
+          institution: q.institution,
+          username: newUser.username,
+        })),
+      });
+    }
+
+    // Create experiences
+    if (parsedExperiences.length > 0) {
+      await prisma.experience.createMany({
+        data: parsedExperiences.map((exp) => {
+          const experienceData: any = {
+            jobTitle: exp.jobTitle,
+            company: exp.company,
+            description: exp.description,
+            username: newUser.username,
+          };
+          if (exp.startDate) {
+            experienceData.startDate = new Date(exp.startDate);
+          }
+          if (exp.endDate) {
+            experienceData.endDate = new Date(exp.endDate);
+          }
+          return experienceData;
+        }),
+      });
+    }
+
+    // Create certifications
+    if (parsedCertifications.length > 0) {
+      await prisma.certification.createMany({
+        data: parsedCertifications.map((cert) => ({
+          name: cert.name,
+          issuingAuthority: cert.issuingAuthority,
+          licenseNumber: cert.licenseNumber,
+          issueDate: cert.issueDate ? new Date(cert.issueDate) : undefined,
+          expiryDate: cert.expiryDate ? new Date(cert.expiryDate) : undefined,
+          username: newUser.username,
+        })),
+      });
+    }
+
+    // Create EmployeeDocuments for each document in documentsMap
+    // docsMap = {
+    //   [categoryName]: {
+    //       [index]: { file, displayName, category }
+    //   }
+    // }
+    const docsToCreate: EmployeeDocumentData[] = [];
+
+    for (const cat of Object.keys(documentsMap)) {
+      const docIndices = Object.keys(documentsMap[cat]);
+      for (const idxStr of docIndices) {
+        const idx = parseInt(idxStr, 10);
+        const docObj = documentsMap[cat][idx];
+
+        // We have docObj.file, docObj.displayName, docObj.category
+        if (!docObj.file) continue; // no actual file
+        const category = docObj.category || DocumentCategory.others;
+
+        docsToCreate.push({
+          filename: docObj.displayName || docObj.file.filename,
+          data: docObj.file.buffer,
+          size: docObj.file.buffer.length,
+          userUsername: newUser.username,
+          category,
         });
       }
-
-      // Send email with credentials
-      await sendEmail(email as string, username, generatedPassword);
-
-      return res.status(200).json({ username: newUser.username });
-    } catch (error: any) {
-      if (error instanceof PrismaClientKnownRequestError) {
-        if (error.code === "P2002") {
-          const target = error.meta?.target;
-          const field = Array.isArray(target) ? target.join(", ") : target;
-          return res.status(409).json({ message: `The ${field} is already in use.` });
-        }
-      }
-      console.error("Failed to create user:", error);
-      return res.status(500).json({ message: "Failed to create user" });
     }
+
+    if (docsToCreate.length > 0) {
+      await prisma.employeeDocument.createMany({
+        data: docsToCreate,
+      });
+    }
+
+    // Send email with credentials
+    await sendEmail(email, username, generatedPassword);
+
+    return res.status(200).json({ username: newUser.username });
   } catch (error: any) {
-    console.error("Error parsing form:", error);
-    return res.status(400).json({ message: error.message || "Invalid form data" });
+    if (error instanceof PrismaClientKnownRequestError) {
+      if (error.code === "P2002") {
+        const target = error.meta?.target;
+        const field = Array.isArray(target) ? target.join(", ") : target;
+        return res
+          .status(409)
+          .json({ message: `The ${field} is already in use.` });
+      }
+    }
+    console.error("Failed to create user:", error);
+    return res.status(500).json({ message: "Failed to create user" });
   }
 }

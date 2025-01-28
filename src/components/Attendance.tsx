@@ -1,25 +1,37 @@
+// components/Attendance.tsx
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { useAttendanceMarking } from '@/hooks/useAttendanceMarking'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
 import { CheckCircle2, XCircle, Clock, UserCircle2 } from 'lucide-react'
+import { useAttendanceMarking } from '@/hooks/useAttendanceMarking'
+
+// This matches your DB schema or your final type:
+import { Attendance } from '@prisma/client'
 
 interface MobileAttendanceMarkingProps {
   username?: string
+  todayRecord?: Attendance | null  // from getServerSideProps
   onAttendanceMarked: () => void
 }
 
 export function MobileAttendanceMarking({
   username,
+  todayRecord,
   onAttendanceMarked,
 }: MobileAttendanceMarkingProps) {
-  const { markAttendance, loading, error, success, attendanceStatus } =
-    useAttendanceMarking(username || '', onAttendanceMarked)
+  // We pass the record to the hook. Also ensure we do (todayRecord ?? null)
+  const {
+    markAttendance,
+    loading,
+    error,
+    success,
+    attendanceStatus,
+  } = useAttendanceMarking(username ?? '', todayRecord ?? null, onAttendanceMarked)
 
   const [currentTime, setCurrentTime] = useState(new Date())
 
@@ -117,12 +129,13 @@ export function MobileAttendanceMarking({
                 </div>
                 <div className="text-base font-light text-zinc-200 tabular-nums">
                   {attendanceStatus.checkOutTime
-                    ? new Date(
-                        attendanceStatus.checkOutTime
-                      ).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })
+                    ? new Date(attendanceStatus.checkOutTime).toLocaleTimeString(
+                        [],
+                        {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        }
+                      )
                     : '--:--'}
                 </div>
               </div>

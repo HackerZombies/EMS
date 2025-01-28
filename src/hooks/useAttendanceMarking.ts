@@ -1,7 +1,10 @@
-//hooks/useAttendanceMarking.ts
+// hooks/useAttendanceMarking.ts
 import { useState, useEffect, useCallback, useRef } from 'react';
 import KalmanFilter from 'kalmanjs';
 import { formatToIST } from '@/lib/timezone';
+
+// Prisma-based type:
+import { Attendance } from '@prisma/client';
 
 interface AttendanceStatus {
   checkedIn: boolean;
@@ -10,17 +13,19 @@ interface AttendanceStatus {
   checkOutTime: string | null;
 }
 
+// Hook now takes three parameters: (username, todayRecord, onMarked)
 export const useAttendanceMarking = (
   username: string,
+  todayRecord: Attendance | null,
   onAttendanceMarked: () => void
 ) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isRetryingLocation, setIsRetryingLocation] = useState(false);
-  const [retryAction, setRetryAction] = useState<'checkin' | 'checkout' | null>(
-    null
-  );
+  const [retryAction, setRetryAction] = useState<'checkin' | 'checkout' | null>(null);
+
+  // Local state for the day’s attendance
   const [attendanceStatus, setAttendanceStatus] = useState<AttendanceStatus>({
     checkedIn: false,
     checkedOut: false,
@@ -28,37 +33,40 @@ export const useAttendanceMarking = (
     checkOutTime: null,
   });
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // 1. Kalman Filter Instances
-  // ─────────────────────────────────────────────────────────────────────────────
-  // R = measurement noise, Q = process noise -- tweak as necessary:
+  // Kalman filter refs
   const latKFRef = useRef(new KalmanFilter({ R: 0.01, Q: 3 }));
   const lonKFRef = useRef(new KalmanFilter({ R: 0.01, Q: 3 }));
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // 2. Fetch Attendance Status
+  // 1. Initialize from 'todayRecord'
   // ─────────────────────────────────────────────────────────────────────────────
-  const fetchAttendanceStatus = useCallback(async () => {
-    if (!username) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(`/api/attendance/status?username=${username}`);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data: AttendanceStatus = await response.json();
-      setAttendanceStatus(data);
-    } catch (e: any) {
-      setError(e.message || 'Failed to fetch attendance status');
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    // If there's no record => user not checked in
+    if (!todayRecord) {
+      setAttendanceStatus({
+        checkedIn: false,
+        checkedOut: false,
+        checkInTime: null,
+        checkOutTime: null,
+      });
+      return;
     }
-  }, [username]);
+
+    // If todayRecord exists, set accordingly
+    setAttendanceStatus({
+      checkedIn: !!todayRecord.checkInTime,
+      checkedOut: !!todayRecord.checkOutTime,
+      checkInTime: todayRecord.checkInTime
+        ? new Date(todayRecord.checkInTime).toISOString()
+        : null,
+      checkOutTime: todayRecord.checkOutTime
+        ? new Date(todayRecord.checkOutTime).toISOString()
+        : null,
+    });
+  }, [todayRecord]);
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // 3. getLocationPinpoint (using watch + Kalman)
-  //    Includes toJSON methods to satisfy GeolocationPosition interface
+  // 2. getLocationPinpoint (using watch + Kalman)
   // ─────────────────────────────────────────────────────────────────────────────
   const getLocationPinpoint = async (
     desiredAccuracy = 10,
@@ -69,19 +77,12 @@ export const useAttendanceMarking = (
       let watchId: number;
 
       const handleSuccess = (position: GeolocationPosition) => {
-        // Apply Kalman filters
         const filteredLatitude = latKFRef.current.filter(position.coords.latitude);
         const filteredLongitude = lonKFRef.current.filter(position.coords.longitude);
-        const { accuracy, altitude, altitudeAccuracy, heading, speed } =
-          position.coords;
+        const { accuracy, altitude, altitudeAccuracy, heading, speed } = position.coords;
 
-        // Create a new "kalmanPosition" object that implements
-        // GeolocationPosition + GeolocationCoordinates + toJSON methods.
         const kalmanPosition: GeolocationPosition = {
-          // Keep original timestamp
           timestamp: position.timestamp,
-
-          // Define coords with filtered lat/lng
           coords: {
             latitude: filteredLatitude,
             longitude: filteredLongitude,
@@ -90,8 +91,6 @@ export const useAttendanceMarking = (
             altitudeAccuracy,
             heading,
             speed,
-
-            // Required by the TS DOM lib:
             toJSON() {
               return {
                 latitude: this.latitude,
@@ -104,8 +103,6 @@ export const useAttendanceMarking = (
               };
             },
           },
-
-          // Also required at the top-level:
           toJSON() {
             return {
               coords: this.coords,
@@ -114,15 +111,10 @@ export const useAttendanceMarking = (
           },
         };
 
-        // Compare accuracy with "bestPosition"
-        if (
-          !bestPosition ||
-          kalmanPosition.coords.accuracy < bestPosition.coords.accuracy
-        ) {
+        if (!bestPosition || kalmanPosition.coords.accuracy < bestPosition.coords.accuracy) {
           bestPosition = kalmanPosition;
         }
 
-        // If the best position meets or beats desiredAccuracy, resolve
         if (bestPosition.coords.accuracy <= desiredAccuracy) {
           navigator.geolocation.clearWatch(watchId);
           resolve(bestPosition);
@@ -134,13 +126,11 @@ export const useAttendanceMarking = (
         reject(error);
       };
 
-      // Begin watching position
       watchId = navigator.geolocation.watchPosition(handleSuccess, handleError, {
         enableHighAccuracy: true,
         maximumAge: 0,
       });
 
-      // Fallback after maxWaitMs if not resolved
       setTimeout(() => {
         navigator.geolocation.clearWatch(watchId);
         if (bestPosition) {
@@ -157,7 +147,7 @@ export const useAttendanceMarking = (
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // 4. markAttendance
+  // 3. markAttendance
   // ─────────────────────────────────────────────────────────────────────────────
   const markAttendance = async (action: 'checkin' | 'checkout') => {
     setLoading(true);
@@ -167,16 +157,15 @@ export const useAttendanceMarking = (
     setRetryAction(null);
 
     try {
-      // Attempt to get the best possible location
       const position = await getLocationPinpoint(10, 30000);
-      handleLocationSuccess(position, action);
+      await handleLocationSuccess(position, action);
     } catch (err: any) {
       handleLocationError(err, action);
     }
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // 5. handleLocationSuccess
+  // 4. handleLocationSuccess
   // ─────────────────────────────────────────────────────────────────────────────
   const handleLocationSuccess = async (
     position: GeolocationPosition,
@@ -187,9 +176,7 @@ export const useAttendanceMarking = (
     try {
       const response = await fetch(`/api/attendance/${action}?action=${action}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username,
           date: new Date().toISOString().split('T')[0],
@@ -211,17 +198,30 @@ export const useAttendanceMarking = (
 
       const successData = await response.json();
       setSuccess(successData.message);
+
+      // Let the parent know we marked attendance
       onAttendanceMarked();
-      fetchAttendanceStatus();
+
+      // Optionally update state or re-fetch
+      // For example, you can do a direct re-fetch from an endpoint if needed
+      setAttendanceStatus((prev) => ({
+        ...prev,
+        checkedIn: action === 'checkin' ? true : prev.checkedIn,
+        checkedOut: action === 'checkout' ? true : prev.checkedOut,
+        checkInTime:
+          action === 'checkin' ? new Date().toISOString() : prev.checkInTime,
+        checkOutTime:
+          action === 'checkout' ? new Date().toISOString() : prev.checkOutTime,
+      }));
     } catch (e: any) {
-      setError(e.message || `Failed to ${action} attendance`);
+      setError(e.message || `Failed to ${action}`);
     } finally {
       setLoading(false);
     }
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // 6. handleLocationError
+  // 5. handleLocationError
   // ─────────────────────────────────────────────────────────────────────────────
   const handleLocationError = (error: any, action: 'checkin' | 'checkout') => {
     let errorMessage = 'Could not retrieve location.';
@@ -249,7 +249,7 @@ export const useAttendanceMarking = (
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // 7. Support for Retrying
+  // 6. Retrying location
   // ─────────────────────────────────────────────────────────────────────────────
   const retryGetLocation = () => {
     if (retryAction) {
@@ -260,14 +260,7 @@ export const useAttendanceMarking = (
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // 8. Fetch Attendance Status on Mount/Change
-  // ─────────────────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    fetchAttendanceStatus();
-  }, [fetchAttendanceStatus]);
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // 9. Return the Hook’s Public API
+  // 7. Return the Hook’s Public API
   // ─────────────────────────────────────────────────────────────────────────────
   return {
     markAttendance,

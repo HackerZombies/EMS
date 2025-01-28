@@ -1,8 +1,8 @@
+// pages/attendance.tsx
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { GetServerSidePropsContext } from 'next'
 import { getServerSession } from 'next-auth/next'
 import isMobileDevice from 'is-mobile'
-
 import { authOptions } from "./api/auth/[...nextauth]"
 import prisma from '@/lib/prisma'
 
@@ -14,6 +14,7 @@ import { Attendance } from '@prisma/client'
 
 interface AttendancePageProps {
   initialAttendanceRecords: Attendance[]
+  todayRecord: Attendance | null  // or 'Attendance | null' from your DB
   user: {
     firstName: string
     lastName: string
@@ -24,17 +25,20 @@ interface AttendancePageProps {
 
 export default function AttendanceMobilePage({
   initialAttendanceRecords,
+  todayRecord,
   user,
   isMobile,
 }: AttendancePageProps) {
-  const [attendanceUpdates, setAttendanceUpdates] = useState<Attendance[]>(initialAttendanceRecords)
+  const [attendanceUpdates, setAttendanceUpdates] =
+    useState<Attendance[]>(initialAttendanceRecords)
+
   const ws = useRef<WebSocket | null>(null)
 
   const handleAttendanceMarked = useCallback(() => {
     console.log('Attendance marked (WebSocket should update)')
   }, [])
 
-  // Initialize WebSocket only if we're on mobile (optional; you can remove the isMobile check if desired)
+  // Initialize WebSocket if on mobile (optional logic)
   useEffect(() => {
     if (!isMobile) return
 
@@ -49,7 +53,9 @@ export default function AttendanceMobilePage({
       try {
         const attendanceData: Attendance = JSON.parse(event.data)
         setAttendanceUpdates((prevUpdates) => {
-          const existingIndex = prevUpdates.findIndex((item) => item.id === attendanceData.id)
+          const existingIndex = prevUpdates.findIndex(
+            (item) => item.id === attendanceData.id
+          )
           if (existingIndex > -1) {
             const newUpdates = [...prevUpdates]
             newUpdates[existingIndex] = attendanceData
@@ -86,7 +92,6 @@ export default function AttendanceMobilePage({
   // Render
   return (
     <MobileAttendanceLayout>
-      {/* If not on mobile, show a message. If on mobile, show the attendance UI. */}
       {!isMobile ? (
         <div className="mt-6 p-4 rounded-md bg-zinc-800 border border-zinc-700 text-center">
           <h2 className="text-xl font-semibold text-red-400 mb-2">
@@ -101,9 +106,16 @@ export default function AttendanceMobilePage({
           {user && (
             <MobileAttendanceMarking
               username={user.username}
+              /**
+               * IMPORTANT FIX:
+               * If 'todayRecord' happens to be undefined, pass null instead.
+               * That way we never pass undefined to the hook/component.
+               */
+              todayRecord={todayRecord ?? null}
               onAttendanceMarked={handleAttendanceMarked}
             />
           )}
+
           <MobileAttendanceDetails
             attendanceRecords={attendanceUpdates}
             userName={user?.username || ''}
@@ -130,15 +142,36 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
   const userAgent = context.req.headers['user-agent'] || ''
   const isMobile = isMobileDevice({ ua: userAgent })
 
-  // 3. If user is on mobile, fetch attendance data. Otherwise, show an empty set or placeholders
   let attendanceRecords: Attendance[] = []
+  let todayRecord: Attendance | null = null
   let user = null
 
   if (isMobile) {
     try {
+      // All records
       attendanceRecords = await prisma.attendance.findMany({
         where: {
           userUsername: session.user.username,
+        },
+        orderBy: {
+          date: 'desc',
+        },
+      })
+
+      // Example logic to find "today's" record
+      const startOfDay = new Date()
+      startOfDay.setHours(0, 0, 0, 0)
+
+      const endOfDay = new Date(startOfDay)
+      endOfDay.setDate(endOfDay.getDate() + 1)
+
+      todayRecord = await prisma.attendance.findFirst({
+        where: {
+          userUsername: session.user.username,
+          date: {
+            gte: startOfDay,
+            lt: endOfDay,
+          },
         },
         orderBy: {
           date: 'desc',
@@ -164,6 +197,7 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     props: {
       isMobile,
       initialAttendanceRecords: JSON.parse(JSON.stringify(attendanceRecords)),
+      todayRecord: todayRecord ? JSON.parse(JSON.stringify(todayRecord)) : null,
       user: user || null,
     },
   }

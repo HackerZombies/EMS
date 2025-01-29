@@ -22,6 +22,13 @@ import DocumentsForm, {
   UploadedDocument,
 } from "@/components/add-New-Employee/DocumentsForm";
 
+import {
+  validatePersonalInfo,
+  validateJobDetails,
+  validateQualifications,
+  validateDocuments,
+} from "@/utils/validations"; // <-- your validation helpers
+
 export interface CreateUserFormData {
   firstName: string;
   middleName: string;
@@ -44,7 +51,7 @@ export interface CreateUserFormData {
   qualifications: QualificationsFormData["qualifications"];
   experiences: any[];
   certifications: any[];
-  documents: UploadedDocuments; // Our typed object containing arrays of files per category
+  documents: UploadedDocuments; 
   profileImageUrl: string;
   avatarImageUrl: string;
   sameAsResidential?: boolean;
@@ -77,15 +84,12 @@ export default function CreateUserPage() {
 
   // Initialize UploadedDocuments with all categories as empty arrays
   const initialUploadedDocuments: UploadedDocuments = {
-    // **Identity Documents**
     aadhaar_card: [],
     pan_card: [],
     passport: [],
     voter_id: [],
     driving_license: [],
     other_identity_documents: [],
-
-    // **Educational Documents**
     tenth_marksheet: [],
     twelfth_marksheet: [],
     graduation_degree: [],
@@ -94,8 +98,6 @@ export default function CreateUserPage() {
     diploma_certificate: [],
     educational_transcript: [],
     other_educational_documents: [],
-
-    // **Employment Documents**
     resume: [],
     previous_employment_certificate: [],
     experience_letter: [],
@@ -105,15 +107,11 @@ export default function CreateUserPage() {
     appointment_letter: [],
     employment_contract: [],
     other_employment_documents: [],
-
-    // **Certification Documents**
     professional_certifications: [],
     language_certifications: [],
     technical_certifications: [],
     industry_specific_certifications: [],
     other_certifications: [],
-
-    // **Address Proof Documents**
     utility_bill: [],
     rental_agreement: [],
     bank_statement: [],
@@ -121,56 +119,40 @@ export default function CreateUserPage() {
     ration_card: [],
     lease_agreement: [],
     other_address_proof: [],
-
-    // **Skills Documents**
     portfolio: [],
     project_documents: [],
     skill_certificates: [],
     training_completion_certificates: [],
     other_skills_documents: [],
-
-    // **Financial Documents**
     form_16: [],
     it_return: [],
     bank_passbook: [],
     canceled_cheque: [],
     salary_certificate: [],
     other_financial_documents: [],
-
-    // **Insurance Documents**
     health_insurance_policy: [],
     life_insurance_policy: [],
     motor_insurance: [],
     other_insurance_documents: [],
-
-    // **Legal Documents**
     nda_agreement: [],
     legal_contracts: [],
     court_clearance_certificate: [],
     police_clearance_certificate: [],
     other_legal_documents: [],
-
-    // **Professional Licenses**
     engineering_license: [],
     medical_license: [],
     teaching_license: [],
     other_professional_licenses: [],
-
-    // **Company-Specific Documents**
     signed_policies: [],
     employee_handbook: [],
     non_disclosure_agreement: [],
     non_compete_agreement: [],
     other_company_documents: [],
-
-    // **Dependents' Documents**
     spouse_aadhaar_card: [],
     spouse_pan_card: [],
     child_birth_certificate: [],
     child_school_certificate: [],
     other_dependents_documents: [],
-
-    // **Additional Documents**
     photo: [],
     medical_certificate: [],
     reference_letters: [],
@@ -208,90 +190,143 @@ export default function CreateUserPage() {
     sameAsResidential: false,
   });
 
+  /**
+   * Validates the currently active tab’s data.
+   * If there are validation errors, setErrorMessage and return false (to prevent tab switch).
+   * If no errors, clear errorMessage and return true.
+   */
+  const validateCurrentTab = (): boolean => {
+    let errors: string[] = [];
+    if (activeTab === "personal") {
+      errors = validatePersonalInfo(formData);
+    } else if (activeTab === "job") {
+      errors = validateJobDetails(formData);
+    } else if (activeTab === "qualifications") {
+      errors = validateQualifications(formData);
+    } else if (activeTab === "documents") {
+      errors = validateDocuments(formData);
+    }
+
+    if (errors.length > 0) {
+      setErrorMessage(errors.join(" "));
+      return false;
+    } else {
+      setErrorMessage(null);
+      return true;
+    }
+  };
+
+  /**
+   * Handles moving to the previous or next tab, 
+   * running validation if we move forward.
+   */
+  const handleTabChange = (direction: "next" | "prev") => {
+    const tabs = ["personal", "job", "qualifications", "documents"];
+    const currentIndex = tabs.indexOf(activeTab);
+
+    if (direction === "next") {
+      // Validate current tab data before going to next
+      if (!validateCurrentTab()) return; // Stop if invalid
+      if (currentIndex < tabs.length - 1) {
+        setActiveTab(tabs[currentIndex + 1]);
+      }
+    } else {
+      // For "previous", typically no validation needed
+      if (currentIndex > 0) {
+        setActiveTab(tabs[currentIndex - 1]);
+      }
+    }
+  };
+
+  /**
+   * Final submission with re-validation of ALL tabs or 
+   * just call your existing validation functions collectively.
+   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Clear previous messages
     setSuccessMessage(null);
     setErrorMessage(null);
 
-    const formDataToSend = new FormData();
-
-    // Append simple fields
-    const simpleFields: Array<keyof CreateUserFormData> = [
-      "firstName",
-      "middleName",
-      "lastName",
-      "email",
-      "phoneNumber",
-      "dob",
-      "residentialAddress",
-      "permanentAddress",
-      "nationality",
-      "gender",
-      "bloodGroup",
-      "role",
-      "department",
-      "position",
-      "workLocation",
-      "employmentType",
-      "joiningDate",
-      "profileImageUrl",
-      "avatarImageUrl",
-      "sameAsResidential",
+    // You can run all validations one last time:
+    const allErrors = [
+      ...validatePersonalInfo(formData),
+      ...validateJobDetails(formData),
+      ...validateQualifications(formData),
+      ...validateDocuments(formData),
     ];
 
-    simpleFields.forEach((field) => {
-      const value = formData[field];
-      if (value !== undefined && value !== null) {
-        formDataToSend.append(field, String(value));
-      }
-    });
-
-    // Append complex fields (arrays)
-    const complexFields: Array<keyof CreateUserFormData> = [
-      "emergencyContacts",
-      "qualifications",
-      "experiences",
-      "certifications",
-    ];
-
-    complexFields.forEach((field) => {
-      const value = formData[field];
-      if (Array.isArray(value)) {
-        formDataToSend.append(field, JSON.stringify(value));
-      }
-    });
-
-    // Append documents
-    // For each category, for each document in that category, we append:
-    //   documents[category][index][file]
-    //   documents[category][index][displayName]
-    //   documents[category][index][category]
-    //   documents[category][index][id]  (optional if you need it)
-    Object.entries(formData.documents).forEach(([docType, docsArray]) => {
-      docsArray.forEach((doc: UploadedDocument, index: number) => {
-        formDataToSend.append(
-          `documents[${docType}][${index}][file]`,
-          doc.file
-        );
-        formDataToSend.append(
-          `documents[${docType}][${index}][displayName]`,
-          doc.displayName
-        );
-        formDataToSend.append(
-          `documents[${docType}][${index}][category]`,
-          docType
-        );
-        // Optional ID field:
-        formDataToSend.append(
-          `documents[${docType}][${index}][id]`,
-          doc.id
-        );
-      });
-    });
+    if (allErrors.length > 0) {
+      setErrorMessage(allErrors.join(" "));
+      return; // Stop submission
+    }
 
     try {
+      // Build your FormData
+      const formDataToSend = new FormData();
+
+      // 1. Simple fields
+      const simpleFields: Array<keyof CreateUserFormData> = [
+        "firstName",
+        "middleName",
+        "lastName",
+        "email",
+        "phoneNumber",
+        "dob",
+        "residentialAddress",
+        "permanentAddress",
+        "nationality",
+        "gender",
+        "bloodGroup",
+        "role",
+        "department",
+        "position",
+        "workLocation",
+        "employmentType",
+        "joiningDate",
+        "profileImageUrl",
+        "avatarImageUrl",
+        "sameAsResidential",
+      ];
+
+      simpleFields.forEach((field) => {
+        const value = formData[field];
+        if (value !== undefined && value !== null) {
+          formDataToSend.append(field, String(value));
+        }
+      });
+
+      // 2. Complex fields (arrays)
+      const complexFields: Array<keyof CreateUserFormData> = [
+        "emergencyContacts",
+        "qualifications",
+        "experiences",
+        "certifications",
+      ];
+      complexFields.forEach((field) => {
+        const value = formData[field];
+        if (Array.isArray(value)) {
+          formDataToSend.append(field, JSON.stringify(value));
+        }
+      });
+
+      // 3. Documents
+      Object.entries(formData.documents).forEach(([docType, docsArray]) => {
+        docsArray.forEach((doc: UploadedDocument, index: number) => {
+          formDataToSend.append(`documents[${docType}][${index}][file]`, doc.file);
+          formDataToSend.append(
+            `documents[${docType}][${index}][displayName]`,
+            doc.displayName
+          );
+          formDataToSend.append(
+            `documents[${docType}][${index}][category]`,
+            docType
+          );
+          formDataToSend.append(`documents[${docType}][${index}][id]`, doc.id);
+        });
+      });
+
+      // 4. Submit to API
       const response = await fetch("/api/users/newUser", {
         method: "POST",
         body: formDataToSend,
@@ -310,9 +345,9 @@ export default function CreateUserPage() {
       }
 
       const data = await response.json();
-      // Show success message
       setSuccessMessage(`New user created with username: ${data.username}`);
-      // Optionally navigate to the newly created user’s page
+
+      // Navigate or keep on page
       router.push(`/manage/users/user/${data.username}`);
     } catch (error) {
       console.error("Error creating user:", error);
@@ -398,18 +433,7 @@ export default function CreateUserPage() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => {
-                  const tabs = [
-                    "personal",
-                    "job",
-                    "qualifications",
-                    "documents",
-                  ];
-                  const currentIndex = tabs.indexOf(activeTab);
-                  if (currentIndex > 0) {
-                    setActiveTab(tabs[currentIndex - 1]);
-                  }
-                }}
+                onClick={() => handleTabChange("prev")}
                 disabled={activeTab === "personal"}
               >
                 Previous
@@ -417,18 +441,7 @@ export default function CreateUserPage() {
 
               <Button
                 type="button"
-                onClick={() => {
-                  const tabs = [
-                    "personal",
-                    "job",
-                    "qualifications",
-                    "documents",
-                  ];
-                  const currentIndex = tabs.indexOf(activeTab);
-                  if (currentIndex < tabs.length - 1) {
-                    setActiveTab(tabs[currentIndex + 1]);
-                  }
-                }}
+                onClick={() => handleTabChange("next")}
                 disabled={activeTab === "documents"}
               >
                 Next

@@ -1,7 +1,7 @@
 // upload.ts
 import { NextApiRequest, NextApiResponse } from "next";
 import busboy from "busboy";
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 
 export const config = { api: { bodyParser: false } };
 

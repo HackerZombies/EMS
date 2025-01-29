@@ -1,7 +1,7 @@
 // src/pages/api/users/user/[username].ts
 
 import { NextApiRequest, NextApiResponse } from "next";
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../auth/[...nextauth]";
 import { DocumentCategory } from "@prisma/client"; // Import DocumentCategory from Prisma

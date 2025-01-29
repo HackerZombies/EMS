@@ -1,7 +1,7 @@
 // src/pages/api/users/updateUser.ts
 
 import type { NextApiRequest, NextApiResponse } from "next";
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import bcrypt from "bcrypt";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";

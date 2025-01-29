@@ -3,7 +3,7 @@
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { useState, FormEvent, useEffect, useRef } from "react";
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { GetServerSidePropsContext } from "next";
 import { User } from "@prisma/client";
 import { getSession, useSession, signOut } from "next-auth/react";

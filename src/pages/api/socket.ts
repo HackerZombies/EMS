@@ -2,7 +2,7 @@ import WebSocket, { WebSocketServer } from 'ws';
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from './auth/[...nextauth]';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { IncomingMessage } from 'http'; // Import IncomingMessage from Node.js
 
 let wss: WebSocketServer | undefined;

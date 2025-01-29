@@ -1,7 +1,7 @@
 // src/pages/api/tickets/newMessage.ts
 
 import type { NextApiRequest, NextApiResponse } from "next";
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
 // Define a Zod schema for input validation

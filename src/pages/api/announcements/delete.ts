@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import prisma from "../../../lib/prisma";
-import { Prisma } from "@prisma/client"; // Import Prisma namespace
+import { prisma } from "../../../lib/prisma";
+import { Prisma } from "@prisma/client";
 
 // API endpoint for announcement deletion utilizing the announcement ID as the identifier for deletion
 // Utilized POST as NextAuth.js did not allow for DELETE method to work

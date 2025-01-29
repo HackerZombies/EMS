@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { IncomingForm, File as FormidableFile, Files } from "formidable";
 import path from "path";
 import fs from "fs/promises";
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../auth/[...nextauth]";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";

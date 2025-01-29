@@ -1,7 +1,7 @@
 import { Prisma, User } from "@prisma/client";
 import { GetServerSideProps } from "next";
 import { getSession } from "next-auth/react";
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import Head from "next/head";
 import { motion } from "framer-motion";

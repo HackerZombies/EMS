@@ -6,7 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../api/auth/[...nextauth]";
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { Attendance } from "@prisma/client";
 import { GetServerSideProps } from "next";
 

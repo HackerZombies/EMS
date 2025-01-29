@@ -1,6 +1,6 @@
 // updateleavestatus.ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { sendLeaveRequestUpdateEmail } from "@/lib/sendLeaveRequestUpdateEmail";
 

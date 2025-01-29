@@ -13,7 +13,7 @@ import {
   ArrowRight,
 } from "lucide-react"; // ArrowRight for design or another icon
 
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/pages/api/auth/[...nextauth]";
 

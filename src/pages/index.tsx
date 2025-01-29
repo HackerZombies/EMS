@@ -3,7 +3,7 @@
 import { GetServerSideProps, GetServerSidePropsContext } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "./api/auth/[...nextauth]";
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { Event } from "@/types/events";
 import useSWR from 'swr';
 import { formatToIST } from "@/lib/timezone";

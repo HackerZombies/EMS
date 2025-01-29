@@ -4,7 +4,7 @@ import { GetServerSidePropsContext } from 'next'
 import { getServerSession } from 'next-auth/next'
 import isMobileDevice from 'is-mobile'
 import { authOptions } from "./api/auth/[...nextauth]"
-import prisma from '@/lib/prisma'
+import { prisma } from '@/lib/prisma'
 
 import MobileAttendanceLayout from '@/components/attendancelayout'
 import { MobileAttendanceMarking } from '@/components/Attendance'

@@ -9,7 +9,7 @@ import { useState } from "react";
 import { Announcement } from "@prisma/client";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../api/auth/[...nextauth]";
-import prisma from "../../lib/prisma";
+import { prisma } from "../../lib/prisma";
 import { GetServerSideProps } from "next";
 import { motion } from "framer-motion";
 import { Icon } from "@iconify/react";

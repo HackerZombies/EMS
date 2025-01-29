@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 
 export default async function handleAttendanceStatus(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") {

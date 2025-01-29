@@ -3,7 +3,7 @@ import { GetServerSideProps } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../../api/auth/[...nextauth]";
 import { User } from "@prisma/client";
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { Document } from "@prisma/client";
 import { useState } from "react";
 import BackButton from "@/components/BackButton";

@@ -2,7 +2,7 @@
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import multer from 'multer';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { DocumentCategory } from '@prisma/client'; // Import DocumentCategory from Prisma
 import path from 'path'; // Import the 'path' module
 import { v4 as uuidv4 } from 'uuid'; // Import UUID for unique identifiers

@@ -5,7 +5,7 @@ import { User } from "@prisma/client";
 import { useRouter } from "next/router";
 import { GetServerSidePropsContext } from "next";
 import { getSession } from "next-auth/react";
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import {
   FaUserEdit,
   FaSignOutAlt,

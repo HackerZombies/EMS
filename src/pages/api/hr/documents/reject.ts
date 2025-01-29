@@ -1,6 +1,6 @@
 // pages/api/hr/documents/reject.ts
 import { NextApiRequest, NextApiResponse } from 'next';
-import prisma from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import nodemailer from 'nodemailer';
 import * as dotenv from 'dotenv';
 

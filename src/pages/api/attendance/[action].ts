@@ -1,7 +1,7 @@
 // pages/api/attendance/[action].ts
 
 import { NextApiRequest, NextApiResponse } from "next";
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { broadcastAttendanceUpdate } from "../socket";
 // 1) import your reverse geocode helper
 import { reverseGeocodeFromMapbox } from "@/lib/mapbox"; 

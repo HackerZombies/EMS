@@ -3,7 +3,7 @@ import type { Digilocker } from "@prisma/client";
 import { GetServerSideProps } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "./api/auth/[...nextauth]";
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { Icon } from "@iconify/react";
 import Head from "next/head";
 import { motion, AnimatePresence } from "framer-motion";

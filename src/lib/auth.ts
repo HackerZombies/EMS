@@ -1,4 +1,4 @@
-import prisma from './prisma';
+import { prisma } from './prisma';
 import { sendotpEmail } from './email'; // Correct import from the consolidated email module
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';

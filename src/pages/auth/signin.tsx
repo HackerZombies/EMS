@@ -2,34 +2,21 @@
 
 import { GetServerSideProps } from "next";
 import { getSession } from "next-auth/react";
-import SignIn from "@/components/signin";
+import SignInForm from "@/components/signin"; // Or inline the code below
 
-export default function SignInPage() {
-  return <SignIn />;
-}
-
+// 1. If user is already authenticated, redirect them away
 export const getServerSideProps: GetServerSideProps = async (context) => {
   const session = await getSession(context);
-
   if (session) {
+    // If it's their first time, do something
     if (session.user.isFirstTime) {
-      return {
-        redirect: {
-          destination: "/settings/edit",
-          permanent: false,
-        },
-      };
+      return { redirect: { destination: "/settings/edit", permanent: false } };
     }
-    // Redirect to dashboard or homepage if not first-time user
-    return {
-      redirect: {
-        destination: "/attendance", // Adjust as needed
-        permanent: false,
-      },
-    };
+    return { redirect: { destination: "/attendance", permanent: false } };
   }
-
-  return {
-    props: {}, // No props needed for sign-in page
-  };
+  return { props: {} };
 };
+
+export default function SignInPage() {
+  return <SignInForm />;
+}

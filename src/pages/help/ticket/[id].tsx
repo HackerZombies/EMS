@@ -18,7 +18,7 @@ import { motion } from "framer-motion";
 import { ToastContainer, toast } from "react-toastify"; // react-toastify for toasts
 import "react-toastify/dist/ReactToastify.css"; // react-toastify styles
 import TicketStatus from "@/components/TicketStatus";
-import prisma from "@/lib/prisma"; // Ensure correct import
+import { prisma } from "@/lib/prisma"; // Ensure correct import
 
 const messageWithUser = Prisma.validator<Prisma.MessageDefaultArgs>()({
   include: { user: true },

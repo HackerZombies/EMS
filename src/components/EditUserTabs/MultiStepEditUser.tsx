@@ -1,40 +1,89 @@
-// src/components/EditUserTabs/MultiStepEditUser.tsx
-
 "use client";
 
-import React, {
-  useState,
-  useEffect,
-  useMemo,
-  useRef,
-  useCallback,
-} from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import isEqual from "lodash.isequal";
 import cloneDeep from "lodash.clonedeep";
+
+// Child forms
 import PersonalInfoForm, { PersonalInfoData } from "./GeneralInfo";
 import JobDetailsForm, { JobDetailsData } from "./JobDetails";
 import QualificationsForm, { QualificationsData } from "./Qualifications";
 import DocumentsSection from "./Documents";
+
+// Hooks
+import { useUserData } from "../../hooks/useUserData";
+import { useAuditLogs } from "../../hooks/useAuditLogs";
+
+// Helpers
+import { processAuditLogs } from "@/lib/processAuditLogs";
+
+// shadcn/ui components
+import { Button } from "@/components/ui/button";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "@/components/ui/tabs";
+
+// Icons
 import {
   TrashIcon,
   ExclamationTriangleIcon,
-  ArrowPathIcon,
+  UserCircleIcon,
+  BriefcaseIcon,
+  AcademicCapIcon,
+  DocumentPlusIcon,
 } from "@heroicons/react/24/outline";
 
-import { processAuditLogs } from "@/lib/processAuditLogs";
+/** 
+ * Updated Qualification type with 
+ * startDate/endDate from your schema.
+ */
+export interface Qualification {
+  name: string;
+  level: string;
+  specializations: string[];
+  institution: string;
+  startDate?: string;  // DateTime? in your schema
+  endDate?: string;    // DateTime? in your schema
+}
 
-// Steps used for your stepper
-const steps = [
-  { id: 0, name: "Personal Info" },
-  { id: 1, name: "Job Details" },
-  { id: 2, name: "Qualifications" },
-  { id: 3, name: "Documents" },
-];
+export interface Experience {
+  jobTitle: string;
+  company: string;
+  startDate: string;
+  endDate: string;
+  description: string;
+}
+
+export interface Certification {
+  name: string;
+  issuingAuthority: string;
+  licenseNumber: string;
+  issueDate: string;
+  expiryDate: string;
+}
+
+export interface Address {
+  flat?: string;
+  street?: string;
+  landmark?: string;
+  city?: string;
+  district?: string;
+  state?: string;
+  pin?: string;
+}
 
 export interface EmergencyContact {
   name: string;
@@ -52,8 +101,8 @@ export interface User {
   nationality?: string;
   phoneNumber?: string;
   dob?: string;
-  residentialAddress?: string;
-  permanentAddress?: string;
+  residentialAddress?: Address;
+  permanentAddress?: Address;
   department?: string;
   position?: string;
   role?: string;
@@ -69,58 +118,24 @@ export interface User {
   workLocation?: string;
 }
 
-export type Qualification = {
-  name: string;
-  level: string;
-  specializations: string[];
-  institution: string;
-};
-
-export type Experience = {
-  jobTitle: string;
-  company: string;
-  startDate: string;
-  endDate: string;
-  description: string;
-};
-
-export type Certification = {
-  name: string;
-  issuingAuthority: string;
-  licenseNumber: string;
-  issueDate: string;
-  expiryDate: string;
-};
-
-interface AuditLogEntry {
-  id: string;
-  action: string;
-  performedBy: string;
-  userUsername: string;
-  targetUsername: string;
-  datePerformed: string; // ISO string
-  details: string; // JSON string
-  user: {
-    username: string;
-    firstName: string;
-    lastName: string;
-  };
-}
-
-interface ChangeHistoryEntry {
-  old: any;
-  new: any;
-  datePerformed: string;
-  performedBy: string;
-}
-
 const MultiStepEditUser: React.FC = () => {
   const router = useRouter();
   const { username } = router.query;
-  const { data: session, status } = useSession();
+  const { data: session } = useSession();
 
-  const [activeStep, setActiveStep] = useState<number>(0);
+  // Hooks for user data & logs
+  const {
+    userData,
+    error: userError,
+    status,
+    setUserData,
+    fetchUser,
+    updateUser,
+    deleteUser,
+  } = useUserData();
+  const { auditLogs, fetchAuditLogs } = useAuditLogs();
 
+  // Sub-form states
   const [personalInfo, setPersonalInfo] = useState<PersonalInfoData>({
     firstName: "",
     middleName: "",
@@ -128,18 +143,27 @@ const MultiStepEditUser: React.FC = () => {
     email: "",
     phoneNumber: "",
     dob: "",
-    residentialAddress: "",
-    permanentAddress: "",
+    residentialAddress: {
+      flat: "",
+      street: "",
+      landmark: "",
+      city: "",
+      district: "",
+      state: "",
+      pin: "",
+    },
+    permanentAddress: {
+      flat: "",
+      street: "",
+      landmark: "",
+      city: "",
+      district: "",
+      state: "",
+      pin: "",
+    },
     gender: "",
     bloodGroup: "",
-    emergencyContacts: [
-      {
-        name: "",
-        relationship: "",
-        phoneNumber: "",
-        email: "",
-      },
-    ],
+    emergencyContacts: [],
     resetPassword: false,
     profileImageUrl: "",
     nationality: "",
@@ -160,148 +184,90 @@ const MultiStepEditUser: React.FC = () => {
     certifications: [],
   });
 
-  const [initialData, setInitialData] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [isDeleting, setIsDeleting] = useState<boolean>(false);
-
-  const [error, setError] = useState<string | null>(null);
-  const [retryFetch, setRetryFetch] = useState<boolean>(false);
-
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-
+  // Tabs, container ref
+  const [activeTab, setActiveTab] = useState<string>("personalInfo");
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Edit mode & dialogs
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
-
   const [deleteConfirm, setDeleteConfirm] = useState<boolean>(false);
+  const [saveConfirm, setSaveConfirm] = useState<boolean>(false);
 
-  const userRole = session?.user?.role ?? "";
+  // Messages
+  const [globalError, setGlobalError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Fetch user data on mount (or when username changes)
+  // Load user + logs
   useEffect(() => {
-    if (username && typeof username === "string") {
-      const fetchData = async () => {
-        setIsLoading(true);
-        setError(null);
-        try {
-          const response = await fetch(`/api/users/user/${username}`);
-          if (!response.ok) throw new Error("Failed to fetch user data");
-
-          const data = await response.json();
-          const userData: User = {
-            username: data.username,
-            firstName: data.firstName,
-            middleName: data.middleName,
-            lastName: data.lastName,
-            email: data.email,
-            phoneNumber: data.phoneNumber || "",
-            dob: data.dob || "",
-            residentialAddress: data.residentialAddress || "",
-            permanentAddress: data.permanentAddress || "",
-            department: data.department || "",
-            position: data.position || "",
-            role: data.role || "",
-            gender: data.gender || "",
-            bloodGroup: data.bloodGroup || "",
-            employmentType: data.employmentType || "",
-            joiningDate: data.joiningDate || "",
-            qualifications: data.qualifications || [],
-            experiences: data.experiences || [],
-            certifications: data.certifications || [],
-            emergencyContacts: data.emergencyContacts || [],
-            profileImageUrl: data.profileImageUrl || "",
-            nationality: data.nationality || "",
-            workLocation: data.workLocation || "",
-          };
-
-          setPersonalInfo({
-            firstName: userData.firstName,
-            middleName: userData.middleName || "",
-            lastName: userData.lastName,
-            email: userData.email,
-            phoneNumber: userData.phoneNumber || "",
-            dob: userData.dob || "",
-            residentialAddress: userData.residentialAddress || "",
-            permanentAddress: userData.permanentAddress || "",
-            gender: userData.gender || "",
-            bloodGroup: userData.bloodGroup || "",
-            emergencyContacts: cloneDeep(userData.emergencyContacts),
-            profileImageUrl: userData.profileImageUrl || "",
-            nationality: userData.nationality || "",
-            resetPassword: false,
-          });
-
-          setJobDetails({
-            department: userData.department || "",
-            position: userData.position || "",
-            role: userData.role || "",
-            employmentType: userData.employmentType || "",
-            joiningDate: userData.joiningDate || "",
-            workLocation: userData.workLocation || "",
-          });
-
-          setQualifications({
-            qualifications: cloneDeep(userData.qualifications),
-            experiences: cloneDeep(userData.experiences),
-            certifications: cloneDeep(userData.certifications),
-          });
-
-          setInitialData(userData);
-        } catch (error: any) {
-          console.error("Error fetching user data:", error);
-          setError(
-            error.message || "An error occurred while fetching user data."
-          );
-        } finally {
-          setIsLoading(false);
-        }
-      };
-      fetchData();
+    if (typeof username === "string") {
+      fetchUser(username);
+      fetchAuditLogs(username);
     }
-  }, [username, retryFetch]);
+  }, [username, fetchUser, fetchAuditLogs]);
 
-  // Fetch audit logs
-  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
-  const [auditLoading, setAuditLoading] = useState<boolean>(true);
-  const [auditError, setAuditError] = useState<string | null>(null);
+  // Convert logs -> structured changes
+  const changeHistory = useMemo(() => processAuditLogs(auditLogs), [auditLogs]);
 
+  // Populate states once user data is loaded
   useEffect(() => {
-    if (username && typeof username === "string") {
-      const fetchAuditLogs = async () => {
-        setAuditLoading(true);
-        setAuditError(null);
-        try {
-          const response = await fetch(
-            `/api/users/user/${username}/auditLogs?page=1&limit=100`
-          );
-          if (!response.ok) {
-            throw new Error("Failed to fetch audit logs");
-          }
-          const data = await response.json();
-          setAuditLogs(data.data);
-        } catch (error: any) {
-          setAuditError(
-            error.message || "An error occurred while fetching audit logs"
-          );
-        } finally {
-          setAuditLoading(false);
-        }
-      };
-      fetchAuditLogs();
+    if (userData) {
+      setPersonalInfo({
+        firstName: userData.firstName,
+        middleName: userData.middleName || "",
+        lastName: userData.lastName,
+        email: userData.email,
+        phoneNumber: userData.phoneNumber || "",
+        dob: userData.dob || "",
+        residentialAddress: cloneDeep(userData.residentialAddress) || {
+          flat: "",
+          street: "",
+          landmark: "",
+          city: "",
+          district: "",
+          state: "",
+          pin: "",
+        },
+        permanentAddress: cloneDeep(userData.permanentAddress) || {
+          flat: "",
+          street: "",
+          landmark: "",
+          city: "",
+          district: "",
+          state: "",
+          pin: "",
+        },
+        gender: userData.gender || "",
+        bloodGroup: userData.bloodGroup || "",
+        emergencyContacts: cloneDeep(userData.emergencyContacts) || [],
+        profileImageUrl: userData.profileImageUrl || "",
+        nationality: userData.nationality || "",
+        resetPassword: false,
+      });
+
+      setJobDetails({
+        department: userData.department || "",
+        position: userData.position || "",
+        role: userData.role || "",
+        employmentType: userData.employmentType || "",
+        joiningDate: userData.joiningDate || "",
+        workLocation: userData.workLocation || "",
+      });
+
+      // qualifications w/ startDate/endDate
+      setQualifications({
+        qualifications: cloneDeep(userData.qualifications),
+        experiences: cloneDeep(userData.experiences),
+        certifications: cloneDeep(userData.certifications),
+      });
     }
-  }, [username]);
+  }, [userData]);
 
-  // Process audit logs to build change history using the utility
-  const changeHistory = useMemo(() => {
-    return processAuditLogs(auditLogs);
-  }, [auditLogs]);
-
-  // Compare current states with initialData to see if changes were made
+  // Check if changes made
   const changesMade = useMemo(() => {
-    if (!initialData) return false;
-    const currentUser: User = {
-      username: initialData.username,
+    if (!userData) return false;
+
+    const currentFormData = {
+      username: userData.username,
       firstName: personalInfo.firstName,
       middleName: personalInfo.middleName,
       lastName: personalInfo.lastName,
@@ -310,6 +276,102 @@ const MultiStepEditUser: React.FC = () => {
       dob: personalInfo.dob,
       residentialAddress: personalInfo.residentialAddress,
       permanentAddress: personalInfo.permanentAddress,
+      gender: personalInfo.gender,
+      bloodGroup: personalInfo.bloodGroup,
+      nationality: personalInfo.nationality,
+      emergencyContacts: personalInfo.emergencyContacts,
+      department: jobDetails.department,
+      position: jobDetails.position,
+      role: jobDetails.role,
+      employmentType: jobDetails.employmentType,
+      joiningDate: jobDetails.joiningDate,
+      workLocation: jobDetails.workLocation,
+      qualifications: qualifications.qualifications,
+      experiences: qualifications.experiences,
+      certifications: qualifications.certifications,
+      profileImageUrl: personalInfo.profileImageUrl,
+    };
+
+    return !isEqual(userData, currentFormData);
+  }, [userData, personalInfo, jobDetails, qualifications]);
+
+  // Toggle edit (revert if turning off)
+  const toggleEditMode = useCallback(() => {
+    if (isEditMode && userData) {
+      // revert
+      setPersonalInfo({
+        firstName: userData.firstName,
+        middleName: userData.middleName || "",
+        lastName: userData.lastName,
+        email: userData.email,
+        phoneNumber: userData.phoneNumber || "",
+        dob: userData.dob || "",
+        residentialAddress: cloneDeep(userData.residentialAddress) || {
+          flat: "",
+          street: "",
+          landmark: "",
+          city: "",
+          district: "",
+          state: "",
+          pin: "",
+        },
+        permanentAddress: cloneDeep(userData.permanentAddress) || {
+          flat: "",
+          street: "",
+          landmark: "",
+          city: "",
+          district: "",
+          state: "",
+          pin: "",
+        },
+        gender: userData.gender || "",
+        bloodGroup: userData.bloodGroup || "",
+        emergencyContacts: cloneDeep(userData.emergencyContacts) || [],
+        profileImageUrl: userData.profileImageUrl || "",
+        nationality: userData.nationality || "",
+        resetPassword: false,
+      });
+
+      setJobDetails({
+        department: userData.department || "",
+        position: userData.position || "",
+        role: userData.role || "",
+        employmentType: userData.employmentType || "",
+        joiningDate: userData.joiningDate || "",
+        workLocation: userData.workLocation || "",
+      });
+
+      setQualifications({
+        qualifications: cloneDeep(userData.qualifications),
+        experiences: cloneDeep(userData.experiences),
+        certifications: cloneDeep(userData.certifications),
+      });
+
+      setGlobalError(null);
+      setSuccessMessage(null);
+    }
+    setIsEditMode(!isEditMode);
+  }, [isEditMode, userData]);
+
+  // Submit changes
+  const handleSubmit = useCallback(async () => {
+    if (!userData) {
+      setGlobalError("No user data loaded yet.");
+      return;
+    }
+    setGlobalError(null);
+    setSuccessMessage(null);
+
+    const payload = {
+      username: userData.username,
+      firstName: personalInfo.firstName,
+      middleName: personalInfo.middleName,
+      lastName: personalInfo.lastName,
+      email: personalInfo.email,
+      phoneNumber: personalInfo.phoneNumber,
+      dob: personalInfo.dob,
+      residentialAddress: cloneDeep(personalInfo.residentialAddress),
+      permanentAddress: cloneDeep(personalInfo.permanentAddress),
       gender: personalInfo.gender,
       bloodGroup: personalInfo.bloodGroup,
       nationality: personalInfo.nationality,
@@ -324,476 +386,264 @@ const MultiStepEditUser: React.FC = () => {
       experiences: cloneDeep(qualifications.experiences),
       certifications: cloneDeep(qualifications.certifications),
       profileImageUrl: personalInfo.profileImageUrl,
+      ...(personalInfo.resetPassword ? { resetPassword: true } : {}),
     };
-    return !isEqual(initialData, currentUser);
-  }, [initialData, personalInfo, jobDetails, qualifications]);
 
-  // Handle form submission
-  const handleSubmit = useCallback(async () => {
-    if (!initialData) {
-      setError("User data is not loaded.");
-      return;
-    }
-
-    setIsSubmitting(true);
-    setError(null);
-    setSuccessMessage(null);
     try {
-      const payload: any = {
-        username: initialData.username,
-        firstName: personalInfo.firstName,
-        middleName: personalInfo.middleName,
-        lastName: personalInfo.lastName,
-        email: personalInfo.email,
-        phoneNumber: personalInfo.phoneNumber,
-        dob: personalInfo.dob,
-        residentialAddress: personalInfo.residentialAddress,
-        permanentAddress: personalInfo.permanentAddress,
-        gender: personalInfo.gender,
-        bloodGroup: personalInfo.bloodGroup,
-        nationality: personalInfo.nationality,
-        emergencyContacts: cloneDeep(personalInfo.emergencyContacts),
-        department: jobDetails.department,
-        position: jobDetails.position,
-        role: jobDetails.role,
-        employmentType: jobDetails.employmentType,
-        joiningDate: jobDetails.joiningDate,
-        workLocation: jobDetails.workLocation,
-        qualifications: cloneDeep(qualifications.qualifications),
-        experiences: cloneDeep(qualifications.experiences),
-        certifications: cloneDeep(qualifications.certifications),
-      };
-
-      if (personalInfo.resetPassword) {
-        payload.resetPassword = true;
-      }
-
-      const response = await fetch("/api/users/updateUser", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to update user.");
-      }
-
-      await response.json();
-
-      setSuccessMessage("User updated successfully!");
-      setActiveStep(0); // Reset to first step if desired
-      setInitialData(
-        cloneDeep({
-          username: initialData.username,
-          firstName: personalInfo.firstName,
-          middleName: personalInfo.middleName,
-          lastName: personalInfo.lastName,
-          email: personalInfo.email,
-          phoneNumber: personalInfo.phoneNumber,
-          dob: personalInfo.dob,
-          residentialAddress: personalInfo.residentialAddress,
-          permanentAddress: personalInfo.permanentAddress,
-          gender: personalInfo.gender,
-          bloodGroup: personalInfo.bloodGroup,
-          nationality: personalInfo.nationality,
-          emergencyContacts: cloneDeep(personalInfo.emergencyContacts),
-          department: jobDetails.department,
-          position: jobDetails.position,
-          role: jobDetails.role,
-          employmentType: jobDetails.employmentType,
-          joiningDate: jobDetails.joiningDate,
-          workLocation: jobDetails.workLocation,
-          qualifications: cloneDeep(qualifications.qualifications),
-          experiences: cloneDeep(qualifications.experiences),
-          certifications: cloneDeep(qualifications.certifications),
-          profileImageUrl: personalInfo.profileImageUrl,
-        })
-      );
+      await updateUser(payload);
+      setSuccessMessage("User details have been successfully updated!");
       setIsEditMode(false);
     } catch (error: any) {
-      console.error("Error updating user:", error);
-      setError(error.message || "An error occurred while updating the user.");
+      setGlobalError(error.message);
     } finally {
-      setIsSubmitting(false);
+      setSaveConfirm(false);
     }
-  }, [
-    initialData,
-    personalInfo.firstName,
-    personalInfo.middleName,
-    personalInfo.lastName,
-    personalInfo.email,
-    personalInfo.phoneNumber,
-    personalInfo.dob,
-    personalInfo.residentialAddress,
-    personalInfo.permanentAddress,
-    personalInfo.gender,
-    personalInfo.bloodGroup,
-    personalInfo.nationality,
-    personalInfo.emergencyContacts,
-    personalInfo.resetPassword,
-    personalInfo.profileImageUrl,
-    jobDetails.department,
-    jobDetails.position,
-    jobDetails.role,
-    jobDetails.employmentType,
-    jobDetails.joiningDate,
-    jobDetails.workLocation,
-    qualifications.qualifications,
-    qualifications.experiences,
-    qualifications.certifications,
-  ]);
+  }, [userData, personalInfo, jobDetails, qualifications, updateUser]);
 
-  // Handle user deletion
+  // Delete user
   const handleDeleteUser = useCallback(async () => {
-    if (!initialData) {
-      setError("User data is not loaded.");
+    if (!userData) {
+      setGlobalError("No user loaded.");
       return;
     }
-
-    setIsDeleting(true);
-    setError(null);
-    setSuccessMessage(null);
     try {
-      const response = await fetch("/api/users/deleteUser", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: initialData.username }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to delete user.");
-      }
+      await deleteUser(userData.username);
       setSuccessMessage("User deleted successfully!");
-      setTimeout(() => {
-        router.push("/manage/users");
-      }, 2000);
-    } catch (error: any) {
-      console.error("Error deleting user:", error);
-      setError(error.message || "An error occurred while deleting the user.");
+    } catch (err: any) {
+      setGlobalError(err.message);
     } finally {
-      setIsDeleting(false);
+      setDeleteConfirm(false);
     }
-  }, [initialData, router]);
+  }, [deleteUser, userData]);
 
-  // Handle toggling edit mode
-  const toggleEditMode = useCallback(() => {
-    if (isEditMode && initialData) {
-      // If exiting edit mode, revert changes by deeply cloning initialData
-      setPersonalInfo({
-        firstName: initialData.firstName,
-        middleName: initialData.middleName || "",
-        lastName: initialData.lastName,
-        email: initialData.email,
-        phoneNumber: initialData.phoneNumber || "",
-        dob: initialData.dob || "",
-        residentialAddress: initialData.residentialAddress || "",
-        permanentAddress: initialData.permanentAddress || "",
-        gender: initialData.gender || "",
-        bloodGroup: initialData.bloodGroup || "",
-        emergencyContacts: cloneDeep(initialData.emergencyContacts),
-        profileImageUrl: initialData.profileImageUrl || "",
-        nationality: initialData.nationality || "",
-        resetPassword: false,
-      });
-
-      setJobDetails({
-        department: initialData.department || "",
-        position: initialData.position || "",
-        role: initialData.role || "",
-        employmentType: initialData.employmentType || "",
-        joiningDate: initialData.joiningDate || "",
-        workLocation: initialData.workLocation || "",
-      });
-
-      setQualifications({
-        qualifications: cloneDeep(initialData.qualifications),
-        experiences: cloneDeep(initialData.experiences),
-        certifications: cloneDeep(initialData.certifications),
-      });
-    }
-    setIsEditMode(!isEditMode);
-  }, [isEditMode, initialData]);
-
-  // Render the current step's form
-  const renderStep = () => {
-    if (!initialData) return null; // Safety check
-
-    switch (activeStep) {
-      case 0:
-        return (
-          <PersonalInfoForm
-            formData={personalInfo}
-            setFormData={setPersonalInfo}
-            changeHistory={changeHistory}
-            isEditMode={isEditMode}
-          />
-        );
-      case 1:
-        return (
-          <JobDetailsForm
-            formData={jobDetails}
-            setFormData={setJobDetails}
-            currentUserRole={userRole}
-            changeHistory={changeHistory}
-            isEditMode={isEditMode}
-          />
-        );
-      case 2:
-        return (
-          <QualificationsForm
-            formData={qualifications}
-            setFormData={setQualifications}
-            changeHistory={changeHistory}
-            isEditMode={isEditMode}
-          />
-        );
-      case 3:
-        return (
-          <DocumentsSection
-            userUsername={initialData.username}
-            isEditMode={isEditMode}
-          />
-        );
-      default:
-        return null;
-    }
-  };
-
-  const handleStepClick = (stepId: number) => {
-    setActiveStep(stepId);
-    scrollToTop();
-  };
-
-  const scrollToTop = () => {
+  // Switch tab
+  const handleTabChange = useCallback((value: string) => {
+    setActiveTab(value);
     containerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  // Determine if loading states are active
-  const isAnyLoading = status === "loading" || isLoading || auditLoading;
+  }, []);
 
   return (
     <>
       <Head>
-        <title>Edit User - {initialData?.username || "Loading..."}</title>
+        <title>Edit User - {userData?.username || "Loading..."}</title>
       </Head>
 
       <div
         ref={containerRef}
-        className="container mx-auto p-2 sm:p-4 bg-gradient-to-r from-blue-50 to-purple-100 min-h-screen flex flex-col relative"
+        className="container mx-auto px-4 py-6 min-h-screen space-y-6"
       >
-        {/* Overlay Spinner */}
-        {isAnyLoading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-transparent pointer-events-none">
-            <ArrowPathIcon
-              className="w-8 h-8 text-blue-600 animate-spin"
-              aria-label="Loading"
-            />
-          </div>
+        {/* Notifications */}
+        {successMessage && (
+          <Alert variant="default">
+            <AlertTitle>Success</AlertTitle>
+            <AlertDescription>{successMessage}</AlertDescription>
+          </Alert>
+        )}
+        {(userError || globalError) && (
+          <Alert variant="destructive">
+            <ExclamationTriangleIcon className="h-4 w-4 mr-2" />
+            <div>
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{userError || globalError}</AlertDescription>
+            </div>
+          </Alert>
         )}
 
-        {/* Header */}
-        <div className="flex justify-between items-center mb-2 sm:mb-4">
-          {/* Edit, Save, and Cancel Buttons */}
-          <div className="flex space-x-2">
-            {!isEditMode ? (
+        {/* Actions */}
+        <div className="flex flex-col md:flex-row md:justify-between items-start md:items-center gap-4">
+          {!isEditMode ? (
+            <Button
+              onClick={toggleEditMode}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              Edit
+            </Button>
+          ) : (
+            <div className="flex items-center gap-3 flex-wrap">
               <Button
-                type="button"
+                variant="default"
                 onClick={toggleEditMode}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-                disabled={isAnyLoading}
+                className="bg-red-600 hover:bg-red-700 text-white"
               >
-                Edit
+                Cancel
               </Button>
-            ) : (
-              <>
-                <Button
-                  type="button"
-                  onClick={handleSubmit}
-                  disabled={isSubmitting || isAnyLoading}
-                  className={`bg-green-600 hover:bg-green-700 text-white ${
-                    isSubmitting || isAnyLoading
-                      ? "opacity-50 cursor-not-allowed"
-                      : ""
-                  }`}
-                >
-                  {isSubmitting ? "Saving..." : "Save"}
-                </Button>
-                <Button
-                  type="button"
-                  onClick={toggleEditMode}
-                  className="bg-red-600 hover:bg-red-700 text-white"
-                  disabled={isAnyLoading}
-                >
-                  Cancel
-                </Button>
-              </>
-            )}
-          </div>
+              <Button
+                onClick={() => setSaveConfirm(true)}
+                className="bg-green-600 hover:bg-green-700 text-white"
+                disabled={!changesMade}
+              >
+                Save
+              </Button>
+            </div>
+          )}
 
-          {/* Delete Button */}
           <Button
-            type="button"
             onClick={() => setDeleteConfirm(true)}
-            className="bg-red-600 hover:bg-red-700 text-white flex items-center px-2 py-1 rounded"
-            disabled={isAnyLoading}
+            variant="destructive"
+            disabled={!userData}
+            className="flex items-center bg-red-700 hover:bg-red-800 text-white"
           >
             <TrashIcon className="w-4 h-4 mr-1" />
             Delete
           </Button>
         </div>
 
-        {/* Success Message */}
-        {successMessage && (
-          <div
-            className="flex items-center bg-green-100 border border-green-400 text-green-700 px-3 py-2 rounded relative mb-4"
-            role="alert"
-          >
-            <span className="block sm:inline">{successMessage}</span>
-            <button
-              onClick={() => setSuccessMessage(null)}
-              className="absolute top-1 right-1 text-green-700"
-            >
-              <svg
-                className="fill-current h-4 w-4"
-                role="button"
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 20 20"
+        {/* Tabs with icons, similar design to CreateUserPage */}
+        <div className="bg-white/80 p-4 rounded-md shadow-lg">
+          <Tabs value={activeTab} onValueChange={handleTabChange}>
+            <TabsList className="grid w-full grid-cols-4 mb-6">
+              <TabsTrigger
+                value="personalInfo"
+                className="data-[state=active]:bg-white data-[state=active]:shadow-md px-4 py-2 flex items-center justify-center"
               >
-                <title>Close</title>
-                <path d="M14.348 5.652a1 1 0 00-1.414 0L10 8.586 7.066 5.652a1 1 0 00-1.414 1.414L8.586 10l-2.934 2.934a1 1 0 101.414 1.414L10 11.414l2.934 2.934a1 1 0 001.414-1.414L11.414 10l2.934-2.934a1 1 0 000-1.414z" />
-              </svg>
-            </button>
-          </div>
-        )}
-
-        {/* Error Message */}
-        {error && (
-          <div
-            className="flex items-center bg-red-100 border border-red-400 text-red-700 px-3 py-2 rounded relative mb-4"
-            role="alert"
-          >
-            <ExclamationTriangleIcon className="w-5 h-5 mr-2" />
-            <span className="block sm:inline">{error}</span>
-            <button
-              onClick={() => setError(null)}
-              className="absolute top-1 right-1 text-red-700"
-            >
-              <svg
-                className="fill-current h-4 w-4"
-                role="button"
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 20 20"
+                <UserCircleIcon className="w-5 h-5 mr-2" />
+                Personal Info
+              </TabsTrigger>
+              <TabsTrigger
+                value="jobDetails"
+                className="data-[state=active]:bg-white data-[state=active]:shadow-md px-4 py-2 flex items-center justify-center"
               >
-                <title>Close</title>
-                <path d="M14.348 5.652a1 1 0 00-1.414 0L10 8.586 7.066 5.652a1 1 0 00-1.414 1.414L8.586 10l-2.934 2.934a1 1 0 101.414 1.414L10 11.414l2.934 2.934a1 1 0 001.414-1.414L11.414 10l2.934-2.934a1 1 0 000-1.414z" />
-              </svg>
-            </button>
-          </div>
-        )}
-
-        {/* Stepper */}
-        <div className="mb-2 sm:mb-4">
-          <Progress
-            value={(activeStep / (steps.length - 1)) * 100}
-            className="mb-1 h-1 rounded-full bg-gradient-to-r from-green-200 to-green-400"
-          />
-          <div className="flex space-x-2 sm:space-x-4 overflow-x-auto">
-            {steps.map((step, index) => (
-              <button
-                key={step.id}
-                onClick={() => handleStepClick(step.id)}
-                className={`flex flex-col items-center text-xs sm:text-sm font-medium ${
-                  index === activeStep
-                    ? "text-blue-600"
-                    : "text-gray-500 hover:text-blue-500"
-                } focus:outline-none`}
-                disabled={isAnyLoading}
+                <BriefcaseIcon className="w-5 h-5 mr-2" />
+                Job Details
+              </TabsTrigger>
+              <TabsTrigger
+                value="qualifications"
+                className="data-[state=active]:bg-white data-[state=active]:shadow-md px-4 py-2 flex items-center justify-center"
               >
-                <span>{step.name}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+                <AcademicCapIcon className="w-5 h-5 mr-2" />
+                Qualifications
+              </TabsTrigger>
+              <TabsTrigger
+                value="documents"
+                className="data-[state=active]:bg-white data-[state=active]:shadow-md px-4 py-2 flex items-center justify-center"
+              >
+                <DocumentPlusIcon className="w-5 h-5 mr-2" />
+                Documents
+              </TabsTrigger>
+            </TabsList>
 
-        {/* Active Step Content */}
-        <div className="flex-grow">
-          <div className="bg-white shadow-md rounded-lg p-2 sm:p-4">
-            {renderStep()}
-          </div>
-        </div>
-
-        {/* Navigation Buttons */}
-        <div className="flex justify-end mt-2 sm:mt-4">
-          {activeStep < steps.length - 1 ? (
-            <Button
-              onClick={() => {
-                setActiveStep((prev) => prev + 1);
-                scrollToTop();
-              }}
-              disabled={!isEditMode || isAnyLoading}
-              className={`bg-blue-600 text-white hover:bg-blue-700 transition-colors duration-300 px-3 py-1 rounded ${
-                !isEditMode || isAnyLoading
-                  ? "opacity-50 cursor-not-allowed"
-                  : ""
-              }`}
+            <TabsContent
+              value="personalInfo"
+              className="rounded-md p-4 border border-gray-100 shadow-sm"
             >
-              Next
-            </Button>
-          ) : (
-            <Button
-              onClick={handleSubmit}
-              disabled={!isEditMode || isSubmitting || isAnyLoading}
-              className={`bg-green-600 text-white hover:bg-green-700 transition-colors duration-300 px-3 py-1 rounded ${
-                !isEditMode || isSubmitting || isAnyLoading
-                  ? "opacity-50 cursor-not-allowed"
-                  : ""
-              }`}
-            >
-              {isSubmitting ? "Submitting..." : "Submit"}
-            </Button>
-          )}
-        </div>
+              {!userData ? (
+                <p className="text-gray-700">Loading user data...</p>
+              ) : (
+                <PersonalInfoForm
+                  formData={personalInfo}
+                  setFormData={setPersonalInfo}
+                  changeHistory={changeHistory}
+                  isEditMode={isEditMode}
+                />
+              )}
+            </TabsContent>
 
-        {/* Delete Confirmation Modal */}
-        {deleteConfirm && initialData && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 px-2">
-            <div className="bg-white p-3 sm:p-4 rounded-lg w-full max-w-xs sm:max-w-sm shadow-lg">
-              <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-2">
-                Confirm Deletion
-              </h2>
-              <p className="text-gray-700 mb-3">
-                Are you sure you want to delete user "
-                <strong>{initialData.username}</strong>"? This action cannot be
-                undone.
-              </p>
-              <div className="flex space-x-2">
-                <Button
-                  type="button"
-                  onClick={() => setDeleteConfirm(false)}
-                  className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded"
-                  disabled={isAnyLoading}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  onClick={handleDeleteUser}
-                  disabled={isDeleting || isAnyLoading}
-                  className={`bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded ${
-                    isDeleting || isAnyLoading
-                      ? "opacity-50 cursor-not-allowed"
-                      : ""
-                  }`}
-                >
-                  {isDeleting ? "Deleting..." : "Delete"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
+            <TabsContent
+              value="jobDetails"
+              className="rounded-md p-4 border border-gray-100 shadow-sm"
+            >
+              {!userData ? (
+                <p className="text-gray-700">Loading user data...</p>
+              ) : (
+                <JobDetailsForm
+                  formData={jobDetails}
+                  setFormData={setJobDetails}
+                  currentUserRole={session?.user?.role || ""}
+                  changeHistory={changeHistory}
+                  isEditMode={isEditMode}
+                />
+              )}
+            </TabsContent>
+
+            <TabsContent
+              value="qualifications"
+              className="rounded-md p-4 border border-gray-100 shadow-sm"
+            >
+              {!userData ? (
+                <p className="text-gray-700">Loading user data...</p>
+              ) : (
+                <QualificationsForm
+                  formData={qualifications}
+                  setFormData={setQualifications}
+                  changeHistory={changeHistory}
+                  isEditMode={isEditMode}
+                />
+              )}
+            </TabsContent>
+
+            <TabsContent
+              value="documents"
+              className="rounded-md p-4 border border-gray-100 shadow-sm"
+            >
+              {!userData ? (
+                <p className="text-gray-700">Loading user data...</p>
+              ) : (
+                <DocumentsSection
+                  userUsername={userData.username}
+                  isEditMode={isEditMode}
+                />
+              )}
+            </TabsContent>
+          </Tabs>
+        </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteConfirm} onOpenChange={setDeleteConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center">
+              <TrashIcon className="h-5 w-5 mr-2 text-red-600" />
+              Confirm Deletion
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground mt-2">
+            Are you sure you want to delete user{" "}
+            <strong>{userData?.username}</strong>? This action cannot be undone.
+          </p>
+          <div className="mt-4 flex justify-end space-x-2">
+            <Button variant="outline" onClick={() => setDeleteConfirm(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteUser}
+              disabled={status.isDeleting}
+            >
+              {status.isDeleting ? "Deleting..." : "Delete"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Save Confirmation Dialog */}
+      <Dialog open={saveConfirm} onOpenChange={setSaveConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center">
+              <ExclamationTriangleIcon className="h-5 w-5 mr-2 text-yellow-600" />
+              Confirm Save
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground mt-2">
+            You're about to save all changes made for{" "}
+            <strong>{userData?.username}</strong>. Please ensure everything is
+            correct before proceeding.
+          </p>
+          <div className="mt-4 flex justify-end space-x-2">
+            <Button variant="outline" onClick={() => setSaveConfirm(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-green-600 hover:bg-green-700 text-white"
+              onClick={handleSubmit}
+              disabled={!changesMade || status.isSubmitting}
+            >
+              {status.isSubmitting ? "Saving..." : "Save Changes"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

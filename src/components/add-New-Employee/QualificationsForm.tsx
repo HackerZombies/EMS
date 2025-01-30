@@ -1,19 +1,28 @@
-'use client';
+"use client";
 
-import React from 'react';
-import { useRouter } from 'next/navigation';
+import React from "react";
+import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { PlusIcon, TrashIcon } from "@heroicons/react/24/outline";
-import { CreateUserFormData } from '../../pages/add-New-Employee/index'; // Import the interface
+import { CreateUserFormData } from "../../pages/add-New-Employee/index"; // adjust this import as necessary
 
+// 1. Add startDate & endDate to the Qualification interface
 export interface Qualification {
   name: string;
   level: string;
   specializations: string[];
   institution: string;
+  startDate: string; // <--- new
+  endDate: string;   // <--- new
 }
 
 export interface Experience {
@@ -43,76 +52,147 @@ interface QualificationsFormProps {
   setFormData: React.Dispatch<React.SetStateAction<CreateUserFormData>>;
 }
 
-const QualificationsForm: React.FC<QualificationsFormProps> = ({ formData, setFormData }) => {
+const QualificationsForm: React.FC<QualificationsFormProps> = ({
+  formData,
+  setFormData,
+}) => {
   const router = useRouter();
 
   // Redirect if formData is not available (direct access)
   if (!formData) {
-    router.push('/add-new-Employee');
+    router.push("/add-new-Employee");
     return null;
   }
 
-  // Handle changes in qualifications
-  const handleQualificationChange = (index: number, field: keyof Qualification, value: string | string[]) => {
+  // ──────────────────────────────────────────────────────────────────────────
+  // Handle qualification changes
+  // ──────────────────────────────────────────────────────────────────────────
+  const handleQualificationChange = (
+    index: number,
+    field: keyof Qualification,
+    value: string | string[]
+  ) => {
     const updatedQualifications = [...formData.qualifications];
-    if (field === 'specializations' && typeof value === 'string') {
-      updatedQualifications[index] = { ...updatedQualifications[index], [field]: value.split(', ').map(s => s.trim()) };
+    if (field === "specializations" && typeof value === "string") {
+      // Split the string into an array by comma
+      updatedQualifications[index] = {
+        ...updatedQualifications[index],
+        [field]: value.split(",").map((s) => s.trim()),
+      };
     } else {
-      updatedQualifications[index] = { ...updatedQualifications[index], [field]: value as string };
+      updatedQualifications[index] = {
+        ...updatedQualifications[index],
+        [field]: value as string,
+      };
     }
-    setFormData(prev => ({ ...prev, qualifications: updatedQualifications }));
+    setFormData((prev) => ({ ...prev, qualifications: updatedQualifications }));
   };
 
   const addQualification = () => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      qualifications: [...prev.qualifications, { name: '', level: '', specializations: [], institution: '' }]
+      qualifications: [
+        ...prev.qualifications,
+        {
+          name: "",
+          level: "",
+          specializations: [],
+          institution: "",
+          startDate: "", // <--- initialize here
+          endDate: "",   // <--- initialize here
+        },
+      ],
     }));
   };
 
   const removeQualification = (index: number) => {
-    const updatedQualifications = formData.qualifications.filter((_: any, i: number) => i !== index);
-    setFormData(prev => ({ ...prev, qualifications: updatedQualifications }));
+    const updatedQualifications = formData.qualifications.filter(
+      (_: any, i: number) => i !== index
+    );
+    setFormData((prev) => ({ ...prev, qualifications: updatedQualifications }));
   };
 
-  // Handle changes in experiences
-  const handleExperienceChange = (index: number, field: keyof Experience, value: string) => {
+  // ──────────────────────────────────────────────────────────────────────────
+  // Handle experience changes
+  // ──────────────────────────────────────────────────────────────────────────
+  const handleExperienceChange = (
+    index: number,
+    field: keyof Experience,
+    value: string
+  ) => {
     const updatedExperiences = [...formData.experiences];
     updatedExperiences[index] = { ...updatedExperiences[index], [field]: value };
-    setFormData(prev => ({ ...prev, experiences: updatedExperiences }));
+    setFormData((prev) => ({ ...prev, experiences: updatedExperiences }));
   };
 
   const addExperience = () => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      experiences: [...prev.experiences, { jobTitle: '', company: '', startDate: '', endDate: '', description: '' }]
+      experiences: [
+        ...prev.experiences,
+        {
+          jobTitle: "",
+          company: "",
+          startDate: "",
+          endDate: "",
+          description: "",
+        },
+      ],
     }));
   };
 
   const removeExperience = (index: number) => {
-    const updatedExperiences = formData.experiences.filter((_: any, i: number) => i !== index);
-    setFormData(prev => ({ ...prev, experiences: updatedExperiences }));
+    const updatedExperiences = formData.experiences.filter(
+      (_: any, i: number) => i !== index
+    );
+    setFormData((prev) => ({ ...prev, experiences: updatedExperiences }));
   };
 
-  // Handle changes in certifications
-  const handleCertificationChange = (index: number, field: keyof Certification, value: string) => {
+  // ──────────────────────────────────────────────────────────────────────────
+  // Handle certification changes
+  // ──────────────────────────────────────────────────────────────────────────
+  const handleCertificationChange = (
+    index: number,
+    field: keyof Certification,
+    value: string
+  ) => {
     const updatedCertifications = [...formData.certifications];
-    updatedCertifications[index] = { ...updatedCertifications[index], [field]: value };
-    setFormData(prev => ({ ...prev, certifications: updatedCertifications }));
+    updatedCertifications[index] = {
+      ...updatedCertifications[index],
+      [field]: value,
+    };
+    setFormData((prev) => ({ ...prev, certifications: updatedCertifications }));
   };
 
   const addCertification = () => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      certifications: [...prev.certifications, { name: '', issuingAuthority: '', licenseNumber: '', issueDate: '', expiryDate: '' }]
+      certifications: [
+        ...prev.certifications,
+        {
+          name: "",
+          issuingAuthority: "",
+          licenseNumber: "",
+          issueDate: "",
+          expiryDate: "",
+        },
+      ],
     }));
   };
 
   const removeCertification = (index: number) => {
-    const updatedCertifications = formData.certifications.filter((_: any, i: number) => i !== index);
-    setFormData(prev => ({ ...prev, certifications: updatedCertifications }));
+    const updatedCertifications = formData.certifications.filter(
+      (_: any, i: number) => i !== index
+    );
+    setFormData((prev) => ({
+      ...prev,
+      certifications: updatedCertifications,
+    }));
   };
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // Render
+  // ──────────────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-8">
       {/* Qualifications Section */}
@@ -127,13 +207,18 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({ formData, setFo
                 <Input
                   id={`qualification-name-${index}`}
                   value={qualification.name}
-                  onChange={(e) => handleQualificationChange(index, 'name', e.target.value)}
+                  onChange={(e) =>
+                    handleQualificationChange(index, "name", e.target.value)
+                  }
                 />
               </div>
+
               <div>
                 <Label htmlFor={`qualification-level-${index}`}>Level</Label>
                 <Select
-                  onValueChange={(value) => handleQualificationChange(index, 'level', value)}
+                  onValueChange={(value) =>
+                    handleQualificationChange(index, "level", value)
+                  }
                   value={qualification.level}
                 >
                   <SelectTrigger>
@@ -148,23 +233,64 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({ formData, setFo
                   </SelectContent>
                 </Select>
               </div>
+
               <div>
-                <Label htmlFor={`qualification-specializations-${index}`}>Specializations</Label>
+                <Label htmlFor={`qualification-specializations-${index}`}>
+                  Specializations
+                </Label>
                 <Input
                   id={`qualification-specializations-${index}`}
-                  value={qualification.specializations.join(', ')}
-                  onChange={(e) => handleQualificationChange(index, 'specializations', e.target.value)}
+                  value={qualification.specializations.join(", ")}
+                  onChange={(e) =>
+                    handleQualificationChange(
+                      index,
+                      "specializations",
+                      e.target.value
+                    )
+                  }
                 />
               </div>
+
               <div>
-                <Label htmlFor={`qualification-institution-${index}`}>Institution</Label>
+                <Label htmlFor={`qualification-institution-${index}`}>
+                  Institution
+                </Label>
                 <Input
                   id={`qualification-institution-${index}`}
                   value={qualification.institution}
-                  onChange={(e) => handleQualificationChange(index, 'institution', e.target.value)}
+                  onChange={(e) =>
+                    handleQualificationChange(index, "institution", e.target.value)
+                  }
+                />
+              </div>
+
+              {/* NEW: Start Date */}
+              <div>
+                <Label htmlFor={`qualification-startDate-${index}`}>Start Date</Label>
+                <Input
+                  id={`qualification-startDate-${index}`}
+                  type="date"
+                  value={qualification.startDate}
+                  onChange={(e) =>
+                    handleQualificationChange(index, "startDate", e.target.value)
+                  }
+                />
+              </div>
+
+              {/* NEW: End Date */}
+              <div>
+                <Label htmlFor={`qualification-endDate-${index}`}>End Date</Label>
+                <Input
+                  id={`qualification-endDate-${index}`}
+                  type="date"
+                  value={qualification.endDate}
+                  onChange={(e) =>
+                    handleQualificationChange(index, "endDate", e.target.value)
+                  }
                 />
               </div>
             </div>
+
             <Button
               type="button"
               variant="destructive"
@@ -195,41 +321,45 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({ formData, setFo
                 <Input
                   id={`experience-jobTitle-${index}`}
                   value={experience.jobTitle}
-                  onChange={(e) => handleExperienceChange(index, 'jobTitle', e.target.value)}
+                  onChange={(e) => handleExperienceChange(index, "jobTitle", e.target.value)}
                 />
               </div>
+
               <div>
                 <Label htmlFor={`experience-company-${index}`}>Company</Label>
                 <Input
                   id={`experience-company-${index}`}
                   value={experience.company}
-                  onChange={(e) => handleExperienceChange(index, 'company', e.target.value)}
+                  onChange={(e) => handleExperienceChange(index, "company", e.target.value)}
                 />
               </div>
+
               <div>
                 <Label htmlFor={`experience-startDate-${index}`}>Start Date</Label>
                 <Input
                   id={`experience-startDate-${index}`}
                   type="date"
                   value={experience.startDate}
-                  onChange={(e) => handleExperienceChange(index, 'startDate', e.target.value)}
+                  onChange={(e) => handleExperienceChange(index, "startDate", e.target.value)}
                 />
               </div>
+
               <div>
                 <Label htmlFor={`experience-endDate-${index}`}>End Date</Label>
                 <Input
                   id={`experience-endDate-${index}`}
                   type="date"
                   value={experience.endDate}
-                  onChange={(e) => handleExperienceChange(index, 'endDate', e.target.value)}
+                  onChange={(e) => handleExperienceChange(index, "endDate", e.target.value)}
                 />
               </div>
+
               <div className="col-span-2">
                 <Label htmlFor={`experience-description-${index}`}>Description</Label>
                 <Input
                   id={`experience-description-${index}`}
                   value={experience.description}
-                  onChange={(e) => handleExperienceChange(index, 'description', e.target.value)}
+                  onChange={(e) => handleExperienceChange(index, "description", e.target.value)}
                 />
               </div>
             </div>
@@ -263,23 +393,33 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({ formData, setFo
                 <Input
                   id={`certification-name-${index}`}
                   value={certification.name}
-                  onChange={(e) => handleCertificationChange(index, 'name', e.target.value)}
+                  onChange={(e) =>
+                    handleCertificationChange(index, "name", e.target.value)
+                  }
                 />
               </div>
               <div>
-                <Label htmlFor={`certification-issuingAuthority-${index}`}>Issuing Authority</Label>
+                <Label htmlFor={`certification-issuingAuthority-${index}`}>
+                  Issuing Authority
+                </Label>
                 <Input
                   id={`certification-issuingAuthority-${index}`}
                   value={certification.issuingAuthority}
-                  onChange={(e) => handleCertificationChange(index, 'issuingAuthority', e.target.value)}
+                  onChange={(e) =>
+                    handleCertificationChange(index, "issuingAuthority", e.target.value)
+                  }
                 />
               </div>
               <div>
-                <Label htmlFor={`certification-licenseNumber-${index}`}>License Number</Label>
+                <Label htmlFor={`certification-licenseNumber-${index}`}>
+                  License Number
+                </Label>
                 <Input
                   id={`certification-licenseNumber-${index}`}
                   value={certification.licenseNumber}
-                  onChange={(e) => handleCertificationChange(index, 'licenseNumber', e.target.value)}
+                  onChange={(e) =>
+                    handleCertificationChange(index, "licenseNumber", e.target.value)
+                  }
                 />
               </div>
               <div>
@@ -288,7 +428,9 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({ formData, setFo
                   id={`certification-issueDate-${index}`}
                   type="date"
                   value={certification.issueDate}
-                  onChange={(e) => handleCertificationChange(index, 'issueDate', e.target.value)}
+                  onChange={(e) =>
+                    handleCertificationChange(index, "issueDate", e.target.value)
+                  }
                 />
               </div>
               <div>
@@ -297,7 +439,9 @@ const QualificationsForm: React.FC<QualificationsFormProps> = ({ formData, setFo
                   id={`certification-expiryDate-${index}`}
                   type="date"
                   value={certification.expiryDate}
-                  onChange={(e) => handleCertificationChange(index, 'expiryDate', e.target.value)}
+                  onChange={(e) =>
+                    handleCertificationChange(index, "expiryDate", e.target.value)
+                  }
                 />
               </div>
             </div>

@@ -15,7 +15,9 @@ import {
   DocumentCategory,
   WorkLocation,
   Department,
-  Position
+  Position,
+  // If referencing:
+  // MaritalStatus,
 } from "@prisma/client";
 
 // Disable default body parser to handle multipart/form-data
@@ -25,7 +27,100 @@ export const config = {
   },
 };
 
-// Utility Functions
+// ─────────────────────────────────────────────────────────────────────────────
+// 1. Type Definitions
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface FormFields {
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  dob?: string;
+  phoneNumber?: string;
+  email?: string;
+  residentialAddress?: string; // Will parse this into JSON
+  permanentAddress?: string;   // Will parse this into JSON
+  nationality?: string;
+  gender?: string;
+  bloodGroup?: string;
+  role?: string;
+  department?: string;
+  position?: string;
+  workLocation?: string;
+  employmentType?: string;
+  joiningDate?: string;
+  emergencyContacts?: string;
+  qualifications?: string;
+  experiences?: string;
+  certifications?: string;
+  profileImageUrl?: string;
+  avatarImageUrl?: string;
+  [key: string]: any;
+}
+
+interface FileEntry {
+  filename: string;
+  buffer: Buffer;
+}
+
+interface DocumentUpload {
+  file?: FileEntry;
+  displayName?: string;
+  category: DocumentCategory;
+}
+
+// For storing to Prisma.employeeDocument
+interface EmployeeDocumentData {
+  filename: string;
+  data: Buffer;
+  size: number;
+  userUsername: string;
+  category: DocumentCategory;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 2. More Specific Interfaces for JSON data
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Emergency Contact JSON shape */
+interface EmergencyContactInput {
+  name?: string;
+  relationship?: string;
+  phoneNumber?: string;
+  email?: string;
+}
+
+/** Qualification JSON shape */
+interface QualificationInput {
+  name?: string;
+  level?: QualificationLevel; // Schooling, Graduate, Masters, Doctorate, Other
+  specializations?: string[];
+  institution?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+/** Experience JSON shape */
+interface ExperienceInput {
+  jobTitle?: string;
+  company?: string;
+  description?: string;
+  startDate?: string; // required by DB
+  endDate?: string;
+}
+
+/** Certification JSON shape */
+interface CertificationInput {
+  name?: string;
+  issuingAuthority?: string;
+  licenseNumber?: string;
+  issueDate?: string;
+  expiryDate?: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 3. Utility Functions
+// ─────────────────────────────────────────────────────────────────────────────
 
 function generateUsername(firstName: string): string {
   const randomNumber = Math.floor(Math.random() * 90000) + 10000;
@@ -49,102 +144,55 @@ function generateSecurePassword(length = 12): string {
   return password;
 }
 
-// Type Definitions
-
-interface FormFields {
-  firstName?: string;
-  middleName?: string;
-  lastName?: string;
-  dob?: string;
-  phoneNumber?: string;
-  email?: string;
-  residentialAddress?: string;
-  permanentAddress?: string;
-  nationality?: string;
-  gender?: string;
-  bloodGroup?: string;
-  role?: string;
-  department?: string;
-  position?: string;
-  workLocation?: string;
-  employmentType?: string;
-  joiningDate?: string;
-  emergencyContacts?: string;
-  qualifications?: string;
-  experiences?: string;
-  certifications?: string;
-  profileImageUrl?: string;
-  avatarImageUrl?: string;
-  [key: string]: any; // allow indexing
+// A helper to parse arrays from JSON
+function safeJsonParse<T>(str: string | undefined): T[] {
+  if (!str) return [];
+  try {
+    return JSON.parse(str) as T[];
+  } catch (e) {
+    console.error("JSON parse error:", e);
+    return [];
+  }
 }
 
-interface FileEntry {
-  filename: string;
-  buffer: Buffer;
-}
-
-interface DocumentUpload {
-  file?: FileEntry;
-  displayName?: string;
-  category: DocumentCategory;
-}
-
-interface EmployeeDocumentData {
-  filename: string;
-  data: Buffer;
-  size: number;
-  userUsername: string;
-  category: DocumentCategory;
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// 4. The Main Handler
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default async function handle(req: NextApiRequest, res: NextApiResponse) {
-  // Authentication Check
+  // 1) Check authentication
   const session = await getServerSession(req, res, authOptions);
   if (!session || session.user.role !== "ADMIN") {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
-  // Method Check
+  // 2) Check method
   if (req.method !== "POST") {
     return res.status(405).json({ message: "Method Not Allowed" });
   }
 
-  // Initialize Busboy with higher file-size limits (e.g., 200MB)
+  // 3) Initialize Busboy
   const bb = busboy({
     headers: req.headers,
     limits: {
-      files: 100,             // up to 100 files
+      files: 100, // up to 100 files
       fileSize: 200 * 1024 * 1024, // 200MB per file
     },
   });
 
-  // We'll store all non-file fields here
+  // 4) Storage for fields & documents
   const fields: FormFields = {};
+  const documentsMap: Record<string, Record<number, DocumentUpload>> = {};
 
-  // We'll store each uploaded document in a structure keyed by:
-  //   documents[<categoryName>][<index>]
-  //
-  // Example:
-  //   documents[resume][0][file], documents[resume][0][displayName], etc.
-  //
-  // The data shape is:
-  //   documentsMap[categoryName][index] = { file, displayName, category }
-  //
-  const documentsMap: Record<
-    string,
-    Record<number, DocumentUpload>
-  > = {};
-
-  /**
-   * Parse form using Busboy
-   */
+  // 5) Parse form
   const parseForm = () =>
     new Promise<void>((resolve, reject) => {
       // Handle text fields
       bb.on("field", (fieldname, value) => {
-        // e.g. fieldname = "documents[resume][0][displayName]"
-        // or a normal field like "firstName", "lastName", etc.
-        const docMatch = fieldname.match(/^documents\[(.+?)\]\[(\d+)\]\[(.+?)\]$/);
+        // e.g. "documents[resume][0][displayName]" or "firstName"
+        const docMatch = fieldname.match(
+          /^documents\[(.+?)\]\[(\d+)\]\[(.+?)\]$/
+        );
         if (docMatch) {
           const [_, docCategory, docIndexStr, docField] = docMatch;
           const docIndex = parseInt(docIndexStr, 10);
@@ -153,21 +201,23 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
           }
           if (!documentsMap[docCategory][docIndex]) {
             documentsMap[docCategory][docIndex] = {
-              category: (Object.values(DocumentCategory).includes(docCategory as DocumentCategory)
+              category: Object.values(DocumentCategory).includes(
+                docCategory as DocumentCategory
+              )
                 ? (docCategory as DocumentCategory)
-                : DocumentCategory.others),
+                : DocumentCategory.others,
             };
           }
 
-          // If this is "displayName", store it; if it is "category", we can override
-          // the category if the user specifically wants to pass it. (Optional)
+          // If this is "displayName" or "category"
           if (docField === "displayName") {
             documentsMap[docCategory][docIndex].displayName = value;
           } else if (docField === "category") {
-            // user might explicitly pass a category string as well
-            documentsMap[docCategory][docIndex].category = (Object.values(DocumentCategory).includes(value as DocumentCategory)
+            documentsMap[docCategory][docIndex].category = Object.values(
+              DocumentCategory
+            ).includes(value as DocumentCategory)
               ? (value as DocumentCategory)
-              : DocumentCategory.others);
+              : DocumentCategory.others;
           }
         } else {
           // Normal field
@@ -175,7 +225,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
         }
       });
 
-      // Handle file uploads
+      // Handle files
       bb.on("file", (fieldname, file, info) => {
         // fieldname = "documents[resume][0][file]"
         const { filename, mimeType } = info;
@@ -192,14 +242,15 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
         ];
 
         if (!allowedFileTypes.includes(mimeType)) {
-          file.resume(); // Discard
+          file.resume(); // discard
           return reject(new Error(`Invalid file type: ${mimeType}`));
         }
 
-        const docMatch = fieldname.match(/^documents\[(.+?)\]\[(\d+)\]\[file\]$/);
+        const docMatch = fieldname.match(
+          /^documents\[(.+?)\]\[(\d+)\]\[file\]$/
+        );
         if (!docMatch) {
-          // If a file doesn't match our documents pattern, skip it
-          file.resume();
+          file.resume(); // skip
           return;
         }
 
@@ -211,12 +262,15 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
         }
         if (!documentsMap[docCategory][docIndex]) {
           documentsMap[docCategory][docIndex] = {
-            category: (Object.values(DocumentCategory).includes(docCategory as DocumentCategory)
+            category: Object.values(DocumentCategory).includes(
+              docCategory as DocumentCategory
+            )
               ? (docCategory as DocumentCategory)
-              : DocumentCategory.others),
+              : DocumentCategory.others,
           };
         }
 
+        // Accumulate file buffers
         const fileBuffers: Buffer[] = [];
         file.on("data", (data: Buffer) => fileBuffers.push(data));
         file.on("error", (err) => {
@@ -232,11 +286,13 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
         });
       });
 
+      // Busboy error
       bb.on("error", (err) => {
         console.error("Busboy error:", err);
         reject(err);
       });
 
+      // All done
       bb.on("finish", () => {
         resolve();
       });
@@ -244,10 +300,10 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       req.pipe(bb);
     });
 
+  // 6) Try parsing and process the data
   try {
     await parseForm();
 
-    // Now we have all fields in `fields` and all documents in `documentsMap`
     const {
       firstName,
       middleName,
@@ -287,35 +343,36 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    // Validate email format
+    // Validate email
     if (!validateEmail(email)) {
       return res.status(400).json({ message: "Invalid email format" });
     }
 
-    // Helper function to safely parse JSON arrays
-    const safeJsonParse = <T>(str: string | undefined): T[] => {
-      if (!str) return [];
-      try {
-        return JSON.parse(str) as T[];
-      } catch (e) {
-        console.error("JSON parse error:", e);
-        return [];
+    // Parse addresses from JSON
+    let parsedResidentialAddress = {};
+    let parsedPermanentAddress = {};
+    try {
+      if (residentialAddress) {
+        parsedResidentialAddress = JSON.parse(residentialAddress);
       }
-    };
+      if (permanentAddress) {
+        parsedPermanentAddress = JSON.parse(permanentAddress);
+      }
+    } catch (parseErr) {
+      return res.status(400).json({
+        message: "Invalid JSON for residential/permanent address fields",
+      });
+    }
 
-    const parsedEmergencyContacts = safeJsonParse<any>(emergencyContacts);
-    const parsedQualifications = safeJsonParse<any>(qualifications).map(
-      (q: any) => ({
-        name: q.name || "",
-        level: q.level as QualificationLevel,
-        specializations: q.specializations || [],
-        institution: q.institution || "",
-      })
+    // Parse arrays
+    const parsedEmergencyContacts = safeJsonParse<EmergencyContactInput>(
+      emergencyContacts
     );
-    const parsedExperiences = safeJsonParse<any>(experiences);
-    const parsedCertifications = safeJsonParse<any>(certifications);
+    const parsedQualifications = safeJsonParse<QualificationInput>(qualifications);
+    const parsedExperiences = safeJsonParse<ExperienceInput>(experiences);
+    const parsedCertifications = safeJsonParse<CertificationInput>(certifications);
 
-    // Generate username and password
+    // Generate username & hashed password
     const username = generateUsername(firstName);
     const generatedPassword = generateSecurePassword();
     const hashedPassword = await bcrypt.hash(generatedPassword, 10);
@@ -327,21 +384,22 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     }
 
     const validGenders: Gender[] = ["M", "F", "Other"];
-    if (!validGenders.includes(gender as Gender)) {
+    if (gender && !validGenders.includes(gender as Gender)) {
       return res.status(400).json({ message: "Invalid gender" });
     }
 
     const validBloodGroups: BloodGroup[] = [
       "A_POSITIVE",
-      "B_POSITIVE",
-      "AB_POSITIVE",
-      "O_POSITIVE",
       "A_NEGATIVE",
+      "B_POSITIVE",
       "B_NEGATIVE",
+      "AB_POSITIVE",
       "AB_NEGATIVE",
+      "O_POSITIVE",
       "O_NEGATIVE",
+      "UNKNOWN",
     ];
-    if (!validBloodGroups.includes(bloodGroup as BloodGroup)) {
+    if (bloodGroup && !validBloodGroups.includes(bloodGroup as BloodGroup)) {
       return res.status(400).json({ message: "Invalid blood group" });
     }
 
@@ -349,8 +407,13 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       "FULL_TIME",
       "PART_TIME",
       "CONTRACT",
+      "INTERN",
+      "OTHER",
     ];
-    if (!validEmploymentTypes.includes(employmentType as EmploymentType)) {
+    if (
+      employmentType &&
+      !validEmploymentTypes.includes(employmentType as EmploymentType)
+    ) {
       return res.status(400).json({ message: "Invalid employment type" });
     }
 
@@ -362,7 +425,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       Position.Chief_Executive_Officer,
       Position.Project_Manager,
     ];
-    if (!validPositions.includes(position as Position)) {
+    if (position && !validPositions.includes(position as Position)) {
       return res.status(400).json({ message: "Invalid position" });
     }
 
@@ -372,7 +435,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       WorkLocation.Kochi,
       WorkLocation.Remote,
     ];
-    if (!validWorkLocations.includes(workLocation as WorkLocation)) {
+    if (workLocation && !validWorkLocations.includes(workLocation as WorkLocation)) {
       return res.status(400).json({ message: "Invalid work location" });
     }
 
@@ -383,11 +446,11 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       Department.Hardware,
       Department.Production,
     ];
-    if (!validDepartments.includes(department as Department)) {
+    if (department && !validDepartments.includes(department as Department)) {
       return res.status(400).json({ message: "Invalid department" });
     }
 
-    // Create the user
+    // Create the user in DB
     const newUser = await prisma.user.create({
       data: {
         username,
@@ -399,17 +462,22 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
         phoneNumber,
         leaveBalance: 28,
         role: role as UserRole,
-        gender: gender as Gender,
-        bloodGroup: bloodGroup as BloodGroup,
-        employmentType: employmentType as EmploymentType,
-        dob: dob ? new Date(dob) : null,
-        residentialAddress,
-        permanentAddress,
-        department: department as Department,
-        position: position as Position,
+        gender: gender ? (gender as Gender) : undefined,
+        bloodGroup: bloodGroup ? (bloodGroup as BloodGroup) : undefined,
+        employmentType: employmentType
+          ? (employmentType as EmploymentType)
+          : undefined,
+        dob: dob ? new Date(dob) : undefined,
+
+        // Store JSON addresses here:
+        residentialAddress: parsedResidentialAddress,
+        permanentAddress: parsedPermanentAddress,
+
+        department: department ? (department as Department) : undefined,
+        position: position ? (position as Position) : undefined,
         nationality,
-        workLocation: workLocation as WorkLocation,
-        joiningDate: joiningDate ? new Date(joiningDate) : null,
+        workLocation: workLocation ? (workLocation as WorkLocation) : undefined,
+        joiningDate: joiningDate ? new Date(joiningDate) : undefined,
         profileImageUrl: profileImageUrl || "",
         avatarImageUrl: avatarImageUrl || "",
       },
@@ -419,10 +487,10 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     if (parsedEmergencyContacts.length > 0) {
       await prisma.emergencyContact.createMany({
         data: parsedEmergencyContacts.map((ec) => ({
-          name: ec.name,
-          relationship: ec.relationship,
-          phoneNumber: ec.phoneNumber,
-          email: ec.email,
+          name: ec.name || "",
+          relationship: ec.relationship || "",
+          phoneNumber: ec.phoneNumber || "",
+          email: ec.email || "",
           userUsername: newUser.username,
         })),
       });
@@ -432,33 +500,37 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     if (parsedQualifications.length > 0) {
       await prisma.qualification.createMany({
         data: parsedQualifications.map((q) => ({
-          name: q.name,
-          level: q.level,
-          specializations: q.specializations || [],
-          institution: q.institution,
+          name: q.name || "",
+          level: q.level ?? QualificationLevel.Other,
+          specializations: q.specializations ?? [],
+          institution: q.institution ?? "",
           username: newUser.username,
+          startDate: q.startDate ? new Date(q.startDate) : null,
+          endDate: q.endDate ? new Date(q.endDate) : null,
         })),
       });
     }
 
     // Create experiences
     if (parsedExperiences.length > 0) {
+      // The 'startDate' is required in DB, so check
+      for (const exp of parsedExperiences) {
+        if (!exp.startDate) {
+          return res
+            .status(400)
+            .json({ message: "Experience startDate is required." });
+        }
+      }
+
       await prisma.experience.createMany({
-        data: parsedExperiences.map((exp) => {
-          const experienceData: any = {
-            jobTitle: exp.jobTitle,
-            company: exp.company,
-            description: exp.description,
-            username: newUser.username,
-          };
-          if (exp.startDate) {
-            experienceData.startDate = new Date(exp.startDate);
-          }
-          if (exp.endDate) {
-            experienceData.endDate = new Date(exp.endDate);
-          }
-          return experienceData;
-        }),
+        data: parsedExperiences.map((exp) => ({
+          jobTitle: exp.jobTitle || "",
+          company: exp.company || "",
+          startDate: new Date(exp.startDate as string),
+          endDate: exp.endDate ? new Date(exp.endDate) : null,
+          description: exp.description || "",
+          username: newUser.username,
+        })),
       });
     }
 
@@ -466,32 +538,24 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     if (parsedCertifications.length > 0) {
       await prisma.certification.createMany({
         data: parsedCertifications.map((cert) => ({
-          name: cert.name,
-          issuingAuthority: cert.issuingAuthority,
-          licenseNumber: cert.licenseNumber,
-          issueDate: cert.issueDate ? new Date(cert.issueDate) : undefined,
-          expiryDate: cert.expiryDate ? new Date(cert.expiryDate) : undefined,
+          name: cert.name || "",
+          issuingAuthority: cert.issuingAuthority || "",
+          licenseNumber: cert.licenseNumber || "",
+          issueDate: cert.issueDate ? new Date(cert.issueDate) : null,
+          expiryDate: cert.expiryDate ? new Date(cert.expiryDate) : null,
           username: newUser.username,
         })),
       });
     }
 
-    // Create EmployeeDocuments for each document in documentsMap
-    // docsMap = {
-    //   [categoryName]: {
-    //       [index]: { file, displayName, category }
-    //   }
-    // }
+    // Create documents
     const docsToCreate: EmployeeDocumentData[] = [];
-
     for (const cat of Object.keys(documentsMap)) {
       const docIndices = Object.keys(documentsMap[cat]);
       for (const idxStr of docIndices) {
         const idx = parseInt(idxStr, 10);
         const docObj = documentsMap[cat][idx];
-
-        // We have docObj.file, docObj.displayName, docObj.category
-        if (!docObj.file) continue; // no actual file
+        if (!docObj.file) continue; // no file
         const category = docObj.category || DocumentCategory.others;
 
         docsToCreate.push({
@@ -503,7 +567,6 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
         });
       }
     }
-
     if (docsToCreate.length > 0) {
       await prisma.employeeDocument.createMany({
         data: docsToCreate,
@@ -515,6 +578,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
 
     return res.status(200).json({ username: newUser.username });
   } catch (error: any) {
+    // Handle Prisma unique constraint errors
     if (error instanceof PrismaClientKnownRequestError) {
       if (error.code === "P2002") {
         const target = error.meta?.target;

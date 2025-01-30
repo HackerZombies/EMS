@@ -1,4 +1,5 @@
-// pages/add-New-Employee/index.tsx
+"use client";
+
 import React, { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -27,8 +28,29 @@ import {
   validateJobDetails,
   validateQualifications,
   validateDocuments,
-} from "@/utils/validations"; // <-- your validation helpers
+} from "@/utils/validations";
 
+// Import shadcn/ui dialog and progress
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
+
+// 1. Define the Address interface
+export interface Address {
+  flat: string;
+  street: string;
+  landmark: string;
+  city: string;
+  district: string;
+  state: string;
+  pin: string;
+}
+
+// 2. CreateUserFormData now uses Address objects
 export interface CreateUserFormData {
   firstName: string;
   middleName: string;
@@ -36,8 +58,11 @@ export interface CreateUserFormData {
   email: string;
   phoneNumber: string;
   dob: string;
-  residentialAddress: string;
-  permanentAddress: string;
+
+  // Residential & Permanent addresses
+  residentialAddress: Address;
+  permanentAddress: Address;
+
   nationality: string;
   gender: string;
   bloodGroup: string;
@@ -51,9 +76,11 @@ export interface CreateUserFormData {
   qualifications: QualificationsFormData["qualifications"];
   experiences: any[];
   certifications: any[];
-  documents: UploadedDocuments; 
+  documents: UploadedDocuments;
   profileImageUrl: string;
   avatarImageUrl: string;
+
+  // Used for "Same as Residential" checkbox
   sameAsResidential?: boolean;
 }
 
@@ -65,8 +92,12 @@ export default function CreateUserPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Submission states
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [progress, setProgress] = useState(0);
+
   // Authorization logic
-  const allowedRoles = ["ADMIN"]; 
+  const allowedRoles = ["ADMIN"];
   if (status === "loading") {
     return (
       <div className="flex justify-center items-center h-screen bg-gray-900">
@@ -162,6 +193,7 @@ export default function CreateUserPage() {
     other_documents: [],
   };
 
+  // 3. Initialize formData, including empty address objects
   const [formData, setFormData] = useState<CreateUserFormData>({
     firstName: "",
     middleName: "",
@@ -169,8 +201,24 @@ export default function CreateUserPage() {
     email: "",
     phoneNumber: "",
     dob: "",
-    residentialAddress: "",
-    permanentAddress: "",
+    residentialAddress: {
+      flat: "",
+      street: "",
+      landmark: "",
+      city: "",
+      district: "",
+      state: "",
+      pin: "",
+    },
+    permanentAddress: {
+      flat: "",
+      street: "",
+      landmark: "",
+      city: "",
+      district: "",
+      state: "",
+      pin: "",
+    },
     nationality: "",
     gender: "",
     bloodGroup: "",
@@ -190,11 +238,7 @@ export default function CreateUserPage() {
     sameAsResidential: false,
   });
 
-  /**
-   * Validates the currently active tab’s data.
-   * If there are validation errors, setErrorMessage and return false (to prevent tab switch).
-   * If no errors, clear errorMessage and return true.
-   */
+  // Validation for each tab
   const validateCurrentTab = (): boolean => {
     let errors: string[] = [];
     if (activeTab === "personal") {
@@ -216,39 +260,29 @@ export default function CreateUserPage() {
     }
   };
 
-  /**
-   * Handles moving to the previous or next tab, 
-   * running validation if we move forward.
-   */
   const handleTabChange = (direction: "next" | "prev") => {
     const tabs = ["personal", "job", "qualifications", "documents"];
     const currentIndex = tabs.indexOf(activeTab);
 
     if (direction === "next") {
-      // Validate current tab data before going to next
-      if (!validateCurrentTab()) return; // Stop if invalid
+      if (!validateCurrentTab()) return;
       if (currentIndex < tabs.length - 1) {
         setActiveTab(tabs[currentIndex + 1]);
       }
     } else {
-      // For "previous", typically no validation needed
       if (currentIndex > 0) {
         setActiveTab(tabs[currentIndex - 1]);
       }
     }
   };
 
-  /**
-   * Final submission with re-validation of ALL tabs or 
-   * just call your existing validation functions collectively.
-   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     setSuccessMessage(null);
     setErrorMessage(null);
 
-    // You can run all validations one last time:
+    // Final re-validation across all tabs
     const allErrors = [
       ...validatePersonalInfo(formData),
       ...validateJobDetails(formData),
@@ -258,14 +292,29 @@ export default function CreateUserPage() {
 
     if (allErrors.length > 0) {
       setErrorMessage(allErrors.join(" "));
-      return; // Stop submission
+      return;
     }
 
+    // Start submission
+    setIsSubmitting(true);
+    setProgress(0);
+
+    // Simulate progress
+    let currentProgress = 0;
+    const fakeProgressInterval = setInterval(() => {
+      currentProgress += 20;
+      if (currentProgress >= 100) {
+        currentProgress = 100;
+        clearInterval(fakeProgressInterval);
+      }
+      setProgress(currentProgress);
+    }, 100);
+
     try {
-      // Build your FormData
+      // Build FormData
       const formDataToSend = new FormData();
 
-      // 1. Simple fields
+      // Simple fields
       const simpleFields: Array<keyof CreateUserFormData> = [
         "firstName",
         "middleName",
@@ -273,8 +322,6 @@ export default function CreateUserPage() {
         "email",
         "phoneNumber",
         "dob",
-        "residentialAddress",
-        "permanentAddress",
         "nationality",
         "gender",
         "bloodGroup",
@@ -296,7 +343,17 @@ export default function CreateUserPage() {
         }
       });
 
-      // 2. Complex fields (arrays)
+      // 4. Addresses as JSON
+      formDataToSend.append(
+        "residentialAddress",
+        JSON.stringify(formData.residentialAddress)
+      );
+      formDataToSend.append(
+        "permanentAddress",
+        JSON.stringify(formData.permanentAddress)
+      );
+
+      // Arrays
       const complexFields: Array<keyof CreateUserFormData> = [
         "emergencyContacts",
         "qualifications",
@@ -310,34 +367,30 @@ export default function CreateUserPage() {
         }
       });
 
-      // 3. Documents
+      // Documents
       Object.entries(formData.documents).forEach(([docType, docsArray]) => {
-        docsArray.forEach((doc: UploadedDocument, index: number) => {
+        (docsArray as UploadedDocument[]).forEach((doc: UploadedDocument, index) => {
           formDataToSend.append(`documents[${docType}][${index}][file]`, doc.file);
           formDataToSend.append(
             `documents[${docType}][${index}][displayName]`,
             doc.displayName
           );
-          formDataToSend.append(
-            `documents[${docType}][${index}][category]`,
-            docType
-          );
+          formDataToSend.append(`documents[${docType}][${index}][category]`, docType);
           formDataToSend.append(`documents[${docType}][${index}][id]`, doc.id);
         });
       });
 
-      // 4. Submit to API
+      // Send to API
       const response = await fetch("/api/users/newUser", {
         method: "POST",
         body: formDataToSend,
       });
 
+      setProgress(100);
+
       if (response.status === 409) {
         const errorData = await response.json();
-        setErrorMessage(
-          errorData.message || "Conflict: User may already exist."
-        );
-        return;
+        throw new Error(errorData.message || "Conflict: User may already exist.");
       }
 
       if (!response.ok) {
@@ -347,11 +400,15 @@ export default function CreateUserPage() {
       const data = await response.json();
       setSuccessMessage(`New user created with username: ${data.username}`);
 
-      // Navigate or keep on page
-      router.push(`/manage/users/user/${data.username}`);
-    } catch (error) {
+      // Show 100% for a short delay, then navigate
+      setTimeout(() => {
+        setIsSubmitting(false);
+        router.push(`/manage/users/user/${data.username}`);
+      }, 800);
+    } catch (error: any) {
       console.error("Error creating user:", error);
-      setErrorMessage("Failed to create user. Please try again.");
+      setErrorMessage(error.message || "Failed to create user. Please try again.");
+      setIsSubmitting(false);
     }
   };
 
@@ -374,45 +431,36 @@ export default function CreateUserPage() {
           <CardContent className="p-6">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="personal">
+                <TabsTrigger value="personal" disabled={isSubmitting}>
                   <UserCircleIcon className="w-5 h-5 mr-2" />
                   Personal Info
                 </TabsTrigger>
-                <TabsTrigger value="job">
+                <TabsTrigger value="job" disabled={isSubmitting}>
                   <BriefcaseIcon className="w-5 h-5 mr-2" />
                   Job Details
                 </TabsTrigger>
-                <TabsTrigger value="qualifications">
+                <TabsTrigger value="qualifications" disabled={isSubmitting}>
                   <AcademicCapIcon className="w-5 h-5 mr-2" />
                   Qualifications
                 </TabsTrigger>
-                <TabsTrigger value="documents">
+                <TabsTrigger value="documents" disabled={isSubmitting}>
                   <DocumentPlusIcon className="w-5 h-5 mr-2" />
                   Documents
                 </TabsTrigger>
               </TabsList>
 
               <TabsContent value="personal">
-                <PersonalInfoForm
-                  formData={formData}
-                  setFormData={setFormData}
-                />
+                <PersonalInfoForm formData={formData} setFormData={setFormData} />
               </TabsContent>
-
               <TabsContent value="job">
-                <JobDetailsForm
-                  formData={formData}
-                  setFormData={setFormData}
-                />
+                <JobDetailsForm formData={formData} setFormData={setFormData} />
               </TabsContent>
-
               <TabsContent value="qualifications">
                 <QualificationsForm
                   formData={formData}
                   setFormData={setFormData}
                 />
               </TabsContent>
-
               <TabsContent value="documents">
                 <DocumentsForm
                   uploadedDocuments={formData.documents}
@@ -434,7 +482,7 @@ export default function CreateUserPage() {
                 type="button"
                 variant="outline"
                 onClick={() => handleTabChange("prev")}
-                disabled={activeTab === "personal"}
+                disabled={activeTab === "personal" || isSubmitting}
               >
                 Previous
               </Button>
@@ -442,16 +490,31 @@ export default function CreateUserPage() {
               <Button
                 type="button"
                 onClick={() => handleTabChange("next")}
-                disabled={activeTab === "documents"}
+                disabled={activeTab === "documents" || isSubmitting}
               >
                 Next
               </Button>
 
-              <Button type="submit">Create User</Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Creating..." : "Create User"}
+              </Button>
             </div>
           </CardContent>
         </Card>
       </form>
+
+      {/* Dialog with progress bar while submitting */}
+      <Dialog open={isSubmitting}>
+        <DialogContent className="text-center space-y-4">
+          <DialogHeader>
+            <DialogTitle>Creating User...</DialogTitle>
+          </DialogHeader>
+          <Progress value={progress} className="w-full" />
+          <p className="text-sm text-muted-foreground">
+            Please wait while we submit your data.
+          </p>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

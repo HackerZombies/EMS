@@ -198,8 +198,8 @@ model User {
   leaveBalance       Int                @default(28)
   role               UserRole           @default(EMPLOYEE)
   dob                DateTime?
-  residentialAddress String?
-  permanentAddress   String?
+  residentialAddress Json?
+  permanentAddress   Json?
   department         Department?
   position           Position?
   nationality        String?
@@ -261,6 +261,8 @@ model Qualification {
   name            String?
   specializations String[]
   institution     String?
+  startDate       DateTime?
+  endDate         DateTime?
   username        String
   user            User               @relation("UserQualifications", fields: [username], references: [username], onDelete: Cascade)
 

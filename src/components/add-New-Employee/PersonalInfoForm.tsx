@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -11,7 +11,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Camera } from "lucide-react";
 
-import { CreateUserFormData } from "@/pages/add-New-Employee";
+// Import your types. Make sure they reflect JSON shape for addresses
+import { CreateUserFormData, Address } from "@/pages/add-New-Employee";
 
 interface PersonalInfoFormProps {
   formData: CreateUserFormData;
@@ -25,130 +26,19 @@ export default function PersonalInfoForm({
   const [profilePreview, setProfilePreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Notification states for image upload
-  const [uploadSuccessMessage, setUploadSuccessMessage] = useState<string | null>(null);
-  const [uploadErrorMessage, setUploadErrorMessage] = useState<string | null>(null);
+  const [uploadSuccessMessage, setUploadSuccessMessage] = useState<string | null>(
+    null
+  );
+  const [uploadErrorMessage, setUploadErrorMessage] = useState<string | null>(
+    null
+  );
 
-  // Local state for address parts
-  const [residentialAddress, setResidentialAddress] = useState({
-    flat: '',       // Flat/House Number
-    street: '',     // Street/Locality
-    landmark: '',   // Landmark (Optional)
-    city: '',       // City
-    district: '',   // District
-    state: '',      // State
-    pin: '',        // PIN Code
-  });
-  
-  const [permanentAddress, setPermanentAddress] = useState({
-    flat: '',
-    street: '',
-    landmark: '',
-    city: '',
-    district: '',
-    state: '',
-    pin: '',
-  });
-  
-  useEffect(() => {
-    setResidentialAddress(parseAddress(formData.residentialAddress));
-    setPermanentAddress(parseAddress(formData.permanentAddress));
-  }, [formData.residentialAddress, formData.permanentAddress]);
-
-  useEffect(() => {
-    if (formData.sameAsResidential) {
-      setPermanentAddress(residentialAddress);
-      setFormData(prev => ({
-        ...prev,
-        permanentAddress: `${residentialAddress.flat},${residentialAddress.street},${residentialAddress.landmark},${residentialAddress.city},${residentialAddress.district},${residentialAddress.state},${residentialAddress.pin}`,
-      }));
-    }
-  }, [formData.sameAsResidential, residentialAddress, setFormData]);
-
-
-  const parseAddress = (address?: string) => {
-    if (!address) {
-      return {
-        flat: '',
-        street: '',
-        landmark: '',
-        city: '',
-        district: '',
-        state: '',
-        pin: '',
-      };
-    }
-
-    const parts = address.split(',').map(part => part.trim());
-
-    return {
-      flat: parts[0] || '',
-      street: parts[1] || '',
-      landmark: parts[2] || '',
-      city: parts[3] || '',
-      district: parts[4] || '',
-      state: parts[5] || '',
-      pin: parts[6] || '',
-    };
-  };
-  const syncResidentialToParent = () => {
-    setFormData(prev => ({
-      ...prev,
-      residentialAddress: `${residentialAddress.flat},${residentialAddress.street},${residentialAddress.landmark},${residentialAddress.city},${residentialAddress.district},${residentialAddress.state},${residentialAddress.pin}`,
-    }));
-  };
-
-  const syncPermanentToParent = () => {
-    if (!formData.sameAsResidential) {
-      setFormData(prev => ({
-        ...prev,
-        permanentAddress: `${permanentAddress.flat},${permanentAddress.street},${permanentAddress.landmark},${permanentAddress.city},${permanentAddress.district},${permanentAddress.state},${permanentAddress.pin}`,
-      }));
-    }
-  };
-
-  const handleResidentialChange = (field: string, value: string) => {
-    setResidentialAddress(prev => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
-
-  const handlePermanentChange = (field: string, value: string) => {
-    setPermanentAddress(prev => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
-
-  const handleAddressSync = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const isChecked = e.target.checked;
-    setFormData(prev => ({
-      ...prev,
-      sameAsResidential: isChecked,
-    }));
-
-    if (isChecked) {
-      setPermanentAddress(residentialAddress);
-      setFormData(prev => ({
-        ...prev,
-        permanentAddress: `${residentialAddress.flat},${residentialAddress.street},${residentialAddress.landmark},${residentialAddress.city},${residentialAddress.district},${residentialAddress.state},${residentialAddress.pin}`,
-      }));
-    } else {
-      setPermanentAddress({
-        flat: '',
-        street: '',
-        landmark: '',
-        city: '',
-        district: '',
-        state: '',
-        pin: '',
-      });
-    }
-  };
-
+  // ─────────────────────────────────────────────
+  // IMAGE UPLOAD
+  // ─────────────────────────────────────────────
   const handleImageUpload = async (file: File) => {
     if (!file) return;
+
     const uploadData = new FormData();
     uploadData.append("image", file);
 
@@ -157,10 +47,8 @@ export default function PersonalInfoForm({
       uploadData.append("oldImagePath", oldImagePath);
     }
 
-    // Clear previous upload messages
     setUploadSuccessMessage(null);
     setUploadErrorMessage(null);
-
     setLoading(true);
 
     try {
@@ -199,51 +87,124 @@ export default function PersonalInfoForm({
     }
   };
 
+  // ─────────────────────────────────────────────
+  // BASIC FIELDS
+  // ─────────────────────────────────────────────
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleSelectChange =
+    (fieldName: keyof CreateUserFormData) => (value: string) => {
+      setFormData((prev) => ({
+        ...prev,
+        [fieldName]: value,
+      }));
+    };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const cleaned = e.target.value.replace(/\D/g, "").slice(0, 10);
+    setFormData((prev) => ({
+      ...prev,
+      phoneNumber: cleaned,
+    }));
+  };
+
+  // ─────────────────────────────────────────────
+  // ADDRESS CHANGE
+  // ─────────────────────────────────────────────
+  const handleAddressChange = (
+    whichAddress: "residentialAddress" | "permanentAddress",
+    field: keyof Address,
+    value: string
+  ) => {
+    setFormData((prev) => ({
+      ...prev,
+      [whichAddress]: {
+        ...prev[whichAddress],
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleResidentialPinChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const pin = e.target.value.replace(/\D/g, "").slice(0, 6);
+    setFormData((prev) => ({
+      ...prev,
+      residentialAddress: {
+        ...prev.residentialAddress,
+        pin,
+      },
+    }));
+  };
+
+  const handlePermanentPinChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const pin = e.target.value.replace(/\D/g, "").slice(0, 6);
+    setFormData((prev) => ({
+      ...prev,
+      permanentAddress: {
+        ...prev.permanentAddress,
+        pin,
+      },
+    }));
+  };
+
+  // Copy residential -> permanent address if user wants “Same as Residential”
+  const handleAddressSync = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const isChecked = e.target.checked;
+    setFormData((prev) => {
+      const updated = { ...prev, sameAsResidential: isChecked };
+      if (isChecked) {
+        // Copy entire residentialAddress -> permanentAddress
+        updated.permanentAddress = { ...prev.residentialAddress };
+      }
+      return updated;
     });
   };
 
-  const handleSelectChange = (name: string) => (value: string) => {
-    setFormData({
-      ...formData,
-      [name]: value,
-    });
-  };
+  // ─────────────────────────────────────────────
+  // EMERGENCY CONTACTS
+  // ─────────────────────────────────────────────
   const handleEmergencyContactChange = (
     index: number,
     field: keyof CreateUserFormData["emergencyContacts"][number],
     value: string
   ) => {
-    const updatedContacts = [...formData.emergencyContacts];
-    updatedContacts[index] = { ...updatedContacts[index], [field]: value };
-    setFormData({ ...formData, emergencyContacts: updatedContacts });
-  };
-
-  const addEmergencyContact = () => {
-    setFormData({
-      ...formData,
-      emergencyContacts: [
-        ...formData.emergencyContacts,
-        { name: "", relationship: "", phoneNumber: "", email: "" },
-      ],
+    setFormData((prev) => {
+      const updated = [...prev.emergencyContacts];
+      updated[index] = { ...updated[index], [field]: value };
+      return { ...prev, emergencyContacts: updated };
     });
   };
 
-  const removeEmergencyContact = (index: number) => {
-    const updatedContacts = formData.emergencyContacts.filter(
-      (_, i) => i !== index
-    );
-    setFormData({ ...formData, emergencyContacts: updatedContacts });
+  const addEmergencyContact = () => {
+    setFormData((prev) => ({
+      ...prev,
+      emergencyContacts: [
+        ...prev.emergencyContacts,
+        { name: "", relationship: "", phoneNumber: "", email: "" },
+      ],
+    }));
   };
 
+  const removeEmergencyContact = (index: number) => {
+    setFormData((prev) => {
+      const updated = prev.emergencyContacts.filter((_, i) => i !== index);
+      return { ...prev, emergencyContacts: updated };
+    });
+  };
 
+  // ─────────────────────────────────────────────
+  // RENDER
+  // ─────────────────────────────────────────────
   return (
     <div className="space-y-6">
-       {/* ---------------------- Image Upload ---------------------- */}
-       <div className="flex flex-col items-center">
+      {/* ---------------------- Image Upload ---------------------- */}
+      <div className="flex flex-col items-center">
         <Label className="mb-2 text-sm font-semibold">
           Profile/Avatar Image
         </Label>
@@ -286,9 +247,8 @@ export default function PersonalInfoForm({
         )}
       </div>
 
-      {/* ---------------------- Name/Basic Info + Address ---------------------- */}
+      {/* ---------------------- Name/Basic Info ---------------------- */}
       <div className="space-y-4">
-        {/* Basic Info */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <Label htmlFor="firstName">First Name</Label>
@@ -343,10 +303,11 @@ export default function PersonalInfoForm({
               id="phoneNumber"
               name="phoneNumber"
               value={formData.phoneNumber}
-              onChange={handleChange}
+              onChange={handlePhoneChange}
               required
               className="max-w-xs"
             />
+            <p className="text-xs text-gray-500">Enter 10 digits only</p>
           </div>
           <div>
             <Label htmlFor="dob">Date of Birth</Label>
@@ -377,8 +338,8 @@ export default function PersonalInfoForm({
           <div>
             <Label htmlFor="gender">Gender</Label>
             <Select
-              onValueChange={handleSelectChange("gender")}
               value={formData.gender}
+              onValueChange={handleSelectChange("gender")}
             >
               <SelectTrigger className="max-w-xs">
                 <SelectValue placeholder="Select gender" />
@@ -393,8 +354,8 @@ export default function PersonalInfoForm({
           <div>
             <Label htmlFor="bloodGroup">Blood Group</Label>
             <Select
-              onValueChange={handleSelectChange("bloodGroup")}
               value={formData.bloodGroup}
+              onValueChange={handleSelectChange("bloodGroup")}
             >
               <SelectTrigger className="max-w-xs">
                 <SelectValue placeholder="Select blood group" />
@@ -413,127 +374,161 @@ export default function PersonalInfoForm({
           </div>
         </div>
 
-                       {/* Address Info with multiple fields */}
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <Label>Residential Address</Label>
-          <div className="space-y-2">
-            <Input
-              placeholder="Flat/House Number"
-              value={residentialAddress.flat}
-              onChange={e => handleResidentialChange('flat', e.target.value)}
-              onBlur={syncResidentialToParent}
-              className="max-w-xs"
-            />
-            <Input
-              placeholder="Street/Locality"
-              value={residentialAddress.street}
-              onChange={e => handleResidentialChange('street', e.target.value)}
-              onBlur={syncResidentialToParent}
-              className="max-w-xs"
-            />
-            <Input
-              placeholder="Landmark (Optional)"
-              value={residentialAddress.landmark}
-              onChange={e => handleResidentialChange('landmark', e.target.value)}
-              onBlur={syncResidentialToParent}
-              className="max-w-xs"
-            />
-            <Input
-              placeholder="City"
-              value={residentialAddress.city}
-              onChange={e => handleResidentialChange('city', e.target.value)}
-              onBlur={syncResidentialToParent}
-              className="max-w-xs"
-            />
-            <Input
-              placeholder="District"
-              value={residentialAddress.district}
-              onChange={e => handleResidentialChange('district', e.target.value)}
-              onBlur={syncResidentialToParent}
-              className="max-w-xs"
-            />
-            <Input
-              placeholder="State"
-              value={residentialAddress.state}
-              onChange={e => handleResidentialChange('state', e.target.value)}
-              onBlur={syncResidentialToParent}
-              className="max-w-xs"
-            />
-            <Input
-              placeholder="PIN Code"
-              value={residentialAddress.pin}
-              onChange={e => handleResidentialChange('pin', e.target.value)}
-              onBlur={syncResidentialToParent}
-              className="max-w-xs"
-            />
+        {/* ---------------------- Address Info ---------------------- */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Label>Residential Address</Label>
+            <div className="space-y-2">
+              <Input
+                placeholder="Flat/House Number"
+                value={formData.residentialAddress.flat}
+                onChange={(e) =>
+                  handleAddressChange("residentialAddress", "flat", e.target.value)
+                }
+                className="max-w-xs"
+              />
+              <Input
+                placeholder="Street/Locality"
+                value={formData.residentialAddress.street}
+                onChange={(e) =>
+                  handleAddressChange("residentialAddress", "street", e.target.value)
+                }
+                className="max-w-xs"
+              />
+              <Input
+                placeholder="Landmark (Optional)"
+                value={formData.residentialAddress.landmark || ""}
+                onChange={(e) =>
+                  handleAddressChange("residentialAddress", "landmark", e.target.value)
+                }
+                className="max-w-xs"
+              />
+              <Input
+                placeholder="City"
+                value={formData.residentialAddress.city}
+                onChange={(e) =>
+                  handleAddressChange("residentialAddress", "city", e.target.value)
+                }
+                className="max-w-xs"
+              />
+              <Input
+                placeholder="District"
+                value={formData.residentialAddress.district}
+                onChange={(e) =>
+                  handleAddressChange("residentialAddress", "district", e.target.value)
+                }
+                className="max-w-xs"
+              />
+              <Input
+                placeholder="State"
+                value={formData.residentialAddress.state}
+                onChange={(e) =>
+                  handleAddressChange("residentialAddress", "state", e.target.value)
+                }
+                className="max-w-xs"
+              />
+              <Input
+                placeholder="PIN Code"
+                value={formData.residentialAddress.pin}
+                onChange={handleResidentialPinChange}
+                className="max-w-xs"
+              />
+              <p className="text-xs text-gray-500">Digits only (max length 6)</p>
+            </div>
           </div>
-        </div>
-        <div>
-          <Label>Permanent Address</Label>
-          <div className="space-y-2">
-            <Input
-              placeholder="Flat/House Number"
-              value={permanentAddress.flat}
-              onChange={e => handlePermanentChange('flat', e.target.value)}
-              disabled={formData.sameAsResidential}
-              className={`max-w-xs ${formData.sameAsResidential ? 'bg-gray-200' : ''}`}
-            />
-            <Input
-              placeholder="Street/Locality"
-              value={permanentAddress.street}
-              onChange={e => handlePermanentChange('street', e.target.value)}
-              disabled={formData.sameAsResidential}
-              className={`max-w-xs ${formData.sameAsResidential ? 'bg-gray-200' : ''}`}
-            />
-            <Input
-              placeholder="Landmark (Optional)"
-              value={permanentAddress.landmark}
-              onChange={e => handlePermanentChange('landmark', e.target.value)}
-              disabled={formData.sameAsResidential}
-              className={`max-w-xs ${formData.sameAsResidential ? 'bg-gray-200' : ''}`}
-            />
-            <Input
-              placeholder="City"
-              value={permanentAddress.city}
-              onChange={e => handlePermanentChange('city', e.target.value)}
-              disabled={formData.sameAsResidential}
-              className={`max-w-xs ${formData.sameAsResidential ? 'bg-gray-200' : ''}`}
-            />
-            <Input
-              placeholder="District"
-              value={permanentAddress.district}
-              onChange={e => handlePermanentChange('district', e.target.value)}
-              disabled={formData.sameAsResidential}
-              className={`max-w-xs ${formData.sameAsResidential ? 'bg-gray-200' : ''}`}
-            />
-            <Input
-              placeholder="State"
-              value={permanentAddress.state}
-              onChange={e => handlePermanentChange('state', e.target.value)}
-              disabled={formData.sameAsResidential}
-              className={`max-w-xs ${formData.sameAsResidential ? 'bg-gray-200' : ''}`}
-            />
-            <Input
-              placeholder="PIN Code"
-              value={permanentAddress.pin}
-              onChange={e => handlePermanentChange('pin', e.target.value)}
-              disabled={formData.sameAsResidential}
-              className={`max-w-xs ${formData.sameAsResidential ? 'bg-gray-200' : ''}`}
-            />
-          </div>
-          <label className="flex items-center mt-2 text-sm">
-            <input
-              type="checkbox"
-              checked={!!formData.sameAsResidential}
-              onChange={handleAddressSync}
-            />
-            <span className="ml-2">Same as Residential</span>
-          </label>
-        </div>
-        </div>
-</div>
 
+          <div>
+            <Label>Permanent Address</Label>
+            <div className="space-y-2">
+              <Input
+                placeholder="Flat/House Number"
+                value={formData.permanentAddress.flat}
+                onChange={(e) =>
+                  handleAddressChange("permanentAddress", "flat", e.target.value)
+                }
+                disabled={formData.sameAsResidential}
+                className={`max-w-xs ${
+                  formData.sameAsResidential ? "bg-gray-200" : ""
+                }`}
+              />
+              <Input
+                placeholder="Street/Locality"
+                value={formData.permanentAddress.street}
+                onChange={(e) =>
+                  handleAddressChange("permanentAddress", "street", e.target.value)
+                }
+                disabled={formData.sameAsResidential}
+                className={`max-w-xs ${
+                  formData.sameAsResidential ? "bg-gray-200" : ""
+                }`}
+              />
+              <Input
+                placeholder="Landmark (Optional)"
+                value={formData.permanentAddress.landmark || ""}
+                onChange={(e) =>
+                  handleAddressChange("permanentAddress", "landmark", e.target.value)
+                }
+                disabled={formData.sameAsResidential}
+                className={`max-w-xs ${
+                  formData.sameAsResidential ? "bg-gray-200" : ""
+                }`}
+              />
+              <Input
+                placeholder="City"
+                value={formData.permanentAddress.city}
+                onChange={(e) =>
+                  handleAddressChange("permanentAddress", "city", e.target.value)
+                }
+                disabled={formData.sameAsResidential}
+                className={`max-w-xs ${
+                  formData.sameAsResidential ? "bg-gray-200" : ""
+                }`}
+              />
+              <Input
+                placeholder="District"
+                value={formData.permanentAddress.district}
+                onChange={(e) =>
+                  handleAddressChange("permanentAddress", "district", e.target.value)
+                }
+                disabled={formData.sameAsResidential}
+                className={`max-w-xs ${
+                  formData.sameAsResidential ? "bg-gray-200" : ""
+                }`}
+              />
+              <Input
+                placeholder="State"
+                value={formData.permanentAddress.state}
+                onChange={(e) =>
+                  handleAddressChange("permanentAddress", "state", e.target.value)
+                }
+                disabled={formData.sameAsResidential}
+                className={`max-w-xs ${
+                  formData.sameAsResidential ? "bg-gray-200" : ""
+                }`}
+              />
+              <Input
+                placeholder="PIN Code"
+                value={formData.permanentAddress.pin}
+                onChange={handlePermanentPinChange}
+                disabled={formData.sameAsResidential}
+                className={`max-w-xs ${
+                  formData.sameAsResidential ? "bg-gray-200" : ""
+                }`}
+              />
+              <p className="text-xs text-gray-500">Digits only (max length 6)</p>
+            </div>
+
+            <label className="flex items-center mt-2 text-sm">
+              <input
+                type="checkbox"
+                checked={!!formData.sameAsResidential}
+                onChange={handleAddressSync}
+              />
+              <span className="ml-2">Same as Residential</span>
+            </label>
+          </div>
+        </div>
+      </div>
 
       {/* ---------------------- Emergency Contacts ---------------------- */}
       <div className="space-y-2">
@@ -542,9 +537,8 @@ export default function PersonalInfoForm({
           <div key={index} className="border p-3 rounded-lg mb-2">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
               <div>
-                <Label htmlFor={`contact-name-${index}`}>Name</Label>
+                <Label>Name</Label>
                 <Input
-                  id={`contact-name-${index}`}
                   value={contact.name}
                   onChange={(e) =>
                     handleEmergencyContactChange(index, "name", e.target.value)
@@ -553,41 +547,28 @@ export default function PersonalInfoForm({
                 />
               </div>
               <div>
-                <Label htmlFor={`contact-relationship-${index}`}>
-                  Relationship
-                </Label>
+                <Label>Relationship</Label>
                 <Input
-                  id={`contact-relationship-${index}`}
                   value={contact.relationship}
                   onChange={(e) =>
-                    handleEmergencyContactChange(
-                      index,
-                      "relationship",
-                      e.target.value
-                    )
+                    handleEmergencyContactChange(index, "relationship", e.target.value)
                   }
                   className="max-w-xs"
                 />
               </div>
               <div>
-                <Label htmlFor={`contact-phone-${index}`}>Phone Number</Label>
+                <Label>Phone Number</Label>
                 <Input
-                  id={`contact-phone-${index}`}
                   value={contact.phoneNumber}
                   onChange={(e) =>
-                    handleEmergencyContactChange(
-                      index,
-                      "phoneNumber",
-                      e.target.value
-                    )
+                    handleEmergencyContactChange(index, "phoneNumber", e.target.value)
                   }
                   className="max-w-xs"
                 />
               </div>
               <div>
-                <Label htmlFor={`contact-email-${index}`}>Email</Label>
+                <Label>Email</Label>
                 <Input
-                  id={`contact-email-${index}`}
                   value={contact.email}
                   onChange={(e) =>
                     handleEmergencyContactChange(index, "email", e.target.value)

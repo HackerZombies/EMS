@@ -33,15 +33,11 @@ interface FullUser extends PrismaUser {
   emergencyContacts: EmergencyContact[];
 }
 
-/**
- * Compare old FullUser vs. new FullUser, return an object describing changes.
- * For sub-collections, we do a simplistic approach:
- * - If the array length or JSON string differs, we log the entire old vs. new array.
- */
+/** Compare old vs. new user for an object describing changes. */
 function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
   const changedFields: Record<string, { old: any; new: any }> = {};
 
-  // ----- Compare top-level scalar fields -----
+  // 1. Compare top-level fields
   const topLevelFields = [
     "firstName",
     "middleName",
@@ -66,9 +62,17 @@ function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
     const oldVal = (oldUser as any)[key];
     const newVal = (newUser as any)[key];
 
-    // Compare Date objects by time, everything else by !==
     if (oldVal instanceof Date && newVal instanceof Date) {
       if (oldVal.getTime() !== newVal.getTime()) {
+        changedFields[key] = { old: oldVal, new: newVal };
+      }
+    } else if (
+      typeof oldVal === "object" &&
+      oldVal !== null &&
+      typeof newVal === "object" &&
+      newVal !== null
+    ) {
+      if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
         changedFields[key] = { old: oldVal, new: newVal };
       }
     } else {
@@ -78,7 +82,7 @@ function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
     }
   }
 
-  // Compare joiningDate separately
+  // 2. Compare joiningDate separately
   if (oldUser.joiningDate instanceof Date && newUser.joiningDate instanceof Date) {
     if (oldUser.joiningDate.getTime() !== newUser.joiningDate.getTime()) {
       changedFields["joiningDate"] = {
@@ -95,7 +99,7 @@ function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
     }
   }
 
-  // ----- Compare sub-collections -----
+  // 3. Compare array fields
   function compareArray(fieldName: keyof FullUser) {
     const oldFieldValue = oldUser[fieldName];
     const newFieldValue = newUser[fieldName];
@@ -110,14 +114,13 @@ function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
     const oldVal = JSON.stringify(oldArray);
     const newVal = JSON.stringify(newArray);
     if (oldVal !== newVal) {
-      changedFields[fieldName] = {
+      changedFields[fieldName as string] = {
         old: JSON.parse(oldVal),
         new: JSON.parse(newVal),
       };
     }
   }
 
-  // Basic function to remove non-essential or always-unique fields like IDs, etc.
   function simplifyRecord(obj: any) {
     const { id, dateCreated, ...rest } = obj;
     return rest;
@@ -138,13 +141,13 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
   }
 
   try {
-    // 1) Check Session & Role
+    // 1) Session & Role check
     const session = await getServerSession(req, res, authOptions);
     if (!session || !session.user || !ALLOWED_ROLES.includes(session.user.role as string)) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    // 2) Extract body payload
+    // 2) Extract body
     const {
       username,
       firstName,
@@ -179,7 +182,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(400).json({ message: "Missing mandatory fields" });
     }
 
-    // 4) Prepare data to update
+    // 4) Prepare main user data
     const dataToUpdate: Record<string, any> = {
       firstName,
       lastName,
@@ -188,6 +191,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       residentialAddress,
       role,
     };
+
     if (middleName) dataToUpdate.middleName = middleName;
     if (permanentAddress) dataToUpdate.permanentAddress = permanentAddress;
     if (department) dataToUpdate.department = department;
@@ -199,6 +203,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     if (profileImageUrl) dataToUpdate.profileImageUrl = profileImageUrl;
     if (dob) dataToUpdate.dob = new Date(dob);
     if (nationality) dataToUpdate.nationality = nationality;
+
     if (joiningDate !== undefined && joiningDate !== null) {
       dataToUpdate.joiningDate = new Date(joiningDate);
     }
@@ -265,7 +270,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(400).json({ message: "Invalid employment type" });
     }
 
-    // 7) Fetch the OLD user (including sub-relations) for a full comparison later
+    // 7) Fetch old user
     const oldUser = (await prisma.user.findUnique({
       where: { username },
       include: {
@@ -281,7 +286,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(404).json({ message: "User not found" });
     }
 
-    // 8) Update the main user record
+    // 8) Update main user record
     const updatedUser = await prisma.user.update({
       where: { username },
       data: dataToUpdate,
@@ -294,7 +299,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     await handleDocuments(username, documents);
     await handleEmergencyContacts(username, emergencyContacts);
 
-    // 10) Now fetch the NEW user (including sub-relations) for a full diff
+    // 10) Re-fetch new user
     const newUser = (await prisma.user.findUnique({
       where: { username },
       include: {
@@ -310,31 +315,26 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(500).json({ message: "Could not re-fetch updated user." });
     }
 
-    // 11) Build a single changes diff for everything
+    // 11) Build diff
     const changedFields = buildChangesDiff(oldUser, newUser);
 
-    // 12) If there are changes, log once + send one notification
+    // 12) If no changes, respond
     const hasChanges = Object.keys(changedFields).length > 0 || resetPassword;
     if (!hasChanges) {
-      // No real changes found
       return res.status(200).json({ message: "No changes detected" });
     }
 
-    // Create one AuditLog entry
-    // *IMPORTANT*: we store only the JSON changes and the targetUsername
+    // 13) Audit log
     await prisma.auditLog.create({
       data: {
         action: "UPDATE_USER",
         performedBy: session.user.username,
-        targetUsername: username, 
-        userUsername :  username, // <-- NEW: essential for future 'revert' functionality
+        targetUsername: username,
+        userUsername: username,
         details: JSON.stringify(changedFields, null, 2),
       },
     });
 
-    
-
-    // 13) Return response
     return res.status(200).json({
       message: "User updated successfully",
       resetPassword: resetPassword ? "Password reset email sent" : undefined,
@@ -342,14 +342,15 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     });
   } catch (error: any) {
     logger.error("Error updating user:", error);
-    return res
-      .status(500)
-      .json({ message: "Failed to update user", error: error.message });
+    return res.status(500).json({
+      message: "Failed to update user",
+      error: error.message,
+    });
   }
 }
 
 // ------------------------------
-// Handle sub-collections as before
+//  Sub-collection Handlers
 // ------------------------------
 async function handleEmergencyContacts(username: string, emergencyContacts: any[]) {
   if (Array.isArray(emergencyContacts)) {
@@ -367,16 +368,35 @@ async function handleEmergencyContacts(username: string, emergencyContacts: any[
   }
 }
 
+/**
+ * For optional DateTime? fields (startDate, endDate), we only define
+ * them if they exist, avoiding null or undefined issues.
+ */
 async function handleQualifications(username: string, qualifications: any[]) {
   if (Array.isArray(qualifications)) {
     await prisma.qualification.deleteMany({ where: { username } });
-    const data = qualifications.map((qual) => ({
-      name: qual.name,
-      level: qual.level,
-      specializations: qual.specializations || [],
-      institution: qual.institution || null,
-      username,
-    }));
+
+    const data = qualifications.map((qual) => {
+      const record: any = {
+        name: qual.name,
+        level: qual.level,
+        specializations: qual.specializations || [],
+        institution: qual.institution || null,
+        username,
+      };
+
+      // Only set startDate if it exists
+      if (qual.startDate) {
+        record.startDate = new Date(qual.startDate);
+      }
+      // Only set endDate if it exists
+      if (qual.endDate) {
+        record.endDate = new Date(qual.endDate);
+      }
+
+      return record;
+    });
+
     if (data.length > 0) {
       await prisma.qualification.createMany({ data });
     }
@@ -386,14 +406,24 @@ async function handleQualifications(username: string, qualifications: any[]) {
 async function handleExperiences(username: string, experiences: any[]) {
   if (Array.isArray(experiences)) {
     await prisma.experience.deleteMany({ where: { username } });
-    const data = experiences.map((exp) => ({
-      jobTitle: exp.jobTitle,
-      company: exp.company,
-      description: exp.description,
-      username,
-      startDate: new Date(exp.startDate),
-      endDate: exp.endDate ? new Date(exp.endDate) : undefined,
-    }));
+    const data = experiences.map((exp) => {
+      const record: any = {
+        jobTitle: exp.jobTitle,
+        company: exp.company,
+        description: exp.description,
+        username,
+      };
+
+      if (exp.startDate) {
+        record.startDate = new Date(exp.startDate);
+      }
+      if (exp.endDate) {
+        record.endDate = new Date(exp.endDate);
+      }
+
+      return record;
+    });
+
     if (data.length > 0) {
       await prisma.experience.createMany({ data });
     }
@@ -403,14 +433,24 @@ async function handleExperiences(username: string, experiences: any[]) {
 async function handleCertifications(username: string, certifications: any[]) {
   if (Array.isArray(certifications)) {
     await prisma.certification.deleteMany({ where: { username } });
-    const data = certifications.map((cert) => ({
-      name: cert.name,
-      issuingAuthority: cert.issuingAuthority,
-      licenseNumber: cert.licenseNumber || null,
-      username,
-      issueDate: cert.issueDate ? new Date(cert.issueDate) : undefined,
-      expiryDate: cert.expiryDate ? new Date(cert.expiryDate) : undefined,
-    }));
+    const data = certifications.map((cert) => {
+      const record: any = {
+        name: cert.name,
+        issuingAuthority: cert.issuingAuthority,
+        licenseNumber: cert.licenseNumber || null,
+        username,
+      };
+
+      if (cert.issueDate) {
+        record.issueDate = new Date(cert.issueDate);
+      }
+      if (cert.expiryDate) {
+        record.expiryDate = new Date(cert.expiryDate);
+      }
+
+      return record;
+    });
+
     if (data.length > 0) {
       await prisma.certification.createMany({ data });
     }
@@ -420,6 +460,7 @@ async function handleCertifications(username: string, certifications: any[]) {
 async function handleDocuments(username: string, documents: any) {
   if (documents && typeof documents === "object") {
     await prisma.employeeDocument.deleteMany({ where: { userUsername: username } });
+
     const allDocs = Object.keys(documents).flatMap((category) => {
       const docs = Array.isArray(documents[category]) ? documents[category] : [];
       return docs
@@ -433,9 +474,7 @@ async function handleDocuments(username: string, documents: any) {
             userUsername: username,
             filename: doc.displayName || "Untitled",
             fileType: doc.fileType || null,
-            data: doc.fileData
-              ? Buffer.from(doc.fileData, "base64")
-              : Buffer.from([]),
+            data: doc.fileData ? Buffer.from(doc.fileData, "base64") : Buffer.from([]),
             size: doc.size || 0,
             category: mappedCategory,
           };
@@ -449,9 +488,6 @@ async function handleDocuments(username: string, documents: any) {
   }
 }
 
-// --------------
-// Next.js Config
-// --------------
 export const config = {
   api: {
     bodyParser: {

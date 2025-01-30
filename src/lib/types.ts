@@ -89,3 +89,13 @@ export interface UserFormData {
 export interface FormErrors {
   [key: string]: string | any;
 }
+// /types.ts (or anywhere else)
+import { User, AuditLog, Attendance } from "@prisma/client";
+
+/**
+ * Extends User to include relevant relations for sorting / badging
+ */
+export type UserWithExtras = User & {
+  auditLogs: AuditLog[];
+  attendances: Attendance[];
+};

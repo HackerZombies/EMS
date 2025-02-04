@@ -1,13 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Keep your existing experimental plugin settings
   experimental: {
     swcPlugins: [["next-superjson-plugin", {}]],
   },
-
-  // Allow loading images from Cloudinary
   images: {
-    // For Next.js 13+:
     remotePatterns: [
       {
         protocol: "https",
@@ -16,10 +12,22 @@ const nextConfig = {
         pathname: "/**",
       },
     ],
-    
-    // If you're on an older version of Next.js that doesn't support remotePatterns,
-    // you can use: domains: ["res.cloudinary.com"],
+  },
+  async headers() {
+    return [
+      {
+        // Apply to all routes.
+        source: "/(.*)",
+        headers: [
+          // Here you set your own Permissions-Policy header with supported features.
+          {
+            key: "Permissions-Policy",
+            value: "geolocation=(self), microphone=(), camera=()",
+          },
+        ],
+      },
+    ];
   },
 };
 
-export default nextConfig;
+module.exports = nextConfig;

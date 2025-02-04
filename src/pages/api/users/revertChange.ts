@@ -16,9 +16,8 @@ export default async function revertChange(req: NextApiRequest, res: NextApiResp
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const { logId, fields } = req.body; 
-    // If fields is provided as an array of strings, we do partial revert, otherwise revert all changed fields.
-
+    const { logId, fields } = req.body;
+    // If fields is provided as an array of strings, we do partial revert; otherwise revert all changed fields.
     if (!logId) {
       return res.status(400).json({ message: "Missing logId" });
     }
@@ -31,7 +30,7 @@ export default async function revertChange(req: NextApiRequest, res: NextApiResp
       return res.status(404).json({ message: "Audit Log not found" });
     }
 
-    // 2) We must have stored the targetUsername
+    // 2) Ensure the log has a targetUsername
     const targetUsername = auditLog.targetUsername;
     if (!targetUsername) {
       return res.status(400).json({ message: "Log has no targetUsername" });
@@ -67,8 +66,6 @@ export default async function revertChange(req: NextApiRequest, res: NextApiResp
       "lastName",
       "email",
       "phoneNumber",
-      "residentialAddress",
-      "permanentAddress",
       "role",
       "dob",
       "gender",
@@ -80,38 +77,47 @@ export default async function revertChange(req: NextApiRequest, res: NextApiResp
       "nationality",
       "profileImageUrl",
       "joiningDate",
+      // Note: Address fields will be handled separately.
     ];
 
     // Decide which fields to revert:
-    // If fields array is provided & non-empty, revert only those
-    // Otherwise revert everything in changes
-    const fieldsToRevert = Array.isArray(fields) && fields.length > 0
-      ? fields
-      : Object.keys(changes); // revert all changed fields
+    // If a fields array is provided & non-empty, revert only those;
+    // otherwise revert everything in changes.
+    const fieldsToRevert =
+      Array.isArray(fields) && fields.length > 0 ? fields : Object.keys(changes);
 
-    // We'll collect the top-level fields to revert in an object
+    // We'll collect the top-level fields (that belong directly to the User) to revert in an object.
     const dataToRevert: Record<string, any> = {};
 
-    // We'll also build an object describing the fields we actually reverted
-    // so that we can store it in the new REVERT_CHANGES log details
+    // We'll also build an object describing the fields we actually reverted for the REVERT_CHANGES log.
     const revertedChanges: Record<string, any> = {};
 
     for (const fieldName of fieldsToRevert) {
-      // Make sure this field actually exists in 'changes'
+      // Make sure this field exists in the recorded changes.
       if (!changes[fieldName]) {
-        continue; // No change recorded for this field
+        continue;
       }
 
       const { old: oldValue, new: newValue } = changes[fieldName];
 
-      // If it's a known top-level field
+      // Handle address fields separately.
+      if (fieldName === "residentialAddress" && oldValue !== undefined) {
+        await revertResidentialAddress(targetUsername, oldValue);
+        revertedChanges[fieldName] = { old: oldValue, new: newValue };
+        continue;
+      }
+      if (fieldName === "permanentAddress" && oldValue !== undefined) {
+        await revertPermanentAddress(targetUsername, oldValue);
+        revertedChanges[fieldName] = { old: oldValue, new: newValue };
+        continue;
+      }
+
+      // For known top-level fields that belong to the User model.
       if (topLevelFields.includes(fieldName) && oldValue !== undefined) {
         dataToRevert[fieldName] = oldValue ?? null;
-
-        // Record we reverted this field
         revertedChanges[fieldName] = { old: oldValue, new: newValue };
       }
-      // If it's sub-collection data (array), revert entire sub-collection
+      // For sub-collections, revert the entire collection.
       else if (Array.isArray(oldValue)) {
         if (fieldName === "qualifications") {
           await revertQualifications(targetUsername, oldValue);
@@ -124,13 +130,11 @@ export default async function revertChange(req: NextApiRequest, res: NextApiResp
         } else if (fieldName === "emergencyContacts") {
           await revertEmergencyContacts(targetUsername, oldValue);
         }
-
-        // Record we reverted this sub-collection
         revertedChanges[fieldName] = { old: oldValue, new: newValue };
       }
     }
 
-    // If we have top-level fields to revert, do so
+    // If we have any top-level fields to revert (that belong to the User model), update the user record.
     if (Object.keys(dataToRevert).length > 0) {
       await prisma.user.update({
         where: { username: targetUsername },
@@ -138,18 +142,16 @@ export default async function revertChange(req: NextApiRequest, res: NextApiResp
       });
     }
 
-    // 6) Create a new Audit Log for the revert
-    // We'll only store the actual fields that were reverted
+    // 6) Create a new Audit Log for the revert, storing only the fields that were reverted.
     await prisma.auditLog.create({
       data: {
         action: "REVERT_CHANGES",
         performedBy: session.user.username,
         targetUsername,
-        userUsername: targetUsername, // references the user whose record is changed
+        userUsername: targetUsername,
         details: JSON.stringify(revertedChanges, null, 2),
       },
     });
-    
 
     return res.status(200).json({ message: "Changes reverted successfully" });
   } catch (error: any) {
@@ -163,7 +165,58 @@ export default async function revertChange(req: NextApiRequest, res: NextApiResp
 
 // -------------- Sub-collection Reverters --------------
 
-// Revert qualifications
+async function revertResidentialAddress(username: string, oldAddress: any) {
+  // Revert the ResidentialAddress by upserting the record using the old address data.
+  await prisma.residentialAddress.upsert({
+    where: { userUsername: username },
+    update: {
+      flat: oldAddress.flat,
+      street: oldAddress.street,
+      landmark: oldAddress.landmark,
+      city: oldAddress.city,
+      district: oldAddress.district,
+      state: oldAddress.state,
+      pin: oldAddress.pin,
+    },
+    create: {
+      flat: oldAddress.flat,
+      street: oldAddress.street,
+      landmark: oldAddress.landmark,
+      city: oldAddress.city,
+      district: oldAddress.district,
+      state: oldAddress.state,
+      pin: oldAddress.pin,
+      userUsername: username,
+    },
+  });
+}
+
+async function revertPermanentAddress(username: string, oldAddress: any) {
+  // Revert the PermanentAddress by upserting the record using the old address data.
+  await prisma.permanentAddress.upsert({
+    where: { userUsername: username },
+    update: {
+      flat: oldAddress.flat,
+      street: oldAddress.street,
+      landmark: oldAddress.landmark,
+      city: oldAddress.city,
+      district: oldAddress.district,
+      state: oldAddress.state,
+      pin: oldAddress.pin,
+    },
+    create: {
+      flat: oldAddress.flat,
+      street: oldAddress.street,
+      landmark: oldAddress.landmark,
+      city: oldAddress.city,
+      district: oldAddress.district,
+      state: oldAddress.state,
+      pin: oldAddress.pin,
+      userUsername: username,
+    },
+  });
+}
+
 async function revertQualifications(username: string, oldArray: any[]) {
   await prisma.qualification.deleteMany({ where: { username } });
   const data = oldArray.map((q) => ({
@@ -175,7 +228,6 @@ async function revertQualifications(username: string, oldArray: any[]) {
   }
 }
 
-// Revert experiences
 async function revertExperiences(username: string, oldArray: any[]) {
   await prisma.experience.deleteMany({ where: { username } });
   const data = oldArray.map((exp) => ({
@@ -187,7 +239,6 @@ async function revertExperiences(username: string, oldArray: any[]) {
   }
 }
 
-// Revert certifications
 async function revertCertifications(username: string, oldArray: any[]) {
   await prisma.certification.deleteMany({ where: { username } });
   const data = oldArray.map((cert) => ({
@@ -199,7 +250,6 @@ async function revertCertifications(username: string, oldArray: any[]) {
   }
 }
 
-// Revert documents
 async function revertDocuments(username: string, oldArray: any[]) {
   await prisma.employeeDocument.deleteMany({ where: { userUsername: username } });
   if (oldArray.length > 0) {
@@ -212,7 +262,6 @@ async function revertDocuments(username: string, oldArray: any[]) {
   }
 }
 
-// Revert emergency contacts
 async function revertEmergencyContacts(username: string, oldArray: any[]) {
   await prisma.emergencyContact.deleteMany({ where: { userUsername: username } });
   if (oldArray.length > 0) {

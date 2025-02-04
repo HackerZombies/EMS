@@ -19,24 +19,16 @@ import { Button } from "@/components/ui/button";
 // For date formatting
 import { format } from "date-fns";
 
-// A back button, if you have one
+// A back button component, if you have one
 import BackButton from "@/components/BackButton";
 
 interface AnnouncementDetailProps {
-  announcement: ExtendedAnnouncement | null;
+  announcement: ExtendedAnnouncement;
 }
 
 export default function AnnouncementDetail({
   announcement,
 }: AnnouncementDetailProps) {
-  if (!announcement) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-xl text-gray-700">Announcement not found.</p>
-      </div>
-    );
-  }
-
   const formattedDate = format(new Date(announcement.dateCreated), "PPpp");
 
   return (
@@ -100,9 +92,9 @@ export default function AnnouncementDetail({
             {/* Text Content */}
             <CardContent className="px-6 py-4 bg-white flex-1 overflow-auto">
               <div className="prose max-w-none text-gray-800">
-                {/* 
+                {/*  
                   IMPORTANT: If announcement.text contains user-generated HTML,
-                  be sure to sanitize it to avoid XSS vulnerabilities.
+                  make sure to sanitize it to avoid XSS vulnerabilities.
                 */}
                 <div dangerouslySetInnerHTML={{ __html: announcement.text }} />
               </div>
@@ -128,19 +120,34 @@ export default function AnnouncementDetail({
 
 export const getServerSideProps: GetServerSideProps = async (context) => {
   const { id } = context.params!;
+
+  // Redirect if no valid id provided
   if (!id || Array.isArray(id)) {
-    return { notFound: true };
+    return {
+      redirect: {
+        destination: "/",
+        permanent: false,
+      },
+    };
   }
 
   const announcement = await prisma.announcement.findUnique({
     where: { id },
   });
 
+  // If the announcement is not found, redirect to home page
+  if (!announcement) {
+    return {
+      redirect: {
+        destination: "/",
+        permanent: false,
+      },
+    };
+  }
+
   return {
     props: {
-      announcement: announcement
-        ? JSON.parse(JSON.stringify(announcement))
-        : null,
+      announcement: JSON.parse(JSON.stringify(announcement)),
     },
   };
 };

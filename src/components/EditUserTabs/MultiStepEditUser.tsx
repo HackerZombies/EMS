@@ -28,13 +28,9 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-} from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 // Icons
 import {
@@ -298,7 +294,7 @@ const MultiStepEditUser: React.FC = () => {
   // Toggle edit (revert if turning off)
   const toggleEditMode = useCallback(() => {
     if (isEditMode && userData) {
-      // revert
+      // revert to original
       setPersonalInfo({
         firstName: userData.firstName,
         middleName: userData.middleName || "",
@@ -390,7 +386,9 @@ const MultiStepEditUser: React.FC = () => {
     };
 
     try {
+      // Call updateUser and do not check its return value since it returns void.
       await updateUser(payload);
+      // Optionally, you can call fetchUser(userData.username) here to refresh the user data.
       setSuccessMessage("User details have been successfully updated!");
       setIsEditMode(false);
     } catch (error: any) {
@@ -398,7 +396,13 @@ const MultiStepEditUser: React.FC = () => {
     } finally {
       setSaveConfirm(false);
     }
-  }, [userData, personalInfo, jobDetails, qualifications, updateUser]);
+  }, [
+    userData,
+    personalInfo,
+    jobDetails,
+    qualifications,
+    updateUser,
+  ]);
 
   // Delete user
   const handleDeleteUser = useCallback(async () => {
@@ -409,12 +413,14 @@ const MultiStepEditUser: React.FC = () => {
     try {
       await deleteUser(userData.username);
       setSuccessMessage("User deleted successfully!");
+      // Optionally redirect
+      router.push("/manage/users");
     } catch (err: any) {
       setGlobalError(err.message);
     } finally {
       setDeleteConfirm(false);
     }
-  }, [deleteUser, userData]);
+  }, [deleteUser, userData, router]);
 
   // Switch tab
   const handleTabChange = useCallback((value: string) => {
@@ -488,7 +494,7 @@ const MultiStepEditUser: React.FC = () => {
           </Button>
         </div>
 
-        {/* Tabs with icons, similar design to CreateUserPage */}
+        {/* Tabs with icons */}
         <div className="bg-white/80 p-4 rounded-md shadow-lg">
           <Tabs value={activeTab} onValueChange={handleTabChange}>
             <TabsList className="grid w-full grid-cols-4 mb-6">
@@ -530,7 +536,7 @@ const MultiStepEditUser: React.FC = () => {
                 <p className="text-gray-700">Loading user data...</p>
               ) : (
                 <PersonalInfoForm
-                userUsername={userData?.username}
+                  userUsername={userData?.username}
                   formData={personalInfo}
                   setFormData={setPersonalInfo}
                   changeHistory={changeHistory}
@@ -597,11 +603,11 @@ const MultiStepEditUser: React.FC = () => {
               <TrashIcon className="h-5 w-5 mr-2 text-red-600" />
               Confirm Deletion
             </DialogTitle>
+            <DialogDescription>
+              This action cannot be undone. Are you sure you want to delete the user{" "}
+              <strong>{userData?.username}</strong>?
+            </DialogDescription>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground mt-2">
-            Are you sure you want to delete user{" "}
-            <strong>{userData?.username}</strong>? This action cannot be undone.
-          </p>
           <div className="mt-4 flex justify-end space-x-2">
             <Button variant="outline" onClick={() => setDeleteConfirm(false)}>
               Cancel
@@ -625,12 +631,12 @@ const MultiStepEditUser: React.FC = () => {
               <ExclamationTriangleIcon className="h-5 w-5 mr-2 text-yellow-600" />
               Confirm Save
             </DialogTitle>
+            <DialogDescription>
+              You're about to save all changes made for{" "}
+              <strong>{userData?.username}</strong>. Please ensure everything is
+              correct before proceeding.
+            </DialogDescription>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground mt-2">
-            You're about to save all changes made for{" "}
-            <strong>{userData?.username}</strong>. Please ensure everything is
-            correct before proceeding.
-          </p>
           <div className="mt-4 flex justify-end space-x-2">
             <Button variant="outline" onClick={() => setSaveConfirm(false)}>
               Cancel

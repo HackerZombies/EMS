@@ -16,7 +16,6 @@ import {
   WorkLocation,
   Department,
   Position,
-  // If referencing:
   // MaritalStatus,
 } from "@prisma/client";
 
@@ -27,9 +26,9 @@ export const config = {
   },
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 // 1. Type Definitions
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 
 interface FormFields {
   firstName?: string;
@@ -39,7 +38,7 @@ interface FormFields {
   phoneNumber?: string;
   email?: string;
   residentialAddress?: string; // Will parse this into JSON
-  permanentAddress?: string;   // Will parse this into JSON
+  permanentAddress?: string; // Will parse this into JSON
   nationality?: string;
   gender?: string;
   bloodGroup?: string;
@@ -78,9 +77,9 @@ interface EmployeeDocumentData {
   category: DocumentCategory;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 // 2. More Specific Interfaces for JSON data
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 
 /** Emergency Contact JSON shape */
 interface EmergencyContactInput {
@@ -118,9 +117,9 @@ interface CertificationInput {
   expiryDate?: string;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 // 3. Utility Functions
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 
 function generateUsername(firstName: string): string {
   const randomNumber = Math.floor(Math.random() * 90000) + 10000;
@@ -155,9 +154,9 @@ function safeJsonParse<T>(str: string | undefined): T[] {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 // 4. The Main Handler
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
 
 export default async function handle(req: NextApiRequest, res: NextApiResponse) {
   // 1) Check authentication
@@ -348,7 +347,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(400).json({ message: "Invalid email format" });
     }
 
-    // Parse addresses from JSON
+    // Parse addresses from JSON strings
     let parsedResidentialAddress = {};
     let parsedPermanentAddress = {};
     try {
@@ -450,7 +449,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(400).json({ message: "Invalid department" });
     }
 
-    // Create the user in DB
+    // Create the user in DB with nested address creation
     const newUser = await prisma.user.create({
       data: {
         username,
@@ -469,9 +468,29 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
           : undefined,
         dob: dob ? new Date(dob) : undefined,
 
-        // Store JSON addresses here:
-        residentialAddress: parsedResidentialAddress,
-        permanentAddress: parsedPermanentAddress,
+        // Nested create for address models
+        residentialAddress: {
+          create: parsedResidentialAddress as {
+            flat?: string;
+            street?: string;
+            landmark?: string;
+            city?: string;
+            district?: string;
+            state?: string;
+            pin?: string;
+          },
+        },
+        permanentAddress: {
+          create: parsedPermanentAddress as {
+            flat?: string;
+            street?: string;
+            landmark?: string;
+            city?: string;
+            district?: string;
+            state?: string;
+            pin?: string;
+          },
+        },
 
         department: department ? (department as Department) : undefined,
         position: position ? (position as Position) : undefined,

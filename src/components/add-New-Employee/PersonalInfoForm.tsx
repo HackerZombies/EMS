@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Camera } from "lucide-react";
 
-// Import your types. Make sure they reflect JSON shape for addresses
+// Import your types. Ensure they now reflect your proper address model shape.
 import { CreateUserFormData, Address } from "@/pages/add-New-Employee";
 
 interface PersonalInfoFormProps {
@@ -26,13 +26,8 @@ export default function PersonalInfoForm({
 }: PersonalInfoFormProps) {
   const [profilePreview, setProfilePreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-  const [uploadSuccessMessage, setUploadSuccessMessage] = useState<string | null>(
-    null
-  );
-  const [uploadErrorMessage, setUploadErrorMessage] = useState<string | null>(
-    null
-  );
+  const [uploadSuccessMessage, setUploadSuccessMessage] = useState<string | null>(null);
+  const [uploadErrorMessage, setUploadErrorMessage] = useState<string | null>(null);
 
   // ─────────────────────────────────────────────
   // IMAGE UPLOAD
@@ -116,51 +111,44 @@ export default function PersonalInfoForm({
   };
 
   // ─────────────────────────────────────────────
-  // ADDRESS CHANGE
+  // ADDRESS CHANGE HANDLERS
   // ─────────────────────────────────────────────
+  // Ensures that an address object exists before updating its field.
   const handleAddressChange = (
     whichAddress: "residentialAddress" | "permanentAddress",
     field: keyof Address,
     value: string
   ) => {
-    setFormData((prev) => ({
-      ...prev,
-      [whichAddress]: {
-        ...prev[whichAddress],
-        [field]: value,
-      },
-    }));
+    setFormData((prev) => {
+      const currentAddress: Address = prev[whichAddress] || {};
+      return {
+        ...prev,
+        [whichAddress]: {
+          ...currentAddress,
+          [field]: value,
+        },
+      };
+    });
   };
 
+  // Reuse handleAddressChange for PIN fields
   const handleResidentialPinChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const pin = e.target.value.replace(/\D/g, "").slice(0, 6);
-    setFormData((prev) => ({
-      ...prev,
-      residentialAddress: {
-        ...prev.residentialAddress,
-        pin,
-      },
-    }));
+    handleAddressChange("residentialAddress", "pin", pin);
   };
 
   const handlePermanentPinChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const pin = e.target.value.replace(/\D/g, "").slice(0, 6);
-    setFormData((prev) => ({
-      ...prev,
-      permanentAddress: {
-        ...prev.permanentAddress,
-        pin,
-      },
-    }));
+    handleAddressChange("permanentAddress", "pin", pin);
   };
 
-  // Copy residential -> permanent address if user wants “Same as Residential”
+  // Copy residential -> permanent address if user selects “Same as Residential”
   const handleAddressSync = (e: React.ChangeEvent<HTMLInputElement>) => {
     const isChecked = e.target.checked;
     setFormData((prev) => {
       const updated = { ...prev, sameAsResidential: isChecked };
       if (isChecked) {
-        // Copy entire residentialAddress -> permanentAddress
+        // Copy entire residentialAddress -> permanentAddress (if it exists)
         updated.permanentAddress = { ...prev.residentialAddress };
       }
       return updated;
@@ -267,7 +255,7 @@ export default function PersonalInfoForm({
             <Input
               id="middleName"
               name="middleName"
-              value={formData.middleName}
+              value={formData.middleName || ""}
               onChange={handleChange}
               className="max-w-xs"
             />
@@ -330,7 +318,7 @@ export default function PersonalInfoForm({
             <Input
               id="nationality"
               name="nationality"
-              value={formData.nationality}
+              value={formData.nationality || ""}
               onChange={handleChange}
               required
               className="max-w-xs"
@@ -339,7 +327,7 @@ export default function PersonalInfoForm({
           <div>
             <Label htmlFor="gender">Gender</Label>
             <Select
-              value={formData.gender}
+              value={formData.gender || ""}
               onValueChange={handleSelectChange("gender")}
             >
               <SelectTrigger className="max-w-xs">
@@ -355,7 +343,7 @@ export default function PersonalInfoForm({
           <div>
             <Label htmlFor="bloodGroup">Blood Group</Label>
             <Select
-              value={formData.bloodGroup}
+              value={formData.bloodGroup || ""}
               onValueChange={handleSelectChange("bloodGroup")}
             >
               <SelectTrigger className="max-w-xs">
@@ -382,7 +370,7 @@ export default function PersonalInfoForm({
             <div className="space-y-2">
               <Input
                 placeholder="Flat/House Number"
-                value={formData.residentialAddress.flat}
+                value={formData.residentialAddress?.flat || ""}
                 onChange={(e) =>
                   handleAddressChange("residentialAddress", "flat", e.target.value)
                 }
@@ -390,7 +378,7 @@ export default function PersonalInfoForm({
               />
               <Input
                 placeholder="Street/Locality"
-                value={formData.residentialAddress.street}
+                value={formData.residentialAddress?.street || ""}
                 onChange={(e) =>
                   handleAddressChange("residentialAddress", "street", e.target.value)
                 }
@@ -398,7 +386,7 @@ export default function PersonalInfoForm({
               />
               <Input
                 placeholder="Landmark (Optional)"
-                value={formData.residentialAddress.landmark || ""}
+                value={formData.residentialAddress?.landmark || ""}
                 onChange={(e) =>
                   handleAddressChange("residentialAddress", "landmark", e.target.value)
                 }
@@ -406,7 +394,7 @@ export default function PersonalInfoForm({
               />
               <Input
                 placeholder="City"
-                value={formData.residentialAddress.city}
+                value={formData.residentialAddress?.city || ""}
                 onChange={(e) =>
                   handleAddressChange("residentialAddress", "city", e.target.value)
                 }
@@ -414,7 +402,7 @@ export default function PersonalInfoForm({
               />
               <Input
                 placeholder="District"
-                value={formData.residentialAddress.district}
+                value={formData.residentialAddress?.district || ""}
                 onChange={(e) =>
                   handleAddressChange("residentialAddress", "district", e.target.value)
                 }
@@ -422,7 +410,7 @@ export default function PersonalInfoForm({
               />
               <Input
                 placeholder="State"
-                value={formData.residentialAddress.state}
+                value={formData.residentialAddress?.state || ""}
                 onChange={(e) =>
                   handleAddressChange("residentialAddress", "state", e.target.value)
                 }
@@ -430,7 +418,7 @@ export default function PersonalInfoForm({
               />
               <Input
                 placeholder="PIN Code"
-                value={formData.residentialAddress.pin}
+                value={formData.residentialAddress?.pin || ""}
                 onChange={handleResidentialPinChange}
                 className="max-w-xs"
               />
@@ -443,78 +431,64 @@ export default function PersonalInfoForm({
             <div className="space-y-2">
               <Input
                 placeholder="Flat/House Number"
-                value={formData.permanentAddress.flat}
+                value={formData.permanentAddress?.flat || ""}
                 onChange={(e) =>
                   handleAddressChange("permanentAddress", "flat", e.target.value)
                 }
                 disabled={formData.sameAsResidential}
-                className={`max-w-xs ${
-                  formData.sameAsResidential ? "bg-gray-200" : ""
-                }`}
+                className={`max-w-xs ${formData.sameAsResidential ? "bg-gray-200" : ""}`}
               />
               <Input
                 placeholder="Street/Locality"
-                value={formData.permanentAddress.street}
+                value={formData.permanentAddress?.street || ""}
                 onChange={(e) =>
                   handleAddressChange("permanentAddress", "street", e.target.value)
                 }
                 disabled={formData.sameAsResidential}
-                className={`max-w-xs ${
-                  formData.sameAsResidential ? "bg-gray-200" : ""
-                }`}
+                className={`max-w-xs ${formData.sameAsResidential ? "bg-gray-200" : ""}`}
               />
               <Input
                 placeholder="Landmark (Optional)"
-                value={formData.permanentAddress.landmark || ""}
+                value={formData.permanentAddress?.landmark || ""}
                 onChange={(e) =>
                   handleAddressChange("permanentAddress", "landmark", e.target.value)
                 }
                 disabled={formData.sameAsResidential}
-                className={`max-w-xs ${
-                  formData.sameAsResidential ? "bg-gray-200" : ""
-                }`}
+                className={`max-w-xs ${formData.sameAsResidential ? "bg-gray-200" : ""}`}
               />
               <Input
                 placeholder="City"
-                value={formData.permanentAddress.city}
+                value={formData.permanentAddress?.city || ""}
                 onChange={(e) =>
                   handleAddressChange("permanentAddress", "city", e.target.value)
                 }
                 disabled={formData.sameAsResidential}
-                className={`max-w-xs ${
-                  formData.sameAsResidential ? "bg-gray-200" : ""
-                }`}
+                className={`max-w-xs ${formData.sameAsResidential ? "bg-gray-200" : ""}`}
               />
               <Input
                 placeholder="District"
-                value={formData.permanentAddress.district}
+                value={formData.permanentAddress?.district || ""}
                 onChange={(e) =>
                   handleAddressChange("permanentAddress", "district", e.target.value)
                 }
                 disabled={formData.sameAsResidential}
-                className={`max-w-xs ${
-                  formData.sameAsResidential ? "bg-gray-200" : ""
-                }`}
+                className={`max-w-xs ${formData.sameAsResidential ? "bg-gray-200" : ""}`}
               />
               <Input
                 placeholder="State"
-                value={formData.permanentAddress.state}
+                value={formData.permanentAddress?.state || ""}
                 onChange={(e) =>
                   handleAddressChange("permanentAddress", "state", e.target.value)
                 }
                 disabled={formData.sameAsResidential}
-                className={`max-w-xs ${
-                  formData.sameAsResidential ? "bg-gray-200" : ""
-                }`}
+                className={`max-w-xs ${formData.sameAsResidential ? "bg-gray-200" : ""}`}
               />
               <Input
                 placeholder="PIN Code"
-                value={formData.permanentAddress.pin}
+                value={formData.permanentAddress?.pin || ""}
                 onChange={handlePermanentPinChange}
                 disabled={formData.sameAsResidential}
-                className={`max-w-xs ${
-                  formData.sameAsResidential ? "bg-gray-200" : ""
-                }`}
+                className={`max-w-xs ${formData.sameAsResidential ? "bg-gray-200" : ""}`}
               />
               <p className="text-xs text-gray-500">Digits only (max length 6)</p>
             </div>

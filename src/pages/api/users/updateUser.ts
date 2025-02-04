@@ -154,8 +154,8 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       lastName,
       email,
       phoneNumber,
-      residentialAddress,
-      permanentAddress,
+      residentialAddress, // now sent as a JSON string
+      permanentAddress,   // now sent as a JSON string
       role,
       password,
       dob,
@@ -182,7 +182,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(400).json({ message: "Missing mandatory fields" });
     }
 
-    // 4) Prepare main user data for update
+    // 4) Prepare main user data for update (do NOT include addresses here)
     const dataToUpdate: Record<string, any> = {
       firstName,
       lastName,
@@ -201,10 +201,6 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     if (profileImageUrl) dataToUpdate.profileImageUrl = profileImageUrl;
     if (dob) dataToUpdate.dob = new Date(dob);
     if (nationality) dataToUpdate.nationality = nationality;
-
-    if (residentialAddress) dataToUpdate.residentialAddress = residentialAddress;
-    if (permanentAddress) dataToUpdate.permanentAddress = permanentAddress;
-
     if (joiningDate !== undefined && joiningDate !== null) {
       dataToUpdate.joiningDate = new Date(joiningDate);
     }
@@ -215,7 +211,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       const hashedPassword = await bcrypt.hash(newPassword, 10);
       dataToUpdate.password = hashedPassword;
 
-      // Send the email asynchronously so it doesn’t block the update
+      // Send password reset email asynchronously
       sendUpdateEmail(email, username, newPassword)
         .then(() => logger.info(`Password reset email sent to user ${username}.`))
         .catch((error) =>
@@ -286,13 +282,59 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(404).json({ message: "User not found" });
     }
 
-    // 8) Update main user record
+    // 8) Parse addresses from JSON strings
+    let parsedResidentialAddress = null;
+    if (residentialAddress) {
+      try {
+        parsedResidentialAddress = JSON.parse(residentialAddress);
+      } catch (err) {
+        return res.status(400).json({ message: "Invalid JSON for residentialAddress" });
+      }
+    }
+    let parsedPermanentAddress = null;
+    if (permanentAddress) {
+      try {
+        parsedPermanentAddress = JSON.parse(permanentAddress);
+      } catch (err) {
+        return res.status(400).json({ message: "Invalid JSON for permanentAddress" });
+      }
+    }
+
+    // 9) Update main user record using nested writes for addresses
     await prisma.user.update({
       where: { username },
-      data: dataToUpdate,
+      data: {
+        ...dataToUpdate,
+        residentialAddress: parsedResidentialAddress
+          ? {
+              update: {
+                flat: parsedResidentialAddress.flat,
+                street: parsedResidentialAddress.street,
+                landmark: parsedResidentialAddress.landmark,
+                city: parsedResidentialAddress.city,
+                district: parsedResidentialAddress.district,
+                state: parsedResidentialAddress.state,
+                pin: parsedResidentialAddress.pin,
+              },
+            }
+          : undefined,
+        permanentAddress: parsedPermanentAddress
+          ? {
+              update: {
+                flat: parsedPermanentAddress.flat,
+                street: parsedPermanentAddress.street,
+                landmark: parsedPermanentAddress.landmark,
+                city: parsedPermanentAddress.city,
+                district: parsedPermanentAddress.district,
+                state: parsedPermanentAddress.state,
+                pin: parsedPermanentAddress.pin,
+              },
+            }
+          : undefined,
+      },
     });
 
-    // 9) Update sub-collections concurrently
+    // 10) Update sub-collections concurrently
     await Promise.all([
       handleQualifications(username, qualifications),
       handleExperiences(username, experiences),
@@ -301,7 +343,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       handleEmergencyContacts(username, emergencyContacts),
     ]);
 
-    // 10) Re-fetch new user
+    // 11) Re-fetch new user
     const newUser = (await prisma.user.findUnique({
       where: { username },
       include: {
@@ -317,16 +359,16 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(500).json({ message: "Could not re-fetch updated user." });
     }
 
-    // 11) Build diff
+    // 12) Build diff
     const changedFields = buildChangesDiff(oldUser, newUser);
 
-    // 12) If no changes, respond
+    // 13) If no changes, respond
     const hasChanges = Object.keys(changedFields).length > 0 || resetPassword;
     if (!hasChanges) {
       return res.status(200).json({ message: "No changes detected" });
     }
 
-    // 13) Create the audit log
+    // 14) Create the audit log
     const auditLog = await prisma.auditLog.create({
       data: {
         action: "UPDATE_USER",
@@ -337,7 +379,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       },
     });
 
-    // 14) Create a notification for ADMIN
+    // 15) Create a notification for ADMIN
     await prisma.notification.create({
       data: {
         message: `User "${username}" was updated by ${session.user.username}`,
@@ -496,7 +538,7 @@ async function handleDocuments(username: string, documents: any) {
 export const config = {
   api: {
     bodyParser: {
-      sizeLimit: "4mb",
+      sizeLimit: "10mb",
     },
   },
 };

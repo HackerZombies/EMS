@@ -39,7 +39,7 @@ import {
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 
-// 1. Define the Address interface
+// 1. Define the Address interface (proper model shape)
 export interface Address {
   flat: string;
   street: string;
@@ -50,7 +50,7 @@ export interface Address {
   pin: string;
 }
 
-// 2. CreateUserFormData now uses Address objects
+// 2. CreateUserFormData now uses Address objects for addresses
 export interface CreateUserFormData {
   firstName: string;
   middleName: string;
@@ -59,7 +59,7 @@ export interface CreateUserFormData {
   phoneNumber: string;
   dob: string;
 
-  // Residential & Permanent addresses
+  // Residential & Permanent addresses as proper objects
   residentialAddress: Address;
   permanentAddress: Address;
 
@@ -193,7 +193,7 @@ export default function CreateUserPage() {
     other_documents: [],
   };
 
-  // 3. Initialize formData, including empty address objects
+  // 3. Initialize formData, including proper address objects
   const [formData, setFormData] = useState<CreateUserFormData>({
     firstName: "",
     middleName: "",
@@ -343,17 +343,11 @@ export default function CreateUserPage() {
         }
       });
 
-      // 4. Addresses as JSON
-      formDataToSend.append(
-        "residentialAddress",
-        JSON.stringify(formData.residentialAddress)
-      );
-      formDataToSend.append(
-        "permanentAddress",
-        JSON.stringify(formData.permanentAddress)
-      );
+      // Append addresses as JSON strings from proper address objects
+      formDataToSend.append("residentialAddress", JSON.stringify(formData.residentialAddress));
+      formDataToSend.append("permanentAddress", JSON.stringify(formData.permanentAddress));
 
-      // Arrays
+      // Append array fields
       const complexFields: Array<keyof CreateUserFormData> = [
         "emergencyContacts",
         "qualifications",
@@ -367,14 +361,11 @@ export default function CreateUserPage() {
         }
       });
 
-      // Documents
+      // Append documents
       Object.entries(formData.documents).forEach(([docType, docsArray]) => {
         (docsArray as UploadedDocument[]).forEach((doc: UploadedDocument, index) => {
           formDataToSend.append(`documents[${docType}][${index}][file]`, doc.file);
-          formDataToSend.append(
-            `documents[${docType}][${index}][displayName]`,
-            doc.displayName
-          );
+          formDataToSend.append(`documents[${docType}][${index}][displayName]`, doc.displayName);
           formDataToSend.append(`documents[${docType}][${index}][category]`, docType);
           formDataToSend.append(`documents[${docType}][${index}][id]`, doc.id);
         });
@@ -456,10 +447,7 @@ export default function CreateUserPage() {
                 <JobDetailsForm formData={formData} setFormData={setFormData} />
               </TabsContent>
               <TabsContent value="qualifications">
-                <QualificationsForm
-                  formData={formData}
-                  setFormData={setFormData}
-                />
+                <QualificationsForm formData={formData} setFormData={setFormData} />
               </TabsContent>
               <TabsContent value="documents">
                 <DocumentsForm

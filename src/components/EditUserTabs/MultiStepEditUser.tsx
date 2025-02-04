@@ -43,16 +43,15 @@ import {
 } from "@heroicons/react/24/outline";
 
 /** 
- * Updated Qualification type with 
- * startDate/endDate from your schema.
+ * Updated Qualification type with startDate/endDate.
  */
 export interface Qualification {
   name: string;
   level: string;
   specializations: string[];
   institution: string;
-  startDate?: string;  // DateTime? in your schema
-  endDate?: string;    // DateTime? in your schema
+  startDate?: string;
+  endDate?: string;
 }
 
 export interface Experience {
@@ -71,14 +70,18 @@ export interface Certification {
   expiryDate: string;
 }
 
+/** 
+ * Updated Address interface.  
+ * In the UI we expect all fields to be defined as strings.
+ */
 export interface Address {
-  flat?: string;
-  street?: string;
-  landmark?: string;
-  city?: string;
-  district?: string;
-  state?: string;
-  pin?: string;
+  flat: string;
+  street: string;
+  landmark: string;
+  city: string;
+  district: string;
+  state: string;
+  pin: string;
 }
 
 export interface EmergencyContact {
@@ -88,6 +91,9 @@ export interface EmergencyContact {
   email: string;
 }
 
+/** 
+ * User type.
+ */
 export interface User {
   username: string;
   firstName: string;
@@ -97,8 +103,8 @@ export interface User {
   nationality?: string;
   phoneNumber?: string;
   dob?: string;
-  residentialAddress?: Address;
-  permanentAddress?: Address;
+  residentialAddress: Address;
+  permanentAddress: Address;
   department?: string;
   position?: string;
   role?: string;
@@ -114,6 +120,17 @@ export interface User {
   workLocation?: string;
 }
 
+// Default address object used for initialization and fallback
+const defaultAddress: Address = {
+  flat: "",
+  street: "",
+  landmark: "",
+  city: "",
+  district: "",
+  state: "",
+  pin: "",
+};
+
 const MultiStepEditUser: React.FC = () => {
   const router = useRouter();
   const { username } = router.query;
@@ -124,7 +141,6 @@ const MultiStepEditUser: React.FC = () => {
     userData,
     error: userError,
     status,
-    setUserData,
     fetchUser,
     updateUser,
     deleteUser,
@@ -139,24 +155,8 @@ const MultiStepEditUser: React.FC = () => {
     email: "",
     phoneNumber: "",
     dob: "",
-    residentialAddress: {
-      flat: "",
-      street: "",
-      landmark: "",
-      city: "",
-      district: "",
-      state: "",
-      pin: "",
-    },
-    permanentAddress: {
-      flat: "",
-      street: "",
-      landmark: "",
-      city: "",
-      district: "",
-      state: "",
-      pin: "",
-    },
+    residentialAddress: { ...defaultAddress },
+    permanentAddress: { ...defaultAddress },
     gender: "",
     bloodGroup: "",
     emergencyContacts: [],
@@ -207,6 +207,26 @@ const MultiStepEditUser: React.FC = () => {
   // Populate states once user data is loaded
   useEffect(() => {
     if (userData) {
+      // Normalize address values: if any field is missing (undefined), default it to an empty string.
+      const normResidentialAddress: Address = {
+        flat: userData.residentialAddress?.flat ?? "",
+        street: userData.residentialAddress?.street ?? "",
+        landmark: userData.residentialAddress?.landmark ?? "",
+        city: userData.residentialAddress?.city ?? "",
+        district: userData.residentialAddress?.district ?? "",
+        state: userData.residentialAddress?.state ?? "",
+        pin: userData.residentialAddress?.pin ?? "",
+      };
+      const normPermanentAddress: Address = {
+        flat: userData.permanentAddress?.flat ?? "",
+        street: userData.permanentAddress?.street ?? "",
+        landmark: userData.permanentAddress?.landmark ?? "",
+        city: userData.permanentAddress?.city ?? "",
+        district: userData.permanentAddress?.district ?? "",
+        state: userData.permanentAddress?.state ?? "",
+        pin: userData.permanentAddress?.pin ?? "",
+      };
+
       setPersonalInfo({
         firstName: userData.firstName,
         middleName: userData.middleName || "",
@@ -214,24 +234,8 @@ const MultiStepEditUser: React.FC = () => {
         email: userData.email,
         phoneNumber: userData.phoneNumber || "",
         dob: userData.dob || "",
-        residentialAddress: cloneDeep(userData.residentialAddress) || {
-          flat: "",
-          street: "",
-          landmark: "",
-          city: "",
-          district: "",
-          state: "",
-          pin: "",
-        },
-        permanentAddress: cloneDeep(userData.permanentAddress) || {
-          flat: "",
-          street: "",
-          landmark: "",
-          city: "",
-          district: "",
-          state: "",
-          pin: "",
-        },
+        residentialAddress: normResidentialAddress,
+        permanentAddress: normPermanentAddress,
         gender: userData.gender || "",
         bloodGroup: userData.bloodGroup || "",
         emergencyContacts: cloneDeep(userData.emergencyContacts) || [],
@@ -249,7 +253,6 @@ const MultiStepEditUser: React.FC = () => {
         workLocation: userData.workLocation || "",
       });
 
-      // qualifications w/ startDate/endDate
       setQualifications({
         qualifications: cloneDeep(userData.qualifications),
         experiences: cloneDeep(userData.experiences),
@@ -258,7 +261,7 @@ const MultiStepEditUser: React.FC = () => {
     }
   }, [userData]);
 
-  // Check if changes made
+  // Check if changes were made
   const changesMade = useMemo(() => {
     if (!userData) return false;
 
@@ -291,10 +294,29 @@ const MultiStepEditUser: React.FC = () => {
     return !isEqual(userData, currentFormData);
   }, [userData, personalInfo, jobDetails, qualifications]);
 
-  // Toggle edit (revert if turning off)
+  // Toggle edit mode (revert if turning off)
   const toggleEditMode = useCallback(() => {
     if (isEditMode && userData) {
-      // revert to original
+      // Revert to original user data (normalize addresses as needed)
+      const normResidentialAddress: Address = {
+        flat: userData.residentialAddress?.flat ?? "",
+        street: userData.residentialAddress?.street ?? "",
+        landmark: userData.residentialAddress?.landmark ?? "",
+        city: userData.residentialAddress?.city ?? "",
+        district: userData.residentialAddress?.district ?? "",
+        state: userData.residentialAddress?.state ?? "",
+        pin: userData.residentialAddress?.pin ?? "",
+      };
+      const normPermanentAddress: Address = {
+        flat: userData.permanentAddress?.flat ?? "",
+        street: userData.permanentAddress?.street ?? "",
+        landmark: userData.permanentAddress?.landmark ?? "",
+        city: userData.permanentAddress?.city ?? "",
+        district: userData.permanentAddress?.district ?? "",
+        state: userData.permanentAddress?.state ?? "",
+        pin: userData.permanentAddress?.pin ?? "",
+      };
+
       setPersonalInfo({
         firstName: userData.firstName,
         middleName: userData.middleName || "",
@@ -302,24 +324,8 @@ const MultiStepEditUser: React.FC = () => {
         email: userData.email,
         phoneNumber: userData.phoneNumber || "",
         dob: userData.dob || "",
-        residentialAddress: cloneDeep(userData.residentialAddress) || {
-          flat: "",
-          street: "",
-          landmark: "",
-          city: "",
-          district: "",
-          state: "",
-          pin: "",
-        },
-        permanentAddress: cloneDeep(userData.permanentAddress) || {
-          flat: "",
-          street: "",
-          landmark: "",
-          city: "",
-          district: "",
-          state: "",
-          pin: "",
-        },
+        residentialAddress: normResidentialAddress,
+        permanentAddress: normPermanentAddress,
         gender: userData.gender || "",
         bloodGroup: userData.bloodGroup || "",
         emergencyContacts: cloneDeep(userData.emergencyContacts) || [],
@@ -386,9 +392,7 @@ const MultiStepEditUser: React.FC = () => {
     };
 
     try {
-      // Call updateUser and do not check its return value since it returns void.
       await updateUser(payload);
-      // Optionally, you can call fetchUser(userData.username) here to refresh the user data.
       setSuccessMessage("User details have been successfully updated!");
       setIsEditMode(false);
     } catch (error: any) {
@@ -396,13 +400,7 @@ const MultiStepEditUser: React.FC = () => {
     } finally {
       setSaveConfirm(false);
     }
-  }, [
-    userData,
-    personalInfo,
-    jobDetails,
-    qualifications,
-    updateUser,
-  ]);
+  }, [userData, personalInfo, jobDetails, qualifications, updateUser]);
 
   // Delete user
   const handleDeleteUser = useCallback(async () => {
@@ -413,7 +411,6 @@ const MultiStepEditUser: React.FC = () => {
     try {
       await deleteUser(userData.username);
       setSuccessMessage("User deleted successfully!");
-      // Optionally redirect
       router.push("/manage/users");
     } catch (err: any) {
       setGlobalError(err.message);
@@ -434,10 +431,7 @@ const MultiStepEditUser: React.FC = () => {
         <title>Edit User - {userData?.username || "Loading..."}</title>
       </Head>
 
-      <div
-        ref={containerRef}
-        className="container mx-auto px-4 py-6 min-h-screen space-y-6"
-      >
+      <div ref={containerRef} className="container mx-auto px-4 py-6 min-h-screen space-y-6">
         {/* Notifications */}
         {successMessage && (
           <Alert variant="default">
@@ -458,37 +452,21 @@ const MultiStepEditUser: React.FC = () => {
         {/* Actions */}
         <div className="flex flex-col md:flex-row md:justify-between items-start md:items-center gap-4">
           {!isEditMode ? (
-            <Button
-              onClick={toggleEditMode}
-              className="bg-green-600 hover:bg-green-700 text-white"
-            >
+            <Button onClick={toggleEditMode} className="bg-green-600 hover:bg-green-700 text-white">
               Edit
             </Button>
           ) : (
             <div className="flex items-center gap-3 flex-wrap">
-              <Button
-                variant="default"
-                onClick={toggleEditMode}
-                className="bg-red-600 hover:bg-red-700 text-white"
-              >
+              <Button variant="default" onClick={toggleEditMode} className="bg-red-600 hover:bg-red-700 text-white">
                 Cancel
               </Button>
-              <Button
-                onClick={() => setSaveConfirm(true)}
-                className="bg-green-600 hover:bg-green-700 text-white"
-                disabled={!changesMade}
-              >
+              <Button onClick={() => setSaveConfirm(true)} className="bg-green-600 hover:bg-green-700 text-white" disabled={!changesMade}>
                 Save
               </Button>
             </div>
           )}
 
-          <Button
-            onClick={() => setDeleteConfirm(true)}
-            variant="destructive"
-            disabled={!userData}
-            className="flex items-center bg-red-700 hover:bg-red-800 text-white"
-          >
+          <Button onClick={() => setDeleteConfirm(true)} variant="destructive" disabled={!userData} className="flex items-center bg-red-700 hover:bg-red-800 text-white">
             <TrashIcon className="w-4 h-4 mr-1" />
             Delete
           </Button>
@@ -498,45 +476,30 @@ const MultiStepEditUser: React.FC = () => {
         <div className="bg-white/80 p-4 rounded-md shadow-lg">
           <Tabs value={activeTab} onValueChange={handleTabChange}>
             <TabsList className="grid w-full grid-cols-4 mb-6">
-              <TabsTrigger
-                value="personalInfo"
-                className="data-[state=active]:bg-white data-[state=active]:shadow-md px-4 py-2 flex items-center justify-center"
-              >
+              <TabsTrigger value="personalInfo" className="data-[state=active]:bg-white data-[state=active]:shadow-md px-4 py-2 flex items-center justify-center">
                 <UserCircleIcon className="w-5 h-5 mr-2" />
                 Personal Info
               </TabsTrigger>
-              <TabsTrigger
-                value="jobDetails"
-                className="data-[state=active]:bg-white data-[state=active]:shadow-md px-4 py-2 flex items-center justify-center"
-              >
+              <TabsTrigger value="jobDetails" className="data-[state=active]:bg-white data-[state=active]:shadow-md px-4 py-2 flex items-center justify-center">
                 <BriefcaseIcon className="w-5 h-5 mr-2" />
                 Job Details
               </TabsTrigger>
-              <TabsTrigger
-                value="qualifications"
-                className="data-[state=active]:bg-white data-[state=active]:shadow-md px-4 py-2 flex items-center justify-center"
-              >
+              <TabsTrigger value="qualifications" className="data-[state=active]:bg-white data-[state=active]:shadow-md px-4 py-2 flex items-center justify-center">
                 <AcademicCapIcon className="w-5 h-5 mr-2" />
                 Qualifications
               </TabsTrigger>
-              <TabsTrigger
-                value="documents"
-                className="data-[state=active]:bg-white data-[state=active]:shadow-md px-4 py-2 flex items-center justify-center"
-              >
+              <TabsTrigger value="documents" className="data-[state=active]:bg-white data-[state=active]:shadow-md px-4 py-2 flex items-center justify-center">
                 <DocumentPlusIcon className="w-5 h-5 mr-2" />
                 Documents
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent
-              value="personalInfo"
-              className="rounded-md p-4 border border-gray-100 shadow-sm"
-            >
+            <TabsContent value="personalInfo" className="rounded-md p-4 border border-gray-100 shadow-sm">
               {!userData ? (
                 <p className="text-gray-700">Loading user data...</p>
               ) : (
                 <PersonalInfoForm
-                  userUsername={userData?.username}
+                  userUsername={userData.username}
                   formData={personalInfo}
                   setFormData={setPersonalInfo}
                   changeHistory={changeHistory}
@@ -545,10 +508,7 @@ const MultiStepEditUser: React.FC = () => {
               )}
             </TabsContent>
 
-            <TabsContent
-              value="jobDetails"
-              className="rounded-md p-4 border border-gray-100 shadow-sm"
-            >
+            <TabsContent value="jobDetails" className="rounded-md p-4 border border-gray-100 shadow-sm">
               {!userData ? (
                 <p className="text-gray-700">Loading user data...</p>
               ) : (
@@ -562,10 +522,7 @@ const MultiStepEditUser: React.FC = () => {
               )}
             </TabsContent>
 
-            <TabsContent
-              value="qualifications"
-              className="rounded-md p-4 border border-gray-100 shadow-sm"
-            >
+            <TabsContent value="qualifications" className="rounded-md p-4 border border-gray-100 shadow-sm">
               {!userData ? (
                 <p className="text-gray-700">Loading user data...</p>
               ) : (
@@ -578,17 +535,11 @@ const MultiStepEditUser: React.FC = () => {
               )}
             </TabsContent>
 
-            <TabsContent
-              value="documents"
-              className="rounded-md p-4 border border-gray-100 shadow-sm"
-            >
+            <TabsContent value="documents" className="rounded-md p-4 border border-gray-100 shadow-sm">
               {!userData ? (
                 <p className="text-gray-700">Loading user data...</p>
               ) : (
-                <DocumentsSection
-                  userUsername={userData.username}
-                  isEditMode={isEditMode}
-                />
+                <DocumentsSection userUsername={userData.username} isEditMode={isEditMode} />
               )}
             </TabsContent>
           </Tabs>
@@ -612,11 +563,7 @@ const MultiStepEditUser: React.FC = () => {
             <Button variant="outline" onClick={() => setDeleteConfirm(false)}>
               Cancel
             </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteUser}
-              disabled={status.isDeleting}
-            >
+            <Button variant="destructive" onClick={handleDeleteUser} disabled={status.isDeleting}>
               {status.isDeleting ? "Deleting..." : "Delete"}
             </Button>
           </div>
@@ -632,8 +579,7 @@ const MultiStepEditUser: React.FC = () => {
               Confirm Save
             </DialogTitle>
             <DialogDescription>
-              You're about to save all changes made for{" "}
-              <strong>{userData?.username}</strong>. Please ensure everything is
+              You're about to save all changes made for <strong>{userData?.username}</strong>. Please ensure everything is
               correct before proceeding.
             </DialogDescription>
           </DialogHeader>
@@ -641,11 +587,7 @@ const MultiStepEditUser: React.FC = () => {
             <Button variant="outline" onClick={() => setSaveConfirm(false)}>
               Cancel
             </Button>
-            <Button
-              className="bg-green-600 hover:bg-green-700 text-white"
-              onClick={handleSubmit}
-              disabled={!changesMade || status.isSubmitting}
-            >
+            <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={handleSubmit} disabled={!changesMade || status.isSubmitting}>
               {status.isSubmitting ? "Saving..." : "Save Changes"}
             </Button>
           </div>

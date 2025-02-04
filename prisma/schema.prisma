@@ -184,51 +184,51 @@ enum DocumentCategory {
 // ──────────────────────────────────────────────────────────
 // Models
 // ──────────────────────────────────────────────────────────
-
 model User {
-  id                 String             @id @default(auto()) @map("_id") @db.ObjectId
-  username           String             @unique
-  password           String
-  firstName          String
-  middleName         String?
-  lastName           String
-  email              String             @unique
-  phoneNumber        String             @unique
-  dateCreated        DateTime           @default(now())
-  leaveBalance       Int                @default(28)
-  role               UserRole           @default(EMPLOYEE)
-  dob                DateTime?
-  residentialAddress Json?
-  permanentAddress   Json?
-  department         Department?
-  position           Position?
-  nationality        String?
-  gender             Gender?
-  maritalStatus      MaritalStatus?
-  bloodGroup         BloodGroup?        @default(UNKNOWN)
-  joiningDate        DateTime?
-  employmentType     EmploymentType?
-  workLocation       WorkLocation?
-  profileImageUrl    String?
-  avatarImageUrl     String?
-  isFirstTime        Boolean?           @default(true)
+  id                   String               @id @default(auto()) @map("_id") @db.ObjectId
+  username             String               @unique
+  password             String
+  firstName            String
+  middleName           String?
+  lastName             String
+  email                String               @unique
+  phoneNumber          String               @unique
+  dateCreated          DateTime             @default(now())
+  leaveBalance         Int                  @default(28)
+  role                 UserRole             @default(EMPLOYEE)
+  dob                  DateTime?
+  // Removed JSON address fields; added relations to the address models instead:
+  residentialAddress   ResidentialAddress?
+  permanentAddress     PermanentAddress?
+  department           Department?
+  position             Position?
+  nationality          String?
+  gender               Gender?
+  maritalStatus        MaritalStatus?
+  bloodGroup           BloodGroup?          @default(UNKNOWN)
+  joiningDate          DateTime?
+  employmentType       EmploymentType?
+  workLocation         WorkLocation?
+  profileImageUrl      String?
+  avatarImageUrl       String?
+  isFirstTime          Boolean?             @default(true)
 
   // Relations
-  leaveRequests      LeaveRequest[]     @relation("UserLeaveRequests")
-  digilocker         Digilocker[]       @relation("UserDigilocker")
-  documents          Document[]         @relation("UserDocuments")
-  tickets            Ticket[]           @relation("UserTickets")
-  messages           Message[]          @relation("UserMessages")
-  hrDocuments        HrDocument[]       @relation("UserHrDocuments")
-  otps               OTP[]              @relation("UserOTPs")
-  qualifications     Qualification[]    @relation("UserQualifications")
-  employeeDocuments  EmployeeDocument[] @relation("UserEmployeeDocuments")
-  attendances        Attendance[]       @relation("UserAttendances")
-  experiences        Experience[]       @relation("UserExperiences")
-  certifications     Certification[]    @relation("UserCertifications")
-  auditLogs          AuditLog[]         @relation("UserAuditLogs")
-  emergencyContacts  EmergencyContact[] @relation("UserEmergencyContacts")
-  notifications      Notification[]     @relation("UserNotifications")
+  leaveRequests        LeaveRequest[]       @relation("UserLeaveRequests")
+  digilocker           Digilocker[]         @relation("UserDigilocker")
+  documents            Document[]           @relation("UserDocuments")
+  tickets              Ticket[]             @relation("UserTickets")
+  messages             Message[]            @relation("UserMessages")
+  hrDocuments          HrDocument[]         @relation("UserHrDocuments")
+  otps                 OTP[]                @relation("UserOTPs")
+  qualifications       Qualification[]      @relation("UserQualifications")
+  employeeDocuments    EmployeeDocument[]   @relation("UserEmployeeDocuments")
+  attendances          Attendance[]         @relation("UserAttendances")
+  experiences          Experience[]         @relation("UserExperiences")
+  certifications       Certification[]      @relation("UserCertifications")
+  auditLogs            AuditLog[]           @relation("UserAuditLogs")
+  emergencyContacts    EmergencyContact[]   @relation("UserEmergencyContacts")
+  notifications        Notification[]       @relation("UserNotifications")
 
   @@index([email, phoneNumber], name: "user_contact_index")
 }
@@ -446,4 +446,33 @@ model AuditLog {
   targetUsername String?
   datePerformed  DateTime @default(now())
   details        String
+}
+model ResidentialAddress {
+  id           String @id @default(auto()) @map("_id") @db.ObjectId
+  flat         String?
+  street       String?
+  landmark     String?
+  city         String?
+  district     String?
+  state        String?
+  pin          String?
+
+  // One-to-one relation with User
+  userUsername String @unique
+  user         User   @relation(fields: [userUsername], references: [username], onDelete: Cascade)
+}
+
+model PermanentAddress {
+  id           String @id @default(auto()) @map("_id") @db.ObjectId
+  flat         String?
+  street       String?
+  landmark     String?
+  city         String?
+  district     String?
+  state        String?
+  pin          String?
+
+  // One-to-one relation with User
+  userUsername String @unique
+  user         User   @relation(fields: [userUsername], references: [username], onDelete: Cascade)
 }

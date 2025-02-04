@@ -4,9 +4,18 @@ import React, { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+} from "@/components/ui/card";
 import { Camera, History, ChevronDown, ChevronRight } from "lucide-react";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Modal } from "@/components/ui/modal";
 import {
   Select,
@@ -17,14 +26,16 @@ import {
 } from "@/components/ui/select";
 
 // ----------- Types -----------
+
+// Define a proper Address interface where all properties are required
 export interface Address {
-  flat?: string;
-  street?: string;
-  landmark?: string;
-  city?: string;
-  district?: string;
-  state?: string;
-  pin?: string;
+  flat: string;
+  street: string;
+  landmark: string;
+  city: string;
+  district: string;
+  state: string;
+  pin: string;
 }
 
 export interface EmergencyContact {
@@ -44,8 +55,9 @@ export interface PersonalInfoData {
   nationality?: string;
   gender?: string;
   bloodGroup?: string;
-  residentialAddress?: Address;
-  permanentAddress?: Address;
+  // Addresses are now required objects (even if empty strings)
+  residentialAddress: Address;
+  permanentAddress: Address;
   sameAsResidential?: boolean;
   profileImageUrl?: string;
   emergencyContacts: EmergencyContact[];
@@ -99,7 +111,9 @@ function HistorySection({
     <div className="mt-2 p-4 bg-white/70 border border-gray-200 rounded-md space-y-2 text-red-900">
       <h4 className="text-sm font-semibold flex items-center space-x-1">
         <History className="w-4 h-4 text-blue-500" />
-        <span>{customLabel ? `${customLabel} Change History` : "Change History"}</span>
+        <span>
+          {customLabel ? `${customLabel} Change History` : "Change History"}
+        </span>
       </h4>
       <ul className="space-y-2">
         {historyList.map((entry, idx) => (
@@ -184,13 +198,13 @@ export default function PersonalInfoForm({
   function validate() {
     const newErr: Record<string, string> = {};
 
-    if (!formData.firstName?.trim()) {
+    if (!formData.firstName.trim()) {
       newErr.firstName = "First name is required.";
     }
-    if (!formData.lastName?.trim()) {
+    if (!formData.lastName.trim()) {
       newErr.lastName = "Last name is required.";
     }
-    if (!formData.email?.trim()) {
+    if (!formData.email.trim()) {
       newErr.email = "Email is required.";
     } else if (!isValidEmail(formData.email)) {
       newErr.email = "Please enter a valid email.";
@@ -255,7 +269,7 @@ export default function PersonalInfoForm({
   function handleSameAsResidential(checked: boolean) {
     setFormData((prev) => {
       const updated = { ...prev, sameAsResidential: checked };
-      if (checked && prev.residentialAddress) {
+      if (checked) {
         updated.permanentAddress = { ...prev.residentialAddress };
       }
       return updated;
@@ -263,7 +277,7 @@ export default function PersonalInfoForm({
   }
 
   useEffect(() => {
-    if (formData.sameAsResidential && formData.residentialAddress) {
+    if (formData.sameAsResidential) {
       setFormData((prev) => ({
         ...prev,
         permanentAddress: { ...prev.residentialAddress },
@@ -272,7 +286,11 @@ export default function PersonalInfoForm({
   }, [formData.sameAsResidential, formData.residentialAddress, setFormData]);
 
   // Emergency contacts
-  function handleEmergencyContactChange(idx: number, field: keyof EmergencyContact, value: string) {
+  function handleEmergencyContactChange(
+    idx: number,
+    field: keyof EmergencyContact,
+    value: string
+  ) {
     if (field === "phoneNumber") {
       value = value.replace(/\D/g, "").slice(0, 10);
     }
@@ -305,10 +323,9 @@ export default function PersonalInfoForm({
 
     try {
       const fd = new FormData();
-      // The field name below must match the formidable upload field name ("image")
+      // The field name below must match your upload endpoint's expected field name ("image")
       fd.append("image", file);
 
-      // Make the PUT request to your Cloudinary transform endpoint
       const res = await fetch(`/api/users/employee-photos/${userUsername}`, {
         method: "PUT",
         body: fd,
@@ -319,10 +336,8 @@ export default function PersonalInfoForm({
       }
 
       const data = await res.json();
-      // data.profileImageUrl => final Cloudinary URL w/ transformations
       console.log("New profile image URL:", data.profileImageUrl);
 
-      // Update form data and local preview to the final Cloudinary URL
       setFormData((prev) => ({ ...prev, profileImageUrl: data.profileImageUrl }));
       setProfilePreview(data.profileImageUrl);
     } catch (error) {
@@ -333,14 +348,13 @@ export default function PersonalInfoForm({
   function onProfileImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) {
-      // Show immediate local preview while uploading...
+      // Show local preview while uploading...
       setProfilePreview(URL.createObjectURL(file));
-      // ...then upload to server => Cloudinary => get final URL
       handleImageUpload(file);
     }
   }
 
-  // Replace switch with a Select for resetPassword
+  // Reset password select handler
   function handleResetPassword(val: string) {
     setFormData((prev) => ({
       ...prev,
@@ -430,15 +444,6 @@ export default function PersonalInfoForm({
                 </div>
                 {errors.firstName && (
                   <p className="text-red-500 text-sm">{errors.firstName}</p>
-                )}
-                {openFields["firstName"] && (
-                  <HistorySection
-                    field="firstName"
-                    historyList={getPaginatedHistory("firstName")}
-                    totalCount={getFieldHistory("firstName").length}
-                    currentPage={pagination["firstName"] || 1}
-                    onPageChange={handlePageChange}
-                  />
                 )}
               </div>
 
@@ -621,7 +626,7 @@ export default function PersonalInfoForm({
               </div>
             </div>
 
-            {/* Reset Password (select) */}
+            {/* Reset Password */}
             {isEditMode && (
               <div className="flex flex-col justify-center">
                 <Label className="mb-1 font-medium">Reset Password</Label>
@@ -651,7 +656,10 @@ export default function PersonalInfoForm({
         </CardHeader>
         <CardContent className="p-6 space-y-6">
           {/* Residential Address */}
-          <Collapsible open={isResidentialOpen} onOpenChange={setResidentialOpen}>
+          <Collapsible
+            open={isResidentialOpen}
+            onOpenChange={setResidentialOpen}
+          >
             <div className="flex items-center justify-between">
               <Label className="font-semibold">
                 Residential Address <span className="text-red-500">*</span>
@@ -667,16 +675,6 @@ export default function PersonalInfoForm({
                 </Button>
               </CollapsibleTrigger>
             </div>
-            {openFields["residentialAddress"] && (
-              <HistorySection
-                field="residentialAddress"
-                historyList={getPaginatedHistory("residentialAddress")}
-                totalCount={getFieldHistory("residentialAddress").length}
-                currentPage={pagination["residentialAddress"] || 1}
-                onPageChange={handlePageChange}
-                customLabel="Residential Address"
-              />
-            )}
             <CollapsibleContent className="mt-2">
               <p className="text-xs text-gray-500 mb-2">
                 Pin code must be 6 digits (India standard).
@@ -688,9 +686,7 @@ export default function PersonalInfoForm({
                       key={fld}
                       placeholder={fld}
                       disabled={!isEditMode}
-                      value={
-                        formData.residentialAddress?.[fld as keyof Address] || ""
-                      }
+                      value={formData.residentialAddress[fld as keyof Address] || ""}
                       onChange={(e) =>
                         updateAddress(
                           "residentialAddress",
@@ -706,7 +702,10 @@ export default function PersonalInfoForm({
           </Collapsible>
 
           {/* Permanent Address */}
-          <Collapsible open={isPermanentOpen} onOpenChange={setPermanentOpen}>
+          <Collapsible
+            open={isPermanentOpen}
+            onOpenChange={setPermanentOpen}
+          >
             <div className="flex items-center justify-between">
               <Label className="font-semibold">
                 Permanent Address <span className="text-red-500">*</span>
@@ -722,16 +721,6 @@ export default function PersonalInfoForm({
                 </Button>
               </CollapsibleTrigger>
             </div>
-            {openFields["permanentAddress"] && (
-              <HistorySection
-                field="permanentAddress"
-                historyList={getPaginatedHistory("permanentAddress")}
-                totalCount={getFieldHistory("permanentAddress").length}
-                currentPage={pagination["permanentAddress"] || 1}
-                onPageChange={handlePageChange}
-                customLabel="Permanent Address"
-              />
-            )}
             <CollapsibleContent className="mt-2">
               <p className="text-xs text-gray-500 mb-2">
                 Pin code must be 6 digits (India standard).
@@ -748,9 +737,7 @@ export default function PersonalInfoForm({
                           ? "bg-gray-200 cursor-not-allowed"
                           : ""
                       }
-                      value={
-                        formData.permanentAddress?.[fld as keyof Address] || ""
-                      }
+                      value={formData.permanentAddress[fld as keyof Address] || ""}
                       onChange={(e) =>
                         updateAddress(
                           "permanentAddress",
@@ -846,11 +833,7 @@ export default function PersonalInfoForm({
                           <Input
                             value={c.relationship}
                             onChange={(e) =>
-                              handleEmergencyContactChange(
-                                i,
-                                "relationship",
-                                e.target.value
-                              )
+                              handleEmergencyContactChange(i, "relationship", e.target.value)
                             }
                             disabled={!isEditMode}
                           />
@@ -868,11 +851,7 @@ export default function PersonalInfoForm({
                             value={c.phoneNumber}
                             maxLength={10}
                             onChange={(e) =>
-                              handleEmergencyContactChange(
-                                i,
-                                "phoneNumber",
-                                e.target.value
-                              )
+                              handleEmergencyContactChange(i, "phoneNumber", e.target.value)
                             }
                             disabled={!isEditMode}
                           />

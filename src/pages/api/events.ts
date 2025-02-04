@@ -1,5 +1,3 @@
-// src/pages/api/events.ts
-
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "./auth/[...nextauth]";
@@ -23,7 +21,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const limit = 4;
 
-    // Fetch user
+    // Fetch user by username from the session
     const user = await prisma.user.findUnique({
       where: { username: session.user.username },
     });
@@ -36,13 +34,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Construct userName from firstName, middleName, and lastName
-    const userName = [
-      user.firstName,
-      user.middleName,
-      user.lastName,
-    ]
-      .filter(Boolean)
-      .join(" ") || "Unknown User";
+    const userName =
+      [user.firstName, user.middleName, user.lastName]
+        .filter(Boolean)
+        .join(" ") || "Unknown User";
 
     // Define the time threshold for event expiration (24 hours ago)
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -55,7 +50,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             user.role === "HR"
               ? { dateCreated: { gte: twentyFourHoursAgo } }
               : {
-                  role: { in: [user.role, "EMPLOYEE"] },
+                  // For non-HR users, only fetch announcements targeted to them or global ones.
+                  OR: [
+                    { roleTargets: { has: user.role } },
+                    { roleTargets: { equals: [] } },
+                  ],
                   dateCreated: { gte: twentyFourHoursAgo },
                 },
           orderBy: { dateCreated: "desc" },

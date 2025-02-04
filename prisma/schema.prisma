@@ -238,11 +238,19 @@ model Notification {
   message           String
   createdAt         DateTime @default(now())
   isRead            Boolean  @default(false)
+  targetUrl         String? 
 
-  recipientUsername String
-  recipient         User     @relation("UserNotifications", fields: [recipientUsername], references: [username], onDelete: Cascade)
+  // For a single user:
+  recipientUsername String?
+  recipient         User?    @relation("UserNotifications", fields: [recipientUsername], references: [username], onDelete: Cascade)
 
-  @@index([recipientUsername])
+  // For role-based notifications (an array of roles this message targets):
+  roleTargets       String[] // e.g. ["ADMIN","EMPLOYEE","HR"]
+
+  // If you want a truly global (to all connected users):
+  // you could just leave both of the above null or default to "everyone"
+    // pinned    Boolean  @default(false)
+  // archived  Boolean  @default(false)
 }
 
 model EmergencyContact {
@@ -360,8 +368,21 @@ model Announcement {
   title       String
   text        String
   dateCreated DateTime @default(now())
-  role        String
+
+  // For pinned items
+  pinned      Boolean  @default(false)
+
+  // For archiving
+  archived    Boolean  @default(false)
+
+  // Optional image
+  imageUrl    String?
+
+   // For role-based notifications (an array of roles this message targets):
+  roleTargets       String[] // e.g. ["ADMIN","EMPLOYEE","HR"]
+
 }
+
 
 model Ticket {
   id           String    @id @default(auto()) @map("_id") @db.ObjectId

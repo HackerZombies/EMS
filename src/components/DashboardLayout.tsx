@@ -1,16 +1,23 @@
-// src/layouts/DashboardLayout.tsx
-
+// src/components/DashboardLayout.tsx
 "use client";
 
-import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
-import { ErrorBoundary } from '@/components/ErrorBoundary'; // Adjust the path as necessary
+import React, {
+  useMemo,
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+} from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useSession, signOut } from "next-auth/react";
 import { Icon } from "@iconify/react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useMediaQuery } from "react-responsive";
-import Breadcrumbs from "@/components/Breadcrumbs"; // Ensure Breadcrumbs is a client component
-import Image from "next/image";
+import Breadcrumbs from "@/components/Breadcrumbs";
+
+// 1) Import the ShadCN ScrollArea
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 async function fetchAvatarImage(): Promise<string> {
   const response = await fetch("/api/users/user/avatar");
@@ -30,17 +37,30 @@ type NavCategoryType = {
   items: NavItemType[];
 };
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { data: session, status } = useSession(); // Include status for loading check
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const { data: session, status } = useSession();
   const router = useRouter();
 
+  // Distinguish mobile (<= 768px) vs. desktop
   const isMobile = useMediaQuery({ query: "(max-width: 768px)" });
+
+  // State for toggling left sidebar on mobile
   const [navbarOpen, setNavbarOpen] = useState(false);
+
+  // State for user’s avatar
   const [avatarImage, setAvatarImage] = useState<string>("/default-avatar.png");
 
+  // Refs to handle closing the mobile sidebar on outside click
   const sidebarRef = useRef<HTMLDivElement>(null);
   const toggleButtonRef = useRef<HTMLButtonElement>(null);
 
+  // -------------------------------------
+  // Fetch Avatar on Mount
+  // -------------------------------------
   useEffect(() => {
     async function loadAvatar() {
       try {
@@ -53,13 +73,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     loadAvatar();
   }, []);
 
-  // Sign out
+  // -------------------------------------
+  // Sign Out
+  // -------------------------------------
   const handleSignOut = useCallback(async () => {
     const data = await signOut({ redirect: false, callbackUrl: "/" });
     router.push(data.url);
   }, [router]);
 
-  // Role-based nav items
+  // -------------------------------------
+  // Build Nav Items
+  // -------------------------------------
   const navItems = useMemo<NavCategoryType[]>(() => {
     if (!session?.user) return [];
 
@@ -86,7 +110,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           { url: "/add-New-Employee", title: "Add Employees", icon: "ph:address-book" },
           { url: "/manage/users", title: "Manage Employees", icon: "ph:address-book" },
           { url: "/hr/attendance", title: "Manage Attendance", icon: "ph:calendar-check" },
-          { url: "/activity", title: "Activity Logs", icon: "ph:clock-clockwise" }, // Added Activity Logs
+          { url: "/activity", title: "Activity Logs", icon: "ph:clock-clockwise" },
         ],
       });
     }
@@ -108,14 +132,33 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return baseItems;
   }, [session]);
 
-  // State to track the currently expanded category
-  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  // -------------------------------------
+  // Multiple Category Expand/Collapse
+  // -------------------------------------
+  const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
 
-  const toggleCategory = useCallback((categoryName: string) => {
-    setExpandedCategory((prev) => (prev === categoryName ? null : categoryName));
+  // On mount (or change of role), set default open categories
+  useEffect(() => {
+    if (!session?.user) return;
+
+    if (session.user.role === "ADMIN") {
+      setExpandedCategories(["General", "ADMIN"]);
+    } else if (session.user.role === "HR") {
+      setExpandedCategories(["General", "HR Employees"]);
+    } else {
+      // EMPLOYEE
+      setExpandedCategories(["General"]);
+    }
+  }, [session?.user]);
+
+  // Toggle an individual category
+  const toggleCategory = useCallback((cat: string) => {
+    setExpandedCategories((prev) =>
+      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
+    );
   }, []);
 
-  // Close sidebar if user clicks outside
+  // Close the mobile sidebar if user clicks outside
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (
@@ -132,7 +175,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [navbarOpen]);
 
-  // **Move roleBadge useMemo here, before any early returns**
+  // Role badge
   const roleBadge = useMemo(() => {
     if (session?.user.role === "ADMIN") {
       return (
@@ -150,51 +193,59 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return null;
   }, [session?.user.role]);
 
+  // If still loading session
   if (status === "loading") {
-    return <div className="flex justify-center items-center min-h-screen">Loading...</div>;
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        Loading...
+      </div>
+    );
   }
 
+  // If not logged in
   if (!session?.user) {
     return <>{children}</>;
   }
 
-  const firstName = session.user.firstName?.split(" ")[0] || "User";
-
   return (
-    <ErrorBoundary fallback={<div className="flex justify-center items-center h-screen">Something went wrong.</div>}>
+    <ErrorBoundary
+      fallback={
+        <div className="flex justify-center items-center h-screen">
+          Something went wrong.
+        </div>
+      }
+    >
       <div className="flex min-h-screen">
-        {/* Overlay for mobile when sidebar is open */}
         {isMobile && navbarOpen && (
           <div
             onClick={() => setNavbarOpen(false)}
             className="fixed inset-0 bg-black/50 z-30 backdrop-blur-sm"
-          ></div>
+          />
         )}
 
-        {/* Sidebar */}
+        {/* LEFT SIDEBAR (Nav) */}
         <aside
           ref={sidebarRef}
           id="sidebar-navigation"
           className={`fixed top-0 left-0 z-40 w-64 h-screen pt-[4rem]
             backdrop-blur-md backdrop-saturate-150
             bg-white/20 dark:bg-black/20
-            border-none
             shadow-md
             rounded-r-lg
             transition-transform
             ${navbarOpen ? "translate-x-0" : "-translate-x-full"}
             sm:translate-x-0
-            flex flex-col justify-between
+            flex flex-col
           `}
         >
-          <div className="flex flex-col h-full px-3 pb-4 text-white">
-            {/* Navigation Items */}
-            <ul className="pt-2 space-y-2 flex-1">
+          {/* 2) Wrap your nav content in a ScrollArea for desktop scrolling */}
+          <ScrollArea className="flex-1 px-3 pb-4 text-white">
+            <ul className="pt-2 space-y-2">
+              {/* Render your nav categories */}
               {navItems.map((category) => {
-                const isCollapsed = expandedCategory !== category.category;
+                const isCollapsed = !expandedCategories.includes(category.category);
                 return (
                   <li key={category.category}>
-                    {/* Category Toggle Button */}
                     <button
                       onClick={() => toggleCategory(category.category)}
                       className="flex items-center justify-between w-full p-2
@@ -212,7 +263,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         className="w-5 h-5"
                       />
                     </button>
-                    {/* Navigation Links */}
                     <ul className={`${isCollapsed ? "hidden" : "block"} ml-2`}>
                       {category.items.map((item) => (
                         <li key={item.url}>
@@ -240,7 +290,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               })}
             </ul>
 
-            {/* Mobile-only Sign Out and Settings Buttons */}
+            {/* Mobile-only: Sign Out / Settings at bottom */}
             <div className="sm:hidden mt-4 space-y-2">
               <Link
                 href="/settings"
@@ -257,17 +307,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 Sign Out
               </button>
             </div>
-          </div>
+          </ScrollArea>
         </aside>
 
-        {/* Header */}
+        {/* HEADER (Top Bar) */}
         <header
           className={`fixed top-0 left-0 w-full z-50
             flex items-center justify-between
             py-4 px-6
             backdrop-blur-md backdrop-saturate-150
             bg-white/20 dark:bg-black/20
-            border-none
             shadow-md
             rounded-b-lg
           `}
@@ -280,10 +329,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           <div className="flex items-center space-x-4">
-            {/* Display user role badge in header */}
+            {/* Role badge */}
             {roleBadge}
 
-            {/* Settings and Sign Out buttons for larger screens */}
+            {/* Larger-screen Settings & Sign Out */}
             {!isMobile && (
               <>
                 <Link
@@ -304,7 +353,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </>
             )}
 
-            {/* Toggle sidebar button for mobile */}
+            {/* Mobile toggle sidebar */}
             {isMobile && (
               <button
                 ref={toggleButtonRef}
@@ -318,17 +367,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 aria-label={navbarOpen ? "Close sidebar" : "Open sidebar"}
               >
                 <Icon icon={navbarOpen ? "ph:x" : "ph:list"} className="w-6 h-6" />
-                <span className="sr-only">{navbarOpen ? "Close sidebar" : "Open sidebar"}</span>
+                <span className="sr-only">
+                  {navbarOpen ? "Close sidebar" : "Open sidebar"}
+                </span>
               </button>
             )}
           </div>
         </header>
 
-        {/* Main Content */}
-        <main className={`flex-1 p-4 sm:pl-64 min-h-screen pt-16`}>
-          <div className="mt-4">
-            {children}
-          </div>
+        {/* MAIN CONTENT */}
+        <main className="flex-1 p-4 sm:pl-64 min-h-screen pt-16">
+          <div className="mt-4">{children}</div>
         </main>
       </div>
     </ErrorBoundary>

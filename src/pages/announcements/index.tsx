@@ -1,351 +1,312 @@
 // src/pages/announcements/index.tsx
 
-'use client';
+"use client";
 
-import { useSession } from "next-auth/react";
 import Head from "next/head";
-import Link from "next/link";
-import { useState } from "react";
-import { Announcement } from "@prisma/client";
+import { GetServerSideProps } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../api/auth/[...nextauth]";
-import { prisma } from "../../lib/prisma";
-import { GetServerSideProps } from "next";
-import { motion } from "framer-motion";
-import { Icon } from "@iconify/react";
-import { Button } from '@/components/ui/button'; // Ensure this import is correct
-import { Trash2, ArrowUpSquare, ArrowDownSquare, XCircle } from 'lucide-react'; // Corrected imports
-import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
-import { Modal } from '@/components/ui/modal';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Slot } from '@radix-ui/react-slot';
+import { prisma } from "@/lib/prisma";
+import { useSession } from "next-auth/react";
+import Link from "next/link";
+import { ToastContainer, toast } from "react-toastify";
+import { motion, AnimatePresence } from "framer-motion";
+import { useState, useCallback } from "react";
+import { useRouter } from "next/router";
 
-// Extend Announcement type if imageUrl is optional
-interface ExtendedAnnouncement extends Announcement {
-  imageUrl?: string;
-}
+// ShadCN UI
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { XCircle } from "lucide-react";
 
-// Server-side props fetching
+// Notification logic
+import {
+  useSidebarNotifications,
+  NotificationItem,
+} from "@/hooks/useSidebarNotifications";
+import { NotificationListCard } from "@/components/NotificationCard";
+
+// For Searching/Filtering announcements
+import { SearchBarAndFilter } from "@/components/SearchBarAndFilter";
+
+// ExtendedAnnouncement type
+import { ExtendedAnnouncement } from "@/types/ExtendedAnnouncement";
+
+// The grid-based display
+import { AnnouncementsGrid } from "@/components/AnnouncementsGrid";
+
 export const getServerSideProps: GetServerSideProps = async (context) => {
   const session = await getServerSession(context.req, context.res, authOptions);
-  let announcements: ExtendedAnnouncement[] = [];
-  if (session?.user) {
-    announcements = await prisma.announcement.findMany();
+  if (!session) {
+    return {
+      redirect: {
+        destination: "/404",
+        permanent: false,
+      },
+    };
   }
+
+  const userRole = session.user.role; // e.g. "EMPLOYEE", "HR", "ADMIN"
+
+  const announcements = await prisma.announcement.findMany({
+    where: {
+      OR: [
+        { roleTargets: { has: userRole } },
+        { roleTargets: { equals: [] } },
+      ],
+    },
+    orderBy: [
+      { pinned: "desc" },
+      { dateCreated: "desc" },
+    ],
+  });
+
   return {
     props: {
-      initialAnnouncements: announcements,
+      initialAnnouncements: JSON.parse(JSON.stringify(announcements)) as ExtendedAnnouncement[],
     },
   };
 };
 
-// Deleting announcement function
-async function deleteAnnouncement(announcementID: string) {
-  const response = await fetch("/api/announcements/delete", { // Ensure the API path is correct
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ announcementID }),
+// Example: If you still want to allow pin/unpin or delete from index
+async function togglePinAnnouncement(id: string, pinned: boolean) {
+  const resp = await fetch("/api/announcements/pin", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, pinned }),
   });
-  if (!response.ok) {
-    throw new Error(response.statusText);
-  }
-  return await response.json();
+  if (!resp.ok) throw new Error("Failed to pin/unpin");
+  return resp.json();
 }
 
-// Main component
-export default function Announcements({
+async function deleteAnnouncementById(announcementID: string) {
+  const resp = await fetch("/api/announcements/delete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ announcementID }),
+  });
+  if (!resp.ok) throw new Error("Failed to delete");
+  return resp.json();
+}
+
+async function markAllNotificationsRead() {
+  const resp = await fetch("/api/notifications/markAllRead", {
+    method: "PATCH",
+  });
+  if (!resp.ok) throw new Error("Failed to mark all as read");
+  return resp.json();
+}
+
+export default function AnnouncementsIndex({
   initialAnnouncements,
 }: {
   initialAnnouncements: ExtendedAnnouncement[];
 }) {
-  const [announcements, setAnnouncements] = useState<ExtendedAnnouncement[]>(initialAnnouncements);
   const { data: session } = useSession();
-  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+  const router = useRouter();
+
+  // State
+  const [announcements, setAnnouncements] = useState<ExtendedAnnouncement[]>(
+    initialAnnouncements
+  );
   const [loading, setLoading] = useState(false);
-  const [isModalOpen, setModalOpen] = useState<boolean>(false);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-  const converttoReadable = (date: Date): string => {
-    const options: Intl.DateTimeFormatOptions = {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    };
-    return date.toLocaleString("en-GB", options);
-  };
+  // Filters
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showPinnedOnly, setShowPinnedOnly] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
-  const toggleCollapse = (index: number) => {
-    setExpandedIndex((prevIndex) => (prevIndex === index ? null : index));
-  };
+  // Notifications
+  const { notifications, markNotificationAsRead } = useSidebarNotifications(10000);
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
 
-  const handleDeleteAnnouncement = async (announcementID: string) => {
+  const handleMarkAllRead = useCallback(async () => {
     try {
-      setLoading(true); // Start loading when a deletion starts
-      await deleteAnnouncement(announcementID);
-      const updated = announcements.filter(
-        (announcement) => announcement.id !== announcementID
+      await markAllNotificationsRead();
+      notifications.forEach((n) => {
+        if (!n.isRead) markNotificationAsRead(n.id);
+      });
+      toast.success("All notifications marked as read");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to mark all read");
+    }
+  }, [notifications, markNotificationAsRead]);
+
+  // Filter logic
+  const filteredAnnouncements = announcements.filter((a) => {
+    const matchesSearch =
+      a.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      a.text.toLowerCase().includes(searchTerm.toLowerCase());
+
+    if (showPinnedOnly && !a.pinned) return false;
+    if (!showArchived && a.archived) return false;
+
+    return matchesSearch;
+  });
+
+  // Pin/unpin
+  async function handlePinToggle(a: ExtendedAnnouncement) {
+    try {
+      setLoading(true);
+      await togglePinAnnouncement(a.id, !a.pinned);
+      setAnnouncements((prev) =>
+        prev.map((ann) => (ann.id === a.id ? { ...ann, pinned: !ann.pinned } : ann))
       );
-      setAnnouncements(updated);
-      toast.success('Announcement deleted successfully!');
-    } catch (error) {
-      console.error("Error deleting announcement: ", error);
-      toast.error('Failed to delete announcement.');
+      toast.success("Pin state updated");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to pin/unpin");
     } finally {
-      setLoading(false); // Stop loading after the operation
+      setLoading(false);
     }
-  };
+  }
 
-  const handleClearAll = async () => {
+  // Delete
+  async function handleDeleteAnnouncement(id: string) {
     try {
-      setLoading(true); // Start loading when clearing all announcements
-      await Promise.all(announcements.map(announcement => deleteAnnouncement(announcement.id)));
-      setAnnouncements([]);
-      toast.success('All announcements cleared successfully!');
-    } catch (error) {
-      console.error("Error clearing announcements: ", error);
-      toast.error('Failed to clear announcements.');
+      setLoading(true);
+      await deleteAnnouncementById(id);
+      setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+      toast.success("Announcement deleted");
+    } catch (err) {
+      console.error(err);
+      toast.error("Delete failed");
     } finally {
-      setLoading(false); // Stop loading after the operation
+      setLoading(false);
     }
-  };
+  }
 
-  const list = {
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1,
-      },
-    },
-    hidden: {
-      opacity: 0,
-      transition: {
-        when: "afterChildren",
-      },
-    },
-  };
+  // Clear all
+  async function handleClearAll() {
+    try {
+      setLoading(true);
+      await Promise.all(announcements.map((a) => deleteAnnouncementById(a.id)));
+      setAnnouncements([]);
+      toast.success("All cleared!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to clear");
+    } finally {
+      setLoading(false);
+    }
+  }
 
-  const item = {
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: { type: "tween" },
-    },
-    hidden: { opacity: 0, y: 10 },
-  };
+  // Handle click on each notification
+  async function handleViewDetails(notif: NotificationItem) {
+    await markNotificationAsRead(notif.id);
+    if (notif.targetUrl) {
+      router.push(notif.targetUrl);
+    }
+  }
 
-  // Optional: Handle Image Preview (if announcements include images)
-  const openImageModal = (url: string) => {
-    setSelectedImage(url);
-    setModalOpen(true);
-  };
-
-  const closeImageModal = () => {
-    setSelectedImage(null);
-    setModalOpen(false);
-  };
+  // Check user role
+  const userRole = session?.user.role || "";
 
   return (
     <>
       <Head>
         <title>EMS - Announcements</title>
       </Head>
-      <div className=" p-8 rounded-lg shadow-md text-white min-h-screen">
-        {/* Toast Notifications */}
-        <ToastContainer position="top-right" autoClose={3000} hideProgressBar />
+      <ToastContainer position="top-right" autoClose={3000} hideProgressBar />
 
-        {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-center mb-6">
-          <h1 className="text-3xl md:text-4xl font-semibold text-white">Announcements</h1>
-          {session?.user?.role === "HR" || session?.user?.role === "ADMIN" && (
+      <div className="p-4 md:p-8 min-h-screen text-white">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-3xl font-bold">All Updates</h1>
+          {/* Only show "Create Announcement" button if HR or ADMIN */}
+          {(userRole === "HR" || userRole === "ADMIN") && (
             <Link href="/announcements/new">
-              <Button
-                variant="default" // Changed from "primary" to "default"
-                className="flex items-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg transition-transform transform hover:scale-105"
-                aria-label="Create Announcement"
-              >
-                <ArrowUpSquare className="w-5 h-5 mr-2" />
-                Create Announcement
-              </Button>
+              <Button variant="default">Create Announcement</Button>
             </Link>
           )}
         </div>
 
-        {/* Clear All Button */}
-        {session?.user?.role === "HR" && (
-          <Button
-            onClick={handleClearAll}
-            disabled={loading || announcements.length === 0}
-            variant="destructive"
-            className="flex items-center bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg transition-transform transform hover:scale-105 mb-6"
-            aria-label="Clear All Announcements"
-          >
-            {loading ? (
-              <>
-                <svg
-                  className="animate-spin h-5 w-5 mr-2 text-white"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8v8H4z"
-                  ></path>
-                </svg>
-                Clearing...
-              </>
+        <Tabs defaultValue="announcements" onValueChange={() => {}}>
+          <TabsList>
+            <TabsTrigger value="announcements">Announcements</TabsTrigger>
+            <TabsTrigger value="notifications">
+              Notifications
+              {unreadCount > 0 && (
+                <Badge variant="outline" className="ml-2">
+                  {unreadCount}
+                </Badge>
+              )}
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Announcements Tab */}
+          <TabsContent value="announcements">
+            <SearchBarAndFilter
+              searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
+              showPinnedOnly={showPinnedOnly}
+              setShowPinnedOnly={setShowPinnedOnly}
+              showArchived={showArchived}
+              setShowArchived={setShowArchived}
+              onClearAll={
+                (userRole === "HR" || userRole === "ADMIN") && announcements.length > 0
+                  ? handleClearAll
+                  : undefined
+              }
+              isLoading={loading}
+            />
+
+            {filteredAnnouncements.length === 0 ? (
+              <div className="flex flex-col items-center justify-center text-gray-300 mt-10">
+                <XCircle className="w-16 h-16 mb-4" />
+                <h2 className="text-2xl font-semibold">No announcements found</h2>
+              </div>
             ) : (
-              <>
-                <Trash2 className="w-5 h-5 mr-2" />
-                Clear All
-              </>
+              <AnnouncementsGrid
+                announcements={filteredAnnouncements}
+                // Optional for pin/unpin or delete
+                onPinToggle={(userRole === "HR" || userRole === "ADMIN") ? handlePinToggle : undefined}
+                onDelete={(userRole === "HR" || userRole === "ADMIN") ? handleDeleteAnnouncement : undefined}
+                loading={loading}
+              />
             )}
-          </Button>
-        )}
+          </TabsContent>
 
-        {/* No Announcements */}
-        {announcements.length === 0 ? (
-          <div className="flex flex-col items-center justify-center text-center text-gray-400">
-            <XCircle className="w-16 h-16 mb-4" />
-            <h1 className="text-2xl font-semibold px-2">No announcements</h1>
-            {session?.user?.role === "HR" && (
-              <p className="text-gray-500">
-                Click &apos;Create Announcement&apos; to add one.
-              </p>
-            )}
-          </div>
-        ) : (
-          /* Announcements List */
-          <motion.div
-            className="flex flex-col gap-6"
-            initial="hidden"
-            animate="visible"
-            variants={list}
-          >
-            {announcements.map((announcement, index) => (
-              <motion.div
-                className="flex flex-col bg-white rounded-lg p-6 shadow-md transition-transform transform hover:scale-105 hover:shadow-lg"
-                variants={item}
-                key={announcement.id}
-              >
-                {/* Announcement Header */}
-                <button
-                  type="button"
-                  className={`w-full text-left transition-colors duration-300 ${
-                    expandedIndex === index ? "text-green-600" : "text-gray-900"
-                  }`}
-                  onClick={() => toggleCollapse(index)}
-                  aria-expanded={expandedIndex === index}
-                  aria-controls={`announcement-content-${index}`}
-                >
-                  <h2 className="text-2xl font-bold">{announcement.title}</h2>
-                  <p className="text-sm text-gray-500">
-                    {converttoReadable(new Date(announcement.dateCreated))}
-                  </p>
-                </button>
-
-                {/* Announcement Content */}
-                <div
-                  id={`announcement-content-${index}`}
-                  className={`mt-4 text-gray-700 ${
-                    expandedIndex === index ? "block" : "hidden"
-                  }`}
-                >
-                  <p className="mb-4">{announcement.text}</p>
-                  {/* Conditionally render imageUrl if it exists */}
-                  {announcement.imageUrl && (
-                    <img
-                      src={announcement.imageUrl}
-                      alt={`${announcement.title} Image`}
-                      className="w-full h-auto rounded-md cursor-pointer"
-                      onClick={() => openImageModal(announcement.imageUrl!)}
-                      aria-label="View Image"
-                    />
-                  )}
-                  {session?.user?.role === "HR" || session?.user?.role === "ADMIN" && (
-                    <div className="flex justify-end mt-4">
-                      <Button
-                        onClick={() => handleDeleteAnnouncement(announcement.id)}
-                        disabled={loading}
-                        variant="destructive"
-                        className="flex items-center bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg transition-transform transform hover:scale-105"
-                        aria-label={`Delete ${announcement.title}`}
-                      >
-                        {loading ? (
-                          <>
-                            <svg
-                              className="animate-spin h-5 w-5 mr-2 text-white"
-                              xmlns="http://www.w3.org/2000/svg"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                            >
-                              <circle
-                                className="opacity-25"
-                                cx="12"
-                                cy="12"
-                                r="10"
-                                stroke="currentColor"
-                                strokeWidth="4"
-                              ></circle>
-                              <path
-                                className="opacity-75"
-                                fill="currentColor"
-                                d="M4 12a8 8 0 018-8v8H4z"
-                              ></path>
-                            </svg>
-                            Deleting...
-                          </>
-                        ) : (
-                          <>
-                            <Trash2 className="w-5 h-5 mr-2" />
-                            Remove
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            ))}
-          </motion.div>
-        )}
-
-        {/* Image Preview Modal (Optional) */}
-        {selectedImage && (
-          <Modal isOpen={isModalOpen} onClose={closeImageModal}>
-            <div className="flex justify-center items-center">
-              <img src={selectedImage} alt="Announcement Preview" className="max-w-full max-h-full rounded-md" />
+          {/* Notifications Tab */}
+          <TabsContent value="notifications">
+            <div className="flex justify-end mb-3">
+              {unreadCount > 0 && (
+                <Button variant="outline" onClick={handleMarkAllRead}>
+                  Mark All Read
+                </Button>
+              )}
             </div>
-          </Modal>
-        )}
+
+            <div className="rounded-lg p-2 shadow-md min-h-[200px]">
+              <AnimatePresence>
+                {notifications.map((notif) => (
+                  <motion.div
+                    key={notif.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <NotificationListCard
+                      title={notif.message}
+                      time={notif.createdAt}
+                      isNew={!notif.isRead}
+                      onClose={async () => {
+                        await markNotificationAsRead(notif.id);
+                      }}
+                      onClick={() => handleViewDetails(notif)}
+                    />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+
+              {notifications.length === 0 && (
+                <p className="text-sm text-gray-400 mt-2">No notifications found.</p>
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
     </>
   );

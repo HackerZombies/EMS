@@ -1,19 +1,25 @@
-import withPWA from 'next-pwa';
-
 /** @type {import('next').NextConfig} */
-const nextConfig = withPWA({
-  pwa: {
-    dest: "public", // Directory for service worker files
-    register: true, // Auto-register the service worker
-    skipWaiting: true, // Activate the new service worker immediately
-    disable: process.env.NODE_ENV === 'development', // Disable PWA during development mode
-  },
-});
-
-// Add the experimental flag separately
-export default {
-  ...nextConfig,
+const nextConfig = {
+  // Keep your existing experimental plugin settings
   experimental: {
-    swcPlugins: [["next-superjson-plugin", {}]], // Existing plugin support
+    swcPlugins: [["next-superjson-plugin", {}]],
+  },
+
+  // Allow loading images from Cloudinary
+  images: {
+    // For Next.js 13+:
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "res.cloudinary.com",
+        port: "",
+        pathname: "/**",
+      },
+    ],
+    
+    // If you're on an older version of Next.js that doesn't support remotePatterns,
+    // you can use: domains: ["res.cloudinary.com"],
   },
 };
+
+export default nextConfig;

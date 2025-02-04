@@ -1,14 +1,19 @@
-import { Server as HTTPServer } from 'http';
-import { WebSocketServer } from 'ws';
+// src/types/next-websocket.d.ts
+
+import { WebSocketServer } from 'ws'
+import type { Server as HTTPServer } from 'http'
+import type { Socket } from 'net'
 
 declare module 'net' {
   interface Socket {
-    server?: HTTPServer;
+    server?: HTTPServer & {
+      wss?: WebSocketServer
+    }
   }
 }
 
 declare module 'http' {
   interface Server {
-    wss?: WebSocketServer;
+    wss?: WebSocketServer
   }
 }

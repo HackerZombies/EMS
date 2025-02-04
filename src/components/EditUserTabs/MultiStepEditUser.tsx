@@ -530,6 +530,7 @@ const MultiStepEditUser: React.FC = () => {
                 <p className="text-gray-700">Loading user data...</p>
               ) : (
                 <PersonalInfoForm
+                userUsername={userData?.username}
                   formData={personalInfo}
                   setFormData={setPersonalInfo}
                   changeHistory={changeHistory}

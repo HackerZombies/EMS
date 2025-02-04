@@ -1,4 +1,6 @@
-import React, { useState } from "react";
+// src/pages/activity/index.tsx
+
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { GetServerSideProps, GetServerSidePropsContext } from "next";
@@ -11,7 +13,7 @@ import {
   Trash,
   Undo,
   ArrowRight,
-} from "lucide-react"; // ArrowRight for design or another icon
+} from "lucide-react";
 
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
@@ -25,6 +27,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useRouter } from "next/router";
 
 interface AuditLog {
   id: string;
@@ -53,7 +56,7 @@ interface ActivityPageProps {
 
 const ITEMS_PER_PAGE = 5;
 
-// Include REVERT_CHANGES for special styling
+// Action icons by action type
 const ActionIcons: Record<string, React.ReactNode> = {
   UPDATE_USER: <Edit className="h-5 w-5 text-blue-400" />,
   DELETE_USER: <Trash className="h-5 w-5 text-red-400" />,
@@ -102,24 +105,34 @@ export const getServerSideProps: GetServerSideProps<ActivityPageProps> = async (
 };
 
 const ActivityPage: React.FC<ActivityPageProps> = ({ logs }) => {
+  const router = useRouter();
+  const highlightLogId = router.query.highlightLog as string | undefined;
+
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Track revert states for entire log or partial fields
+  // Revert states
   const [isRevertingAll, setIsRevertingAll] = useState<Record<string, boolean>>({});
-  const [isRevertingField, setIsRevertingField] = useState<Record<string, Record<string, boolean>>>({});
+  const [isRevertingField, setIsRevertingField] = useState<
+    Record<string, Record<string, boolean>>
+  >({});
+
+  useEffect(() => {
+    // If highlightLogId exists, auto-expand that log
+    if (highlightLogId) {
+      setExpandedId(highlightLogId);
+    }
+  }, [highlightLogId]);
 
   const toggleExpand = (id: string) => {
     setExpandedId((prev) => (prev === id ? null : id));
   };
 
-  /**
-   * handleRevertAll - revert ALL changed fields for this log
-   */
-  const handleRevertAll = async (logId: string) => {
+  async function handleRevertAll(logId: string) {
     try {
       setIsRevertingAll((prev) => ({ ...prev, [logId]: true }));
-
       const response = await fetch("/api/users/revertChange", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -139,12 +152,9 @@ const ActivityPage: React.FC<ActivityPageProps> = ({ logs }) => {
     } finally {
       setIsRevertingAll((prev) => ({ ...prev, [logId]: false }));
     }
-  };
+  }
 
-  /**
-   * handleRevertField - revert just ONE field
-   */
-  const handleRevertField = async (logId: string, fieldName: string) => {
+  async function handleRevertField(logId: string, fieldName: string) {
     try {
       setIsRevertingField((prev) => ({
         ...prev,
@@ -179,12 +189,8 @@ const ActivityPage: React.FC<ActivityPageProps> = ({ logs }) => {
         },
       }));
     }
-  };
+  }
 
-  /**
-   * A helper to show a labeled Old vs. New, with color-coded text. 
-   * Also uses different labels if the log is a REVERT_CHANGES.
-   */
   const renderValuePair = (
     label: string,
     value: unknown,
@@ -197,17 +203,82 @@ const ActivityPage: React.FC<ActivityPageProps> = ({ logs }) => {
     </div>
   );
 
-  // For sub-collections (arrays)
-  const renderComplexField = (
+  // ----- NEW: Render an object (like residentialAddress JSON) side by side
+  function renderObjectField(log: AuditLog, fieldName: string, oldObj: any, newObj: any) {
+    const isFieldReverting = !!isRevertingField[log.id]?.[fieldName];
+    const isRevertLog = log.action === "REVERT_CHANGES";
+
+    // For smaller displays, we do 1-col, for larger we do 2-col
+    return (
+      <div className="mb-4 bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/10 shadow-sm">
+        <div className="flex items-center justify-between">
+          <h4 className="font-bold text-gray-100 capitalize mb-1">
+            {humanizeFieldName(fieldName)}
+          </h4>
+          {log.action === "UPDATE_USER" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-orange-400 hover:text-orange-500"
+              onClick={() => handleRevertField(log.id, fieldName)}
+              disabled={isFieldReverting}
+            >
+              {isFieldReverting ? "Reverting..." : "Revert Field"}
+            </Button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-3">
+          {/* Old side */}
+          <div>
+            <h5 className="text-purple-400 font-semibold mb-2">
+              {isRevertLog ? "Restored Object" : "Original Object"}
+            </h5>
+            {Object.keys(oldObj || {}).length === 0 ? (
+              <p className="text-gray-300">No data</p>
+            ) : (
+              <Card className="bg-gray-800 bg-opacity-60 backdrop-blur p-3 rounded-md border border-white/10">
+                {Object.entries(oldObj).map(([k, v]) => (
+                  <p key={k} className="text-sm text-gray-200 font-medium mb-1">
+                    <strong className="capitalize text-gray-100">{k}:</strong>{" "}
+                    {String(v ?? "None")}
+                  </p>
+                ))}
+              </Card>
+            )}
+          </div>
+
+          {/* New side */}
+          <div>
+            <h5 className="text-cyan-400 font-semibold mb-2">
+              {isRevertLog ? "Discarded Object" : "Updated Object"}
+            </h5>
+            {Object.keys(newObj || {}).length === 0 ? (
+              <p className="text-gray-300">No data</p>
+            ) : (
+              <Card className="bg-gray-800 bg-opacity-60 backdrop-blur p-3 rounded-md border border-white/10">
+                {Object.entries(newObj).map(([k, v]) => (
+                  <p key={k} className="text-sm text-gray-200 font-medium mb-1">
+                    <strong className="capitalize text-gray-100">{k}:</strong>{" "}
+                    {String(v ?? "None")}
+                  </p>
+                ))}
+              </Card>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderComplexField(
     log: AuditLog,
     fieldName: string,
     oldValue?: unknown[],
     newValue?: unknown[]
-  ) => {
+  ) {
     const oldArray = oldValue || [];
     const newArray = newValue || [];
-
-    // We'll revert the entire sub-collection if partial revert
     const isFieldReverting = !!isRevertingField[log.id]?.[fieldName];
     const isRevertLog = log.action === "REVERT_CHANGES";
 
@@ -231,7 +302,7 @@ const ActivityPage: React.FC<ActivityPageProps> = ({ logs }) => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white/10 backdrop-blur-md p-4 rounded-xl">
-          {/* Old / Original side */}
+          {/* Old side */}
           <div>
             <h5 className="text-purple-400 font-semibold mb-2">
               {isRevertLog ? "Restored Collection" : "Original Collection"}
@@ -254,8 +325,7 @@ const ActivityPage: React.FC<ActivityPageProps> = ({ logs }) => {
               ))
             )}
           </div>
-
-          {/* New / Updated side */}
+          {/* New side */}
           <div>
             <h5 className="text-cyan-400 font-semibold mb-2">
               {isRevertLog ? "Discarded Collection" : "Updated Collection"}
@@ -281,15 +351,14 @@ const ActivityPage: React.FC<ActivityPageProps> = ({ logs }) => {
         </div>
       </div>
     );
-  };
+  }
 
-  // For scalar fields
-  const renderField = (
+  function renderField(
     log: AuditLog,
     fieldName: string,
     oldVal: unknown,
     newVal: unknown
-  ) => {
+  ) {
     const isFieldReverting = !!isRevertingField[log.id]?.[fieldName];
     const isRevertLog = log.action === "REVERT_CHANGES";
 
@@ -299,7 +368,6 @@ const ActivityPage: React.FC<ActivityPageProps> = ({ logs }) => {
           <h4 className="font-bold text-gray-100 capitalize">
             {humanizeFieldName(fieldName)}
           </h4>
-          {/* Show revert button only on a normal UPDATE_USER log */}
           {log.action === "UPDATE_USER" && (
             <Button
               variant="ghost"
@@ -329,11 +397,10 @@ const ActivityPage: React.FC<ActivityPageProps> = ({ logs }) => {
         )}
       </div>
     );
-  };
+  }
 
-  const renderDetails = (log: AuditLog) => {
+  function renderDetails(log: AuditLog) {
     let parsed: AuditLogDetails;
-
     try {
       parsed = JSON.parse(log.details);
     } catch (err) {
@@ -342,17 +409,15 @@ const ActivityPage: React.FC<ActivityPageProps> = ({ logs }) => {
     }
 
     const fieldEntries = Object.entries(parsed);
-
     if (fieldEntries.length === 0) {
       return <p className="text-gray-300 italic">No fields changed.</p>;
     }
 
-    // Only show "Revert All" if the action is an original "UPDATE_USER" 
+    // "Revert All" only for an original "UPDATE_USER" log
     const canRevertAll = log.action === "UPDATE_USER";
 
     return (
       <div className="mt-4 space-y-2">
-        {/* REVERT ALL changes for this log */}
         {canRevertAll && (
           <div className="flex justify-end mb-3">
             <Button
@@ -367,18 +432,28 @@ const ActivityPage: React.FC<ActivityPageProps> = ({ logs }) => {
           </div>
         )}
 
-        {fieldEntries.map(([fieldName, { old, new: newValue }]) => {
-          if (Array.isArray(old) || Array.isArray(newValue)) {
-            return renderComplexField(log, fieldName, old as unknown[], newValue as unknown[]);
-          } else {
-            return renderField(log, fieldName, old, newValue);
+        {fieldEntries.map(([fieldName, { old, new: newVal }]) => {
+          // 1) If it's an array, handle with renderComplexField
+          if (Array.isArray(old) || Array.isArray(newVal)) {
+            return renderComplexField(log, fieldName, old as unknown[], newVal as unknown[]);
           }
+          // 2) If it's an object (like addresses), use renderObjectField
+          if (
+            typeof old === "object" &&
+            old !== null &&
+            typeof newVal === "object" &&
+            newVal !== null
+          ) {
+            return renderObjectField(log, fieldName, old, newVal);
+          }
+          // 3) Otherwise, treat it as a scalar
+          return renderField(log, fieldName, old, newVal);
         })}
       </div>
     );
-  };
+  }
 
-  // Pagination logic
+  // Pagination
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const endIndex = currentPage * ITEMS_PER_PAGE;
   const paginatedLogs = logs.slice(startIndex, endIndex);
@@ -386,7 +461,6 @@ const ActivityPage: React.FC<ActivityPageProps> = ({ logs }) => {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white py-8 px-4">
-      {/* Main container with blurred background */}
       <div className="max-w-5xl mx-auto backdrop-blur-md bg-white/10 p-6 rounded-xl border border-white/10 shadow-lg">
         <Card className="shadow-lg mb-8 bg-transparent">
           <CardHeader>
@@ -406,9 +480,15 @@ const ActivityPage: React.FC<ActivityPageProps> = ({ logs }) => {
           <div className="relative ml-4 border-l border-gray-700">
             {paginatedLogs.map((log) => {
               const expanded = expandedId === log.id;
+              const isHighlighted = highlightLogId === log.id;
 
               return (
-                <div key={log.id} className="relative pl-8 mb-8">
+                <div
+                  key={log.id}
+                  className={`relative pl-8 mb-8 ${
+                    isHighlighted ? "bg-green-800 bg-opacity-20 rounded-xl p-4 -ml-6 pr-2" : ""
+                  }`}
+                >
                   <span
                     className="absolute left-[-11px] top-2 inline-block w-5 h-5 bg-blue-500 rounded-full border-4 border-gray-900 shadow"
                     style={{ marginLeft: "-10px" }}
@@ -419,18 +499,14 @@ const ActivityPage: React.FC<ActivityPageProps> = ({ logs }) => {
                         {format(new Date(log.datePerformed), "PPP p")}
                       </p>
                       <h3 className="text-xl font-bold text-gray-100 flex items-center gap-2">
-                        {ActionIcons[log.action] || (
-                          <User className="h-5 w-5 text-gray-400" />
-                        )}
+                        {ActionIcons[log.action] || <User className="h-5 w-5 text-gray-400" />}
                         {log.action}
                       </h3>
                       <p className="text-sm text-gray-300 mb-2 font-medium">
                         Performed by:{" "}
-                        <span className="text-gray-100 font-semibold">
-                          {log.performedBy}
-                        </span>{" "}
+                        <span className="text-gray-100 font-semibold">{log.performedBy}</span>{" "}
                       </p>
-                      {/* Direct link to the user's manage page */}
+                      {/* Link to the user's page if available */}
                       {log.user?.username && (
                         <Link
                           href={`/manage/users/user/${log.user.username}`}

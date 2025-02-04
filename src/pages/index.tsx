@@ -5,7 +5,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "./api/auth/[...nextauth]";
 import { prisma } from "@/lib/prisma";
 import { Event } from "@/types/events";
-import useSWR from 'swr';
+import useSWR from "swr";
 import { formatToIST } from "@/lib/timezone";
 
 import RecentActivityList from "@/components/RecentActivity";
@@ -15,10 +15,10 @@ interface HomeProps {
   userName: string;
 }
 
-const fetcher = (url: string) => fetch(url).then(res => res.json());
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function Home({ initialEvents, userName }: HomeProps) {
-  const { data, error } = useSWR('/api/events', fetcher, { refreshInterval: 5000 });
+  const { data, error } = useSWR("/api/events", fetcher, { refreshInterval: 5000 });
   const events = data?.events || initialEvents;
   const displayedUserName = data?.userName || userName;
 
@@ -54,13 +54,9 @@ export const getServerSideProps: GetServerSideProps<HomeProps> = async (
     });
 
     if (user) {
-      userName = [
-        user.firstName,
-        user.middleName,
-        user.lastName,
-      ]
-        .filter(Boolean)
-        .join(" ") || "Unknown User";
+      userName =
+        [user.firstName, user.middleName, user.lastName].filter(Boolean).join(" ") ||
+        "Unknown User";
 
       // Fetch the latest four events, similar to the API route
       const limit = 4;
@@ -77,7 +73,11 @@ export const getServerSideProps: GetServerSideProps<HomeProps> = async (
                     },
                   }
                 : {
-                    role: { in: [user.role, "EMPLOYEE"] },
+                    // For non-HR users, only fetch announcements targeted to them or global announcements.
+                    OR: [
+                      { roleTargets: { has: user.role } },
+                      { roleTargets: { equals: [] } },
+                    ],
                     dateCreated: {
                       gte: twentyFourHoursAgo,
                     },
@@ -122,59 +122,59 @@ export const getServerSideProps: GetServerSideProps<HomeProps> = async (
           }),
         ]);
 
-        const transformedAnnouncements = announcements.map((announcement) => ({
-          id: `announcement-${announcement.id}`,
-          type: "Announcements" as const,
-          icon: "ph:megaphone-bold",
-          date: formatToIST(new Date(announcement.dateCreated)), // Ensure Date object
-          title: announcement.title,
-          text: announcement.text,
-          linkTo: "/announcements",
-        }));
-        
-        const transformedTickets = tickets.map((ticket) => ({
-          id: `ticket-${ticket.id}`,
-          type: "Help" as const,
-          icon: "ph:chats-circle-bold",
-          date: formatToIST(new Date(ticket.dateCreated)), // Ensure Date object
-          title: `You created a ticket (#${ticket.id})`,
-          text: ticket.subject,
-          linkTo: `/help/ticket/${ticket.id}`,
-        }));
-        
-        const transformedLeaves = leaves.map((leave) => ({
-          id: `leave-${leave.id}`,
-          type: "Leave" as const,
-          icon: "ph:calendar-check",
-          date: formatToIST(new Date(leave.dateCreated)), // Ensure Date object
-          title: `Leave request (${leave.requestStatus})`,
-          text: leave.reason,
-          linkTo: "/leave",
-        }));
-        
-        const transformedDocuments = documents.map((document) => ({
-          id: `document-${document.id}`,
-          type: "Documents" as const,
-          icon: "ph:folder-open",
-          date: formatToIST(new Date(document.dateCreated)), // Ensure Date object
-          title: `Document uploaded (${document.filename})`,
-          text: "Document available for review.",
-          linkTo: "/documents",
-        }));
-        
-        const transformedAttendance = attendanceRecords.map((record) => ({
-          id: `attendance-${record.id}`,
-          type: "Attendance" as const,
-          icon: "ph:clock",
-          date: formatToIST(new Date(record.date)), // Ensure Date object
-          title: "Attendance recorded",
-          text: `Check-in: ${
-            record.checkInTime ? formatToIST(new Date(record.checkInTime)) : "N/A"
-          } | Check-out: ${
-            record.checkOutTime ? formatToIST(new Date(record.checkOutTime)) : "N/A"
-          }`,
-          linkTo: "/attendance",
-        }));        
+      const transformedAnnouncements = announcements.map((announcement) => ({
+        id: `announcement-${announcement.id}`,
+        type: "Announcements" as const,
+        icon: "ph:megaphone-bold",
+        date: formatToIST(new Date(announcement.dateCreated)),
+        title: announcement.title,
+        text: announcement.text,
+        linkTo: "/announcements",
+      }));
+
+      const transformedTickets = tickets.map((ticket) => ({
+        id: `ticket-${ticket.id}`,
+        type: "Help" as const,
+        icon: "ph:chats-circle-bold",
+        date: formatToIST(new Date(ticket.dateCreated)),
+        title: `You created a ticket (#${ticket.id})`,
+        text: ticket.subject,
+        linkTo: `/help/ticket/${ticket.id}`,
+      }));
+
+      const transformedLeaves = leaves.map((leave) => ({
+        id: `leave-${leave.id}`,
+        type: "Leave" as const,
+        icon: "ph:calendar-check",
+        date: formatToIST(new Date(leave.dateCreated)),
+        title: `Leave request (${leave.requestStatus})`,
+        text: leave.reason,
+        linkTo: "/leave",
+      }));
+
+      const transformedDocuments = documents.map((document) => ({
+        id: `document-${document.id}`,
+        type: "Documents" as const,
+        icon: "ph:folder-open",
+        date: formatToIST(new Date(document.dateCreated)),
+        title: `Document uploaded (${document.filename})`,
+        text: "Document available for review.",
+        linkTo: "/documents",
+      }));
+
+      const transformedAttendance = attendanceRecords.map((record) => ({
+        id: `attendance-${record.id}`,
+        type: "Attendance" as const,
+        icon: "ph:clock",
+        date: formatToIST(new Date(record.date)),
+        title: "Attendance recorded",
+        text: `Check-in: ${
+          record.checkInTime ? formatToIST(new Date(record.checkInTime)) : "N/A"
+        } | Check-out: ${
+          record.checkOutTime ? formatToIST(new Date(record.checkOutTime)) : "N/A"
+        }`,
+        linkTo: "/attendance",
+      }));
 
       // Combine all transformed events
       const allEvents: Event[] = [

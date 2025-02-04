@@ -1,142 +1,212 @@
+// src/pages/api/users/employee-photos/[username].ts
 import type { NextApiRequest, NextApiResponse } from "next";
-import { IncomingForm, File as FormidableFile, Files } from "formidable";
-import path from "path";
-import fs from "fs/promises";
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "../../auth/[...nextauth]";
-import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
+import cloudinary from "@/lib/cloudinary";
 
+// We need a library like 'formidable' or 'multiparty' to parse FormData
+import formidable from "formidable";
+import fs from "fs";
+
+// Disable the default Next.js body parser for this route
 export const config = {
   api: {
-    bodyParser: false,
+    bodyParser: false, // Important for using formidable
   },
 };
 
-const uploadDir = path.join(process.cwd(), "public", "uploads");
-fs.access(uploadDir).catch(async () => {
-  await fs.mkdir(uploadDir, { recursive: true });
-});
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // Parse the [username] param
+  const { username } = req.query;
 
-const parseForm = async (req: NextApiRequest): Promise<{ fields: any; files: Files }> => {
-  const form = new IncomingForm({
-    uploadDir,
-    keepExtensions: true,
-    maxFileSize: 5 * 1024 * 1024,
-    multiples: false,
-    filename: (name, ext, part) => {
-      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-      return uniqueSuffix + path.extname(part.originalFilename || "");
-    },
-  });
-
-  return new Promise((resolve, reject) => {
-    form.parse(req, (err, fields, files) => {
-      if (err) {
-        reject(err);
-        return;
-      }
-      resolve({ fields, files });
-    });
-  });
-};
-
-const handler = async (req: NextApiRequest, res: NextApiResponse) => {
-  if (req.method !== "POST") {
-    res.setHeader("Allow", ["POST"]);
-    return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
+  // Validate username
+  if (!username || Array.isArray(username)) {
+    return res.status(400).json({ error: "Invalid username." });
   }
 
   try {
-    const session = await getServerSession(req, res, authOptions);
-    if (!session) {
-      return res.status(401).json({ message: "Unauthorized" });
+    switch (req.method) {
+      case "GET":
+        return handleGet(req, res, username);
+
+      case "PUT":
+        return handlePut(req, res, username);
+
+      case "PATCH":
+        return handlePatch(req, res, username);
+
+      default:
+        return res.status(405).json({ error: "Method Not Allowed" });
     }
+  } catch (error: any) {
+    console.error("API route error:", error);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+}
 
-    const { username } = req.query;
-    if (!username || typeof username !== "string") {
-      return res.status(400).json({ message: "Username not provided or invalid." });
-    }
+// ------------------ GET ------------------
+async function handleGet(
+  req: NextApiRequest,
+  res: NextApiResponse,
+  username: string
+) {
+  // Find the user in DB, return their stored profileImageUrl
+  const user = await prisma.user.findUnique({ where: { username } });
+  if (!user || !user.profileImageUrl) {
+    return res.status(404).json({ error: "No profile image found." });
+  }
 
-    if (session.user?.username !== username) {
-      return res.status(403).json({ message: "Forbidden: You cannot update another user's profile." });
-    }
+  return res.status(200).json({ profileImageUrl: user.profileImageUrl });
+}
 
-    const currentUser = await prisma.user.findUnique({ where: { username } });
-    if (!currentUser) {
-      return res.status(404).json({ message: "User not found." });
-    }
+// ------------------ PUT ------------------
+async function handlePut(
+  req: NextApiRequest,
+  res: NextApiResponse,
+  username: string
+) {
+  // 1) Parse the multipart/form-data using formidable
+  const { fields, files } = await parseForm(req);
 
-    const { fields, files } = await parseForm(req);
+  // 'files.image' can be a single file or an array of files.
+  let imageFile = files.image as formidable.File | formidable.File[];
 
-    let newProfileImageUrl: string | null = null;
+  if (!imageFile) {
+    return res.status(400).json({ error: "Missing 'image' file in FormData." });
+  }
 
-    // Use 'files.image' since client sends under key 'image'
-    if (files.image) {
-      let file: FormidableFile;
-      if (Array.isArray(files.image)) {
-        file = files.image[0];
-      } else {
-        file = files.image;
+  // If imageFile is an array, take the first item
+  if (Array.isArray(imageFile)) {
+    imageFile = imageFile[0];
+  }
+
+  const singleFile = imageFile as formidable.File;
+
+  if (!singleFile.filepath) {
+    return res.status(400).json({ error: "Invalid file data (no filepath)." });
+  }
+
+  // 2) Read the uploaded file from disk
+  const fileData = fs.readFileSync(singleFile.filepath);
+  if (!fileData) {
+    return res.status(400).json({ error: "Could not read file data." });
+  }
+
+  // 3) Upload to Cloudinary with transformations
+  //    - Crop to 300x300 square, focusing on face
+  //    - Auto-optimize format & quality
+  const uploadResult = await new Promise<any>((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: "my_app_profiles", // optional folder
+        public_id: username,       // or any unique ID
+        overwrite: true,
+        transformation: [
+          {
+            width: 300,
+            height: 300,
+            crop: "fill",
+            gravity: "face",
+          },
+          {
+            fetch_format: "auto",
+            quality: "auto",
+          },
+        ],
+      },
+      (err, result) => {
+        if (err) return reject(err);
+        resolve(result);
       }
+    );
+    uploadStream.end(fileData);
+  });
 
-      if (!file.mimetype?.startsWith("image/")) {
-        await fs.unlink(file.filepath);
-        return res.status(400).json({ message: "Only image files are allowed!" });
-      }
+  // 4) Update user in DB with the new Cloudinary URL
+  const updatedUser = await prisma.user.update({
+    where: { username },
+    data: { profileImageUrl: uploadResult.secure_url },
+  });
 
-      newProfileImageUrl = `/uploads/${path.basename(file.filepath)}`;
+  return res.status(200).json({ profileImageUrl: updatedUser.profileImageUrl });
+}
 
-      if (currentUser.profileImageUrl && currentUser.profileImageUrl !== "/default-avatar.png") {
-        const oldImagePath = path.join(process.cwd(), "public", currentUser.profileImageUrl);
-        try {
-          await fs.unlink(oldImagePath);
-          console.log("Old profile image deleted:", oldImagePath);
-        } catch (err) {
-          console.error("Failed to delete old profile image:", err);
-        }
-      }
-    }
+// ------------------ PATCH ------------------
+async function handlePatch(
+  req: NextApiRequest,
+  res: NextApiResponse,
+  username: string
+) {
+  // The user's existing record
+  const user = await prisma.user.findUnique({ where: { username } });
+  if (!user || !user.profileImageUrl) {
+    return res.status(404).json({ error: "No existing image to patch." });
+  }
 
-    if (!newProfileImageUrl) {
-      return res.status(400).json({ message: "No image uploaded." });
-    }
+  // For simplicity, parse JSON from the request body
+  // (e.g., { "newPublicId": "bob-2025", "newTag": "employee" })
+  const body = await getJsonBody(req);
+  const { newPublicId, newTag } = body;
 
-    const updatedUser = await prisma.user.update({
+  // The existing Cloudinary public_id might be "my_app_profiles/username"
+  const currentPublicId = `my_app_profiles/${username}`;
+
+  // 1) Optionally rename
+  if (newPublicId) {
+    const renameResult = await cloudinary.uploader.rename(
+      currentPublicId,
+      `my_app_profiles/${newPublicId}`
+    );
+
+    // Update the user with the new URL
+    await prisma.user.update({
       where: { username },
       data: {
-        profileImageUrl: newProfileImageUrl,
-        
-      },
-      select: {
-        profileImageUrl: true,
+        profileImageUrl: renameResult.secure_url,
       },
     });
-
-    return res.status(200).json({
-      message: "Profile image updated successfully.",
-      imageUrl: updatedUser.profileImageUrl,
-    });
-  } catch (error: any) {
-    console.error("API Error:", error);
-
-    if (error instanceof PrismaClientKnownRequestError) {
-      return res.status(409).json({ message: "Failed to update profile image." });
-    }
-
-    if (error && typeof error === "object" && "code" in error) {
-      const errCode = (error as any).code;
-      if (errCode === "LIMIT_FILE_SIZE") {
-        return res.status(400).json({ message: "File size exceeds the 5MB limit." });
-      }
-    }
-
-    if (error instanceof Error) {
-      return res.status(400).json({ message: error.message });
-    }
-
-    return res.status(500).json({ message: "Internal Server Error." });
   }
-};
 
-export default handler;
+  // 2) Optionally add a tag
+  if (newTag) {
+    await cloudinary.uploader.explicit(`my_app_profiles/${newPublicId || username}`, {
+      type: "upload",
+      tags: [newTag],
+    });
+  }
+
+  return res.status(200).json({ message: "Successfully patched image." });
+}
+
+/**
+ * Utility: Parse multipart/form-data using 'formidable'
+ */
+function parseForm(req: NextApiRequest) {
+  return new Promise<{ fields: formidable.Fields; files: formidable.Files }>(
+    (resolve, reject) => {
+      const form = formidable({ multiples: false });
+      form.parse(req, (err, fields, files) => {
+        if (err) return reject(err);
+        resolve({ fields, files });
+      });
+    }
+  );
+}
+
+/**
+ * Utility: Parse JSON body (e.g., for PATCH)
+ */
+async function getJsonBody(req: NextApiRequest) {
+  return new Promise<any>((resolve, reject) => {
+    let data = "";
+    req.on("data", (chunk) => {
+      data += chunk;
+    });
+    req.on("end", () => {
+      try {
+        resolve(JSON.parse(data || "{}"));
+      } catch (err) {
+        reject(err);
+      }
+    });
+  });
+}

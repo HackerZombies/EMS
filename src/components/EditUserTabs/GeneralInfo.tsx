@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useSession } from "next-auth/react";
-
-// Shadcn UI + your custom components
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Camera, History, ChevronDown, ChevronRight } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Modal } from "@/components/ui/modal";
 import {
   Select,
   SelectContent,
@@ -14,19 +15,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Modal } from "@/components/ui/modal";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-} from "@/components/ui/card";
-import { Camera, History, ChevronDown, ChevronRight } from "lucide-react";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 
 // ----------- Types -----------
 export interface Address {
@@ -51,12 +39,12 @@ export interface PersonalInfoData {
   middleName?: string;
   lastName: string;
   email: string;
-  phoneNumber?: string; // 10-digit
+  phoneNumber?: string;
   dob?: string;
   nationality?: string;
   gender?: string;
   bloodGroup?: string;
-  residentialAddress?: Address; // pin => 6-digit
+  residentialAddress?: Address;
   permanentAddress?: Address;
   sameAsResidential?: boolean;
   profileImageUrl?: string;
@@ -71,32 +59,25 @@ export interface ChangeHistoryEntry {
   performedBy: string;
 }
 
-interface PersonalInfoFormProps {
-  formData: PersonalInfoData;
-  setFormData: React.Dispatch<React.SetStateAction<PersonalInfoData>>;
-  changeHistory: Record<string, ChangeHistoryEntry[]>;
-  isEditMode: boolean;
-}
-
 // For pagination in history
 const ITEMS_PER_PAGE = 5;
 
-// A small email format checker for demonstration
+// Simple email check
 function isValidEmail(email: string) {
   const pattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return pattern.test(email);
 }
 
-// Safely display changes (string, number, or object)
+// Safely display changes
 function formatValue(val: any): string {
-  if (val === null || val === undefined) return "N/A";
+  if (val == null) return "N/A";
   if (typeof val === "object") {
     return JSON.stringify(val);
   }
   return String(val);
 }
 
-// ----------- Subcomponent: HistorySection -----------
+// ---------- Subcomponent: HistorySection ----------
 function HistorySection({
   field,
   historyList,
@@ -161,44 +142,58 @@ function HistorySection({
   );
 }
 
-// ----------- Main Component -----------
+// ---------- Main Component ----------
+interface PersonalInfoFormProps {
+  userUsername?: string; // The username from the parent
+  formData: PersonalInfoData;
+  setFormData: React.Dispatch<React.SetStateAction<PersonalInfoData>>;
+  changeHistory: Record<string, ChangeHistoryEntry[]>;
+  isEditMode: boolean;
+}
+
 export default function PersonalInfoForm({
+  userUsername,
   formData,
   setFormData,
   changeHistory,
   isEditMode,
 }: PersonalInfoFormProps) {
-  const { data: session } = useSession();
-
   // Profile image preview & modal
   const [profilePreview, setProfilePreview] = useState<string | null>(
     formData.profileImageUrl || null
   );
   const [isModalOpen, setModalOpen] = useState(false);
 
-  // Validation errors, history toggles, pagination
+  // Sync local preview whenever `formData.profileImageUrl` changes
+  useEffect(() => {
+    setProfilePreview(formData.profileImageUrl || null);
+  }, [formData.profileImageUrl]);
+
+  // Validation errors
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // For controlling collapsibles
+  // Collapsible states
   const [isResidentialOpen, setResidentialOpen] = useState(false);
   const [isPermanentOpen, setPermanentOpen] = useState(false);
   const [isContactsOpen, setContactsOpen] = useState(false);
 
-  // For pagination in various fields
+  // History toggles/pagination
   const [openFields, setOpenFields] = useState<Record<string, boolean>>({});
   const [pagination, setPagination] = useState<Record<string, number>>({});
 
-  // Basic validation
   function validate() {
     const newErr: Record<string, string> = {};
 
-    if (!formData.firstName?.trim()) newErr.firstName = "First name is required.";
-    if (!formData.lastName?.trim()) newErr.lastName = "Last name is required.";
-
+    if (!formData.firstName?.trim()) {
+      newErr.firstName = "First name is required.";
+    }
+    if (!formData.lastName?.trim()) {
+      newErr.lastName = "Last name is required.";
+    }
     if (!formData.email?.trim()) {
       newErr.email = "Email is required.";
     } else if (!isValidEmail(formData.email)) {
-      newErr.email = "Please enter a valid email address.";
+      newErr.email = "Please enter a valid email.";
     }
 
     setErrors(newErr);
@@ -207,9 +202,10 @@ export default function PersonalInfoForm({
 
   // History logic
   const getFieldHistory = (fld: string) => changeHistory[fld] || [];
-  const toggleFieldHistory = (fld: string) =>
+  function toggleFieldHistory(fld: string) {
     setOpenFields((prev) => ({ ...prev, [fld]: !prev[fld] }));
-  const handlePageChange = (fld: string, dir: "prev" | "next") => {
+  }
+  function handlePageChange(fld: string, dir: "prev" | "next") {
     setPagination((prev) => {
       const cur = prev[fld] || 1;
       const max = Math.ceil(getFieldHistory(fld).length / ITEMS_PER_PAGE);
@@ -218,22 +214,26 @@ export default function PersonalInfoForm({
       if (dir === "next" && cur < max) newVal += 1;
       return { ...prev, [fld]: newVal };
     });
-  };
-  const getPaginatedHistory = (fld: string) => {
+  }
+  function getPaginatedHistory(fld: string) {
     const h = getFieldHistory(fld);
     const p = pagination[fld] || 1;
     return h.slice((p - 1) * ITEMS_PER_PAGE, p * ITEMS_PER_PAGE);
-  };
-  const renderHistoryIcon = (fld: string) =>
-    getFieldHistory(fld).length > 0 && (
-      <button
-        type="button"
-        className="ml-2 text-gray-500 hover:text-gray-700"
-        onClick={() => toggleFieldHistory(fld)}
-      >
-        <History className="w-5 h-5" />
-      </button>
-    );
+  }
+  function renderHistoryIcon(fld: string) {
+    if (getFieldHistory(fld).length > 0) {
+      return (
+        <button
+          type="button"
+          className="ml-2 text-gray-500 hover:text-gray-700"
+          onClick={() => toggleFieldHistory(fld)}
+        >
+          <History className="w-5 h-5" />
+        </button>
+      );
+    }
+    return null;
+  }
 
   // Address helpers
   function updateAddress(
@@ -242,26 +242,16 @@ export default function PersonalInfoForm({
     value: string
   ) {
     if (field === "pin") {
-      // pin => 6-digit only
       value = value.replace(/\D/g, "").slice(0, 6);
     }
     setFormData((prev) => ({
       ...prev,
       [which]: {
-        ...(prev[which] || {
-          flat: "",
-          street: "",
-          landmark: "",
-          city: "",
-          district: "",
-          state: "",
-          pin: "",
-        }),
+        ...prev[which],
         [field]: value,
       },
     }));
   }
-
   function handleSameAsResidential(checked: boolean) {
     setFormData((prev) => {
       const updated = { ...prev, sameAsResidential: checked };
@@ -282,12 +272,7 @@ export default function PersonalInfoForm({
   }, [formData.sameAsResidential, formData.residentialAddress, setFormData]);
 
   // Emergency contacts
-  function handleEmergencyContactChange(
-    idx: number,
-    field: keyof EmergencyContact,
-    value: string
-  ) {
-    // phone => 10-digit only
+  function handleEmergencyContactChange(idx: number, field: keyof EmergencyContact, value: string) {
     if (field === "phoneNumber") {
       value = value.replace(/\D/g, "").slice(0, 10);
     }
@@ -295,7 +280,6 @@ export default function PersonalInfoForm({
     updated[idx] = { ...updated[idx], [field]: value };
     setFormData((prev) => ({ ...prev, emergencyContacts: updated }));
   }
-
   function addEmergencyContact() {
     setFormData((prev) => ({
       ...prev,
@@ -304,44 +288,54 @@ export default function PersonalInfoForm({
         { name: "", relationship: "", phoneNumber: "", email: "" },
       ],
     }));
-    // auto-open the collapsible
     setContactsOpen(true);
   }
-
   function removeEmergencyContact(idx: number) {
     const updated = formData.emergencyContacts.filter((_, i) => i !== idx);
     setFormData((prev) => ({ ...prev, emergencyContacts: updated }));
   }
 
-  // Image upload
+  // -------------- Image Upload --------------
   async function handleImageUpload(file: File) {
     if (!file) return;
-    const uploadData = new FormData();
-    uploadData.append("image", file);
-    if (formData.profileImageUrl) {
-      uploadData.append("oldImagePath", formData.profileImageUrl);
+    if (!userUsername) {
+      console.error("No username provided to PersonalInfoForm!");
+      return;
     }
 
     try {
-      const username = session?.user?.username;
-      if (!username) throw new Error("No username available.");
-      const res = await fetch(`/api/users/employee-photos/${username}`, {
-        method: "POST",
-        body: uploadData,
+      const fd = new FormData();
+      // The field name below must match the formidable upload field name ("image")
+      fd.append("image", file);
+
+      // Make the PUT request to your Cloudinary transform endpoint
+      const res = await fetch(`/api/users/employee-photos/${userUsername}`, {
+        method: "PUT",
+        body: fd,
       });
-      if (!res.ok) throw new Error("Failed to upload image");
+
+      if (!res.ok) {
+        throw new Error("Upload to Cloudinary failed");
+      }
+
       const data = await res.json();
-      setFormData((prev) => ({ ...prev, profileImageUrl: data.imageUrl }));
-      setProfilePreview(data.imageUrl);
-    } catch (err) {
-      console.error("Upload error:", err);
+      // data.profileImageUrl => final Cloudinary URL w/ transformations
+      console.log("New profile image URL:", data.profileImageUrl);
+
+      // Update form data and local preview to the final Cloudinary URL
+      setFormData((prev) => ({ ...prev, profileImageUrl: data.profileImageUrl }));
+      setProfilePreview(data.profileImageUrl);
+    } catch (error) {
+      console.error("Image upload error:", error);
     }
   }
 
   function onProfileImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) {
+      // Show immediate local preview while uploading...
       setProfilePreview(URL.createObjectURL(file));
+      // ...then upload to server => Cloudinary => get final URL
       handleImageUpload(file);
     }
   }
@@ -350,21 +344,20 @@ export default function PersonalInfoForm({
   function handleResetPassword(val: string) {
     setFormData((prev) => ({
       ...prev,
-      resetPassword: val === "true", // 'true' => boolean true
+      resetPassword: val === "true",
     }));
   }
 
-  // ------- RENDER -------
   return (
     <div className="space-y-6 text-gray-900">
-      {/* Profile Image & Basic Info */}
+      {/* Profile & Basic Info */}
       <Card className="shadow-[0_10px_30px_rgba(0,0,0,0.15)] bg-gradient-to-br from-white/70 to-white/40 backdrop-blur-md border border-gray-200 rounded-xl">
         <CardHeader>
           <CardTitle className="text-black">Profile & Basic Information</CardTitle>
         </CardHeader>
         <CardContent className="p-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Profile Image Block */}
+            {/* Profile Image */}
             <div className="p-4 rounded-lg shadow-sm bg-white/60 flex flex-col items-center">
               <Label className="mb-2 font-semibold">Profile Image</Label>
               <div className="relative w-60 h-60 overflow-hidden border-2 border-blue-200 bg-gray-100 flex items-center justify-center group rounded-md">
@@ -396,8 +389,8 @@ export default function PersonalInfoForm({
                       id="profileImage"
                       type="file"
                       accept="image/*"
-                      onChange={onProfileImageChange}
                       disabled={!isEditMode}
+                      onChange={onProfileImageChange}
                       className="hidden"
                     />
                   </>
@@ -429,20 +422,15 @@ export default function PersonalInfoForm({
                     id="firstName"
                     value={formData.firstName}
                     onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        firstName: e.target.value,
-                      }))
+                      setFormData((prev) => ({ ...prev, firstName: e.target.value }))
                     }
                     disabled={!isEditMode}
-                    className="mt-1"
                   />
                   {renderHistoryIcon("firstName")}
                 </div>
                 {errors.firstName && (
                   <p className="text-red-500 text-sm">{errors.firstName}</p>
                 )}
-                {/* History Section if open */}
                 {openFields["firstName"] && (
                   <HistorySection
                     field="firstName"
@@ -464,10 +452,7 @@ export default function PersonalInfoForm({
                     id="middleName"
                     value={formData.middleName || ""}
                     onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        middleName: e.target.value,
-                      }))
+                      setFormData((prev) => ({ ...prev, middleName: e.target.value }))
                     }
                     disabled={!isEditMode}
                   />
@@ -485,13 +470,9 @@ export default function PersonalInfoForm({
                     id="lastName"
                     value={formData.lastName}
                     onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        lastName: e.target.value,
-                      }))
+                      setFormData((prev) => ({ ...prev, lastName: e.target.value }))
                     }
                     disabled={!isEditMode}
-                    className="mt-1"
                   />
                   {renderHistoryIcon("lastName")}
                 </div>
@@ -514,13 +495,9 @@ export default function PersonalInfoForm({
                     type="email"
                     value={formData.email}
                     onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        email: e.target.value,
-                      }))
+                      setFormData((prev) => ({ ...prev, email: e.target.value }))
                     }
                     disabled={!isEditMode}
-                    className="mt-1"
                   />
                   {renderHistoryIcon("email")}
                 </div>
@@ -548,7 +525,7 @@ export default function PersonalInfoForm({
                   type="date"
                   value={formData.dob ? formData.dob.split("T")[0] : ""}
                   onChange={(e) =>
-                    setFormData((p) => ({ ...p, dob: e.target.value }))
+                    setFormData((prev) => ({ ...prev, dob: e.target.value }))
                   }
                   disabled={!isEditMode}
                 />
@@ -563,7 +540,7 @@ export default function PersonalInfoForm({
                 <Input
                   value={formData.nationality || ""}
                   onChange={(e) =>
-                    setFormData((p) => ({ ...p, nationality: e.target.value }))
+                    setFormData((prev) => ({ ...prev, nationality: e.target.value }))
                   }
                   disabled={!isEditMode}
                 />
@@ -577,7 +554,7 @@ export default function PersonalInfoForm({
               <Select
                 value={formData.gender || ""}
                 onValueChange={(val) =>
-                  setFormData((p) => ({ ...p, gender: val }))
+                  setFormData((prev) => ({ ...prev, gender: val }))
                 }
                 disabled={!isEditMode}
               >
@@ -601,7 +578,7 @@ export default function PersonalInfoForm({
               <Select
                 value={formData.bloodGroup || ""}
                 onValueChange={(val) =>
-                  setFormData((p) => ({ ...p, bloodGroup: val }))
+                  setFormData((prev) => ({ ...prev, bloodGroup: val }))
                 }
                 disabled={!isEditMode}
               >
@@ -636,7 +613,7 @@ export default function PersonalInfoForm({
                   maxLength={10}
                   onChange={(e) => {
                     const val = e.target.value.replace(/\D/g, "").slice(0, 10);
-                    setFormData((p) => ({ ...p, phoneNumber: val }));
+                    setFormData((prev) => ({ ...prev, phoneNumber: val }));
                   }}
                   disabled={!isEditMode}
                 />
@@ -644,12 +621,11 @@ export default function PersonalInfoForm({
               </div>
             </div>
 
-            {/* Reset Password Select */}
+            {/* Reset Password (select) */}
             {isEditMode && (
               <div className="flex flex-col justify-center">
                 <Label className="mb-1 font-medium">Reset Password</Label>
                 <Select
-                  // If resetPassword is true => "true", else "false"
                   value={formData.resetPassword ? "true" : "false"}
                   onValueChange={handleResetPassword}
                   disabled={!isEditMode}
@@ -668,13 +644,13 @@ export default function PersonalInfoForm({
         </CardContent>
       </Card>
 
-      {/* Address Information */}
+      {/* Address Info */}
       <Card className="shadow-[0_10px_30px_rgba(0,0,0,0.15)] bg-gradient-to-br from-white/70 to-white/40 backdrop-blur-md border border-gray-200 rounded-xl">
         <CardHeader>
           <CardTitle className="text-black">Address Information</CardTitle>
         </CardHeader>
         <CardContent className="p-6 space-y-6">
-          {/* Residential Address Collapsible */}
+          {/* Residential Address */}
           <Collapsible open={isResidentialOpen} onOpenChange={setResidentialOpen}>
             <div className="flex items-center justify-between">
               <Label className="font-semibold">
@@ -729,7 +705,7 @@ export default function PersonalInfoForm({
             </CollapsibleContent>
           </Collapsible>
 
-          {/* Permanent Address Collapsible */}
+          {/* Permanent Address */}
           <Collapsible open={isPermanentOpen} onOpenChange={setPermanentOpen}>
             <div className="flex items-center justify-between">
               <Label className="font-semibold">
@@ -801,7 +777,7 @@ export default function PersonalInfoForm({
         </CardContent>
       </Card>
 
-      {/* Emergency Contacts Collapsible */}
+      {/* Emergency Contacts */}
       <Card className="shadow-[0_10px_30px_rgba(0,0,0,0.15)] bg-gradient-to-br from-white/70 to-white/40 backdrop-blur-md border border-gray-200 rounded-xl">
         <CardHeader>
           <CardTitle className="text-black">Emergency Contacts</CardTitle>
@@ -910,8 +886,8 @@ export default function PersonalInfoForm({
                         <p className="text-xs text-gray-500 mb-1">user@example.com</p>
                         <div className="flex items-center">
                           <Input
-                            value={c.email}
                             type="email"
+                            value={c.email}
                             onChange={(e) =>
                               handleEmergencyContactChange(i, "email", e.target.value)
                             }

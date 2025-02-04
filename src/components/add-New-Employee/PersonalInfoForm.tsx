@@ -15,6 +15,7 @@ import { Camera } from "lucide-react";
 import { CreateUserFormData, Address } from "@/pages/add-New-Employee";
 
 interface PersonalInfoFormProps {
+  userUsername?: string; 
   formData: CreateUserFormData;
   setFormData: React.Dispatch<React.SetStateAction<CreateUserFormData>>;
 }

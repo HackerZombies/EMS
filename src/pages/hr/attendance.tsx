@@ -1,7 +1,8 @@
+// src/pages/hr/attendance.tsx
 "use client";
 
 import React, { useEffect, useState, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation"; // <-- import useSearchParams
 import Link from "next/link";
 import Image from "next/image";
 import { getServerSession } from "next-auth/next";
@@ -10,7 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { Attendance } from "@prisma/client";
 import { GetServerSideProps } from "next";
 
-// shadcn/ui components (adjust imports as needed)
+// shadcn/ui components
 import {
   Card,
   CardHeader,
@@ -45,11 +46,8 @@ type AttendanceRecord = {
   checkInLongitude: number | null;
   checkOutLatitude: number | null;
   checkOutLongitude: number | null;
-
-  // NEW: we fetch these from DB now
   checkInAddress: string | null;
   checkOutAddress: string | null;
-
   user: {
     id: string;
     username: string;
@@ -59,7 +57,7 @@ type AttendanceRecord = {
     department?: string | null;
     position?: string | null;
     workLocation?: string | null;
-    profileImageUrl?: string | null;
+    profileImageUrl?: string | null; // Cloudinary URL here
   };
 };
 
@@ -106,7 +104,7 @@ export default function AllAttendancePage({
   const socketRef = useRef<WebSocket | null>(null);
   const [isServerReady, setIsServerReady] = useState(false);
 
-  // Default: Show only today's attendance
+  // Default filters
   const [startDate, setStartDate] = useState<Date | null>(new Date());
   const [endDate, setEndDate] = useState<Date | null>(new Date());
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
@@ -114,9 +112,13 @@ export default function AllAttendancePage({
   const [currentPage, setCurrentPage] = useState(1);
   const [dateError, setDateError] = useState<string | null>(null);
 
-  // ----------------------------------------------------------------------------------
-  // 1) WebSocket Setup
-  // ----------------------------------------------------------------------------------
+  // [1] We read the recordId from the query param using next/navigation
+  const searchParams = useSearchParams();
+  const recordId = searchParams.get("recordId"); // e.g. /hr/attendance?recordId=abc123
+
+  // ------------------------------------------------------------------------------
+  // WebSocket Setup
+  // ------------------------------------------------------------------------------
   useEffect(() => {
     const connectWebSocket = () => {
       socketRef.current = new WebSocket(
@@ -136,10 +138,8 @@ export default function AllAttendancePage({
             socketRef.current?.send(JSON.stringify({ type: "request-all-attendance" }));
           } else if (message.type === "attendanceUpdate") {
             const updatedRecord = message.payload as Attendance;
-            // Attempt to find the matching user
             const user = users.find((u) => u.username === updatedRecord.userUsername);
             if (user) {
-              // Transform to AttendanceRecord
               const updatedRecordData: AttendanceRecord = {
                 id: updatedRecord.id,
                 date: updatedRecord.date.toISOString(),
@@ -149,28 +149,21 @@ export default function AllAttendancePage({
                 checkInLongitude: updatedRecord.checkInLongitude,
                 checkOutLatitude: updatedRecord.checkOutLatitude,
                 checkOutLongitude: updatedRecord.checkOutLongitude,
-
-                // We assume the server sends these in real-time as well
                 checkInAddress: updatedRecord.checkInAddress || null,
                 checkOutAddress: updatedRecord.checkOutAddress || null,
-
                 user: {
                   ...user,
-                  role: user.role || "USER", // fallback
+                  role: user.role || "USER",
                 },
               };
 
               setAttendanceData((prevData) => {
                 const existingIndex = prevData.findIndex((item) => item.id === updatedRecord.id);
                 if (existingIndex > -1) {
-                  // Update existing
                   const newData = [...prevData];
                   newData[existingIndex] = updatedRecordData;
-                  return newData.sort(
-                    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-                  );
+                  return newData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                 } else {
-                  // Insert
                   return [updatedRecordData, ...prevData].sort(
                     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
                   );
@@ -198,9 +191,9 @@ export default function AllAttendancePage({
     };
   }, [users]);
 
-  // ----------------------------------------------------------------------------------
-  // 2) Filter by User + Date Range
-  // ----------------------------------------------------------------------------------
+  // ------------------------------------------------------------------------------
+  // Filter by User + Date Range
+  // ------------------------------------------------------------------------------
   useEffect(() => {
     if (!startDate || !endDate) {
       setFilteredData([]);
@@ -219,12 +212,12 @@ export default function AllAttendancePage({
     });
 
     setFilteredData(filtered);
-    setCurrentPage(1); // reset page
+    setCurrentPage(1);
   }, [attendanceData, startDate, endDate, selectedUser]);
 
-  // ----------------------------------------------------------------------------------
-  // 3) Validate date range (start <= end)
-  // ----------------------------------------------------------------------------------
+  // ------------------------------------------------------------------------------
+  // Validate date range
+  // ------------------------------------------------------------------------------
   useEffect(() => {
     if (startDate && endDate && endDate < startDate) {
       setDateError("End date cannot be earlier than start date.");
@@ -233,44 +226,37 @@ export default function AllAttendancePage({
     }
   }, [startDate, endDate]);
 
-  // ----------------------------------------------------------------------------------
-  // 4) Export Data
-  // ----------------------------------------------------------------------------------
+  // ------------------------------------------------------------------------------
+  // Export Data
+  // ------------------------------------------------------------------------------
   const handleExport = async () => {
     if (filteredData.length === 0) {
       alert("No data to export for the selected filters.");
       return;
     }
 
-    // We already have addresses from DB—no need to fetch from Mapbox now.
-    const dataToExport = filteredData.map((record) => {
-      return {
-        ID: record.id,
-        Date: new Date(record.date).toLocaleDateString(),
-        "Check-In Time": record.checkInTime
-          ? new Date(record.checkInTime).toLocaleTimeString()
+    const dataToExport = filteredData.map((record) => ({
+      ID: record.id,
+      Date: new Date(record.date).toLocaleDateString(),
+      "Check-In Time": record.checkInTime
+        ? new Date(record.checkInTime).toLocaleTimeString()
+        : "N/A",
+      "Check-Out Time": record.checkOutTime
+        ? new Date(record.checkOutTime).toLocaleTimeString()
+        : "N/A",
+      "Check-In Location":
+        record.checkInLatitude && record.checkInLongitude
+          ? `${record.checkInLatitude}, ${record.checkInLongitude}`
           : "N/A",
-        "Check-Out Time": record.checkOutTime
-          ? new Date(record.checkOutTime).toLocaleTimeString()
+      "Check-Out Location":
+        record.checkOutLatitude && record.checkOutLongitude
+          ? `${record.checkOutLatitude}, ${record.checkOutLongitude}`
           : "N/A",
-
-        "Check-In Location":
-          record.checkInLatitude && record.checkInLongitude
-            ? `${record.checkInLatitude}, ${record.checkInLongitude}`
-            : "N/A",
-        "Check-Out Location":
-          record.checkOutLatitude && record.checkOutLongitude
-            ? `${record.checkOutLatitude}, ${record.checkOutLongitude}`
-            : "N/A",
-
-        // Addresses from the DB:
-        "Check-In Address": record.checkInAddress || "N/A",
-        "Check-Out Address": record.checkOutAddress || "N/A",
-
-        User: `${record.user.firstName} ${record.user.lastName}`,
-        Role: record.user.role,
-      };
-    });
+      "Check-In Address": record.checkInAddress || "N/A",
+      "Check-Out Address": record.checkOutAddress || "N/A",
+      User: `${record.user.firstName} ${record.user.lastName}`,
+      Role: record.user.role,
+    }));
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
@@ -279,7 +265,6 @@ export default function AllAttendancePage({
     const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
     const blobData = new Blob([excelBuffer], { type: "application/octet-stream" });
 
-    // Construct a filename
     const filenameParts: string[] = [];
     if (startDate) filenameParts.push(`from_${startDate.toISOString().split("T")[0]}`);
     if (endDate) filenameParts.push(`to_${endDate.toISOString().split("T")[0]}`);
@@ -295,9 +280,9 @@ export default function AllAttendancePage({
     saveAs(blobData, filename);
   };
 
-  // ----------------------------------------------------------------------------------
-  // 5) Pagination
-  // ----------------------------------------------------------------------------------
+  // ------------------------------------------------------------------------------
+  // Pagination
+  // ------------------------------------------------------------------------------
   const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
   const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
   const currentItems = filteredData.slice(indexOfFirstItem, indexOfLastItem);
@@ -307,10 +292,8 @@ export default function AllAttendancePage({
     setCurrentPage(page);
   };
 
-  // ----------------------------------------------------------------------------------
-  // "Late" logic (example)
-  // ----------------------------------------------------------------------------------
-  const getStatusBadge = (record: AttendanceRecord) => {
+  // Determine status (Late, Done, Not In, etc.)
+  function getStatusBadge(record: AttendanceRecord) {
     if (!record.checkInTime) {
       return <Badge variant="destructive">Not In</Badge>;
     }
@@ -322,11 +305,9 @@ export default function AllAttendancePage({
       return <Badge variant="destructive">Late</Badge>;
     }
     return <Badge variant="default">Done</Badge>;
-  };
+  }
 
-  // ----------------------------------------------------------------------------------
-  // Coordinates + Address Popovers
-  // ----------------------------------------------------------------------------------
+  // Address popover
   function AddressPopover({
     label,
     lat,
@@ -341,7 +322,6 @@ export default function AllAttendancePage({
     if (!lat || !lng) {
       return <span className="text-xs text-gray-500">No {label}</span>;
     }
-
     return (
       <Popover>
         <PopoverTrigger asChild>
@@ -356,12 +336,10 @@ export default function AllAttendancePage({
           className="p-3 w-64 bg-white border border-gray-200 shadow-md rounded-md text-xs sm:text-sm"
         >
           <p className="text-gray-700 mb-1">
-            <strong>{label} Coordinates:</strong>{" "}
-            {lat.toFixed(6)}, {lng.toFixed(6)}
+            <strong>{label} Coordinates:</strong> {lat.toFixed(6)}, {lng.toFixed(6)}
           </p>
           <p className="text-gray-700 mb-2">
-            <strong>Address:</strong>{" "}
-            {address || "No address stored"}
+            <strong>Address:</strong> {address || "No address stored"}
           </p>
           <Link
             href={`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`}
@@ -375,21 +353,21 @@ export default function AllAttendancePage({
     );
   }
 
-  // ----------------------------------------------------------------------------------
-  // Render
-  // ----------------------------------------------------------------------------------
+  // [2] We highlight the row if record.id === recordId
+  function isHighlightedRow(record: AttendanceRecord) {
+    return recordId && recordId === record.id;
+  }
+
   return (
     <div className="container mx-auto p-2 sm:p-4">
       <Card className="border border-gray-200 shadow-sm bg-white text-gray-900">
         {/* Header: Filters + Export */}
         <CardHeader className="p-3 sm:p-4 border-b">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            {/* Title */}
             <CardTitle className="text-base sm:text-lg font-semibold">
               Attendance
             </CardTitle>
 
-            {/* Filters */}
             <div className="flex flex-wrap items-end gap-2 sm:gap-4 text-xs sm:text-sm">
               {/* Start Date */}
               <div className="flex flex-col">
@@ -502,8 +480,14 @@ export default function AllAttendancePage({
                       ? new Date(record.checkOutTime).toLocaleTimeString()
                       : "N/A";
 
+                    // highlight row if record.id === recordId
+                    const isHighlighted = isHighlightedRow(record);
+
                     return (
-                      <TableRow key={record.id} className="hover:bg-gray-50">
+                      <TableRow
+                        key={record.id}
+                        className={`hover:bg-gray-50 ${isHighlighted ? "bg-yellow-50" : ""}`}
+                      >
                         {/* Date */}
                         <TableCell className="px-2 py-2 font-medium">{dateStr}</TableCell>
 
@@ -522,19 +506,25 @@ export default function AllAttendancePage({
                               className="w-64 p-3 bg-white border border-gray-200 shadow-md rounded-md text-xs sm:text-sm"
                             >
                               <div className="flex items-center gap-2 mb-2">
-                                <Image
-                                  src={
-                                    record.user.profileImageUrl
-                                      ? record.user.profileImageUrl
-                                      : "/default-avatar.png"
-                                  }
-                                  alt={`${record.user.username}-avatar`}
-                                  width={36}
-                                  height={36}
-                                  className="rounded-full object-cover"
-                                />
+                                {/* Next/Image with Cloudinary URL */}
+                                <div className="relative w-16 h-16">
+                                  <Image
+                                    src={
+                                      record.user.profileImageUrl
+                                        ? record.user.profileImageUrl
+                                        : "/default-avatar.png"
+                                    }
+                                    alt={`${record.user.username}-avatar`}
+                                    fill
+                                    className="rounded-full object-cover"
+                                    sizes="(max-width: 768px) 100vw, 64px"
+                                  />
+                                </div>
+
                                 <div className="flex-1">
-                                  <p className="font-semibold text-gray-800">{userFullName}</p>
+                                  <p className="font-semibold text-gray-800">
+                                    {userFullName}
+                                  </p>
                                   <p className="text-[10px] text-gray-500">
                                     {record.user.department ?? "No Dept"} &bull;{" "}
                                     {record.user.position ?? "No Pos"}
@@ -652,14 +642,11 @@ export default function AllAttendancePage({
   );
 }
 
-// ----------------------------------------------------------------------------------
 // getServerSideProps
-// ----------------------------------------------------------------------------------
 export const getServerSideProps: GetServerSideProps = async (context) => {
   const session = await getServerSession(context.req, context.res, authOptions);
 
-  // Restrict access if needed
-  if (!session?.user || !["HR", "ADMIN"].includes(session?.user.role)) {
+  if (!session?.user || !["HR", "ADMIN"].includes(session.user.role)) {
     return {
       redirect: {
         destination: "/unauthorized",
@@ -669,7 +656,6 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
   }
 
   try {
-    // 1) Fetch attendance with address fields
     const attendanceRecords = await prisma.attendance.findMany({
       include: {
         user: {
@@ -689,7 +675,6 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
       orderBy: { date: "desc" },
     });
 
-    // 2) Fetch the user list (for the employee filter)
     const userRecords = await prisma.user.findMany({
       select: {
         id: true,
@@ -704,7 +689,6 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
       },
     });
 
-    // 3) Transform for props
     const attendanceDataForProps: AttendanceRecord[] = attendanceRecords.map((r) => ({
       id: r.id,
       date: r.date.toISOString(),

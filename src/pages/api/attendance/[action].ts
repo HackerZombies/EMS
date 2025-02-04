@@ -1,12 +1,14 @@
 // pages/api/attendance/[action].ts
-
 import { NextApiRequest, NextApiResponse } from "next";
 import { prisma } from "@/lib/prisma";
 import { broadcastAttendanceUpdate } from "../socket";
-// 1) import your reverse geocode helper
-import { reverseGeocodeFromMapbox } from "@/lib/mapbox"; 
+import { reverseGeocodeFromMapbox } from "@/lib/mapbox";
+import { createNotification } from "@/services/notificationService";
 
-export default async function handleAttendanceAction(req: NextApiRequest, res: NextApiResponse) {
+export default async function handleAttendanceAction(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
   const { action } = req.query;
 
   if (!["checkin", "checkout"].includes(action as string)) {
@@ -33,23 +35,27 @@ export default async function handleAttendanceAction(req: NextApiRequest, res: N
   }
 
   try {
-    // 1) Parse date
     const parsedDate = new Date(date);
     if (isNaN(parsedDate.getTime())) {
       return res.status(400).json({ message: "Invalid date format" });
     }
 
-    let updatedAttendance;
+    let updatedAttendance = null;
 
     // ------------------------------------------------------------------
-    // CHECK-IN LOGIC
+    // CHECK-IN
     // ------------------------------------------------------------------
     if (action === "checkin") {
-      if (!checkInTime || checkInLatitude === undefined || checkInLongitude === undefined) {
-        return res.status(400).json({ message: "Missing required fields for check-in" });
+      if (
+        !checkInTime ||
+        checkInLatitude === undefined ||
+        checkInLongitude === undefined
+      ) {
+        return res
+          .status(400)
+          .json({ message: "Missing required fields for check-in" });
       }
 
-      // 2) Attempt to fetch existing for that day
       const existingAttendance = await prisma.attendance.findUnique({
         where: {
           userUsername_date: {
@@ -60,23 +66,24 @@ export default async function handleAttendanceAction(req: NextApiRequest, res: N
       });
 
       if (existingAttendance) {
-        return res.status(400).json({ message: "Attendance already marked for today" });
+        return res
+          .status(400)
+          .json({ message: "Attendance already marked for today" });
       }
 
-      // 3) **Fetch address** from Mapbox
+      // Reverse geocode
       const checkInAddress = await reverseGeocodeFromMapbox(
         parseFloat(checkInLatitude),
-        parseFloat(checkInLongitude),
+        parseFloat(checkInLongitude)
       );
 
-      // 4) Create the record in the DB
       updatedAttendance = await prisma.attendance.create({
         data: {
           date: parsedDate,
           checkInTime: new Date(checkInTime),
           checkInLatitude: parseFloat(checkInLatitude),
           checkInLongitude: parseFloat(checkInLongitude),
-          checkInAddress, // <- Store it
+          checkInAddress, // <--- Now recognized by Prisma
           userUsername: username,
         },
         include: {
@@ -85,17 +92,30 @@ export default async function handleAttendanceAction(req: NextApiRequest, res: N
           },
         },
       });
+
+      if (updatedAttendance) {
+        await createNotification({
+          message: `User ${updatedAttendance.user.username} just checked in`,
+          roleTargets: ["ADMIN", "HR"],
+          targetUrl: `/hr/attendance?recordId=${updatedAttendance.id}`,
+        });
+      }
     }
 
     // ------------------------------------------------------------------
-    // CHECK-OUT LOGIC
+    // CHECK-OUT
     // ------------------------------------------------------------------
     if (action === "checkout") {
-      if (!checkOutTime || checkOutLatitude === undefined || checkOutLongitude === undefined) {
-        return res.status(400).json({ message: "Missing required fields for check-out" });
+      if (
+        !checkOutTime ||
+        checkOutLatitude === undefined ||
+        checkOutLongitude === undefined
+      ) {
+        return res
+          .status(400)
+          .json({ message: "Missing required fields for check-out" });
       }
 
-      // 1) Find existing
       const attendance = await prisma.attendance.findUnique({
         where: {
           userUsername_date: {
@@ -106,26 +126,27 @@ export default async function handleAttendanceAction(req: NextApiRequest, res: N
       });
 
       if (!attendance) {
-        return res.status(400).json({ message: "No check-in record found for today" });
+        return res
+          .status(400)
+          .json({ message: "No check-in record found for today" });
       }
       if (attendance.checkOutTime) {
         return res.status(400).json({ message: "Already checked out today" });
       }
 
-      // 2) **Fetch address** from Mapbox
+      // Reverse geocode
       const checkOutAddress = await reverseGeocodeFromMapbox(
         parseFloat(checkOutLatitude),
-        parseFloat(checkOutLongitude),
+        parseFloat(checkOutLongitude)
       );
 
-      // 3) Update
       updatedAttendance = await prisma.attendance.update({
         where: { id: attendance.id },
         data: {
           checkOutTime: new Date(checkOutTime),
           checkOutLatitude: parseFloat(checkOutLatitude),
           checkOutLongitude: parseFloat(checkOutLongitude),
-          checkOutAddress, // <- Store it
+          checkOutAddress, // <--- Also recognized by Prisma
         },
         include: {
           user: {
@@ -133,13 +154,20 @@ export default async function handleAttendanceAction(req: NextApiRequest, res: N
           },
         },
       });
+
+      if (updatedAttendance) {
+        await createNotification({
+          message: `User ${updatedAttendance.user.username} just checked out`,
+          roleTargets: ["ADMIN", "HR"],
+          targetUrl: `/hr/attendance?recordId=${updatedAttendance.id}`,
+        });
+      }
     }
 
     // ------------------------------------------------------------------
     // BROADCAST & RESPONSE
     // ------------------------------------------------------------------
     if (updatedAttendance) {
-      // broadcast to your WS clients
       broadcastAttendanceUpdate(updatedAttendance);
     }
 

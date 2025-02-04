@@ -44,8 +44,11 @@ function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
     "lastName",
     "email",
     "phoneNumber",
+
+    // Notice we treat these as objects if they're JSON columns
     "residentialAddress",
     "permanentAddress",
+
     "role",
     "dob",
     "gender",
@@ -63,6 +66,7 @@ function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
     const newVal = (newUser as any)[key];
 
     if (oldVal instanceof Date && newVal instanceof Date) {
+      // Compare timestamps if both are dates
       if (oldVal.getTime() !== newVal.getTime()) {
         changedFields[key] = { old: oldVal, new: newVal };
       }
@@ -72,10 +76,12 @@ function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
       typeof newVal === "object" &&
       newVal !== null
     ) {
+      // If both are objects (like JSON addresses), compare via JSON
       if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
         changedFields[key] = { old: oldVal, new: newVal };
       }
     } else {
+      // Fallback direct comparison
       if (oldVal !== newVal) {
         changedFields[key] = { old: oldVal, new: newVal };
       }
@@ -99,7 +105,7 @@ function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
     }
   }
 
-  // 3. Compare array fields
+  // 3. Compare array fields (qualifications, experiences, etc.)
   function compareArray(fieldName: keyof FullUser) {
     const oldFieldValue = oldUser[fieldName];
     const newFieldValue = newUser[fieldName];
@@ -122,6 +128,7 @@ function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
   }
 
   function simplifyRecord(obj: any) {
+    // Remove fields that we don't consider relevant to the diff
     const { id, dateCreated, ...rest } = obj;
     return rest;
   }
@@ -155,12 +162,12 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       email,
       phoneNumber,
       residentialAddress,
+      permanentAddress,
       role,
       password,
       dob,
       joiningDate,
       middleName,
-      permanentAddress,
       department,
       position,
       gender,
@@ -182,18 +189,16 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(400).json({ message: "Missing mandatory fields" });
     }
 
-    // 4) Prepare main user data
+    // 4) Prepare main user data for update
     const dataToUpdate: Record<string, any> = {
       firstName,
       lastName,
       email,
       phoneNumber,
-      residentialAddress,
       role,
     };
 
     if (middleName) dataToUpdate.middleName = middleName;
-    if (permanentAddress) dataToUpdate.permanentAddress = permanentAddress;
     if (department) dataToUpdate.department = department;
     if (position) dataToUpdate.position = position;
     if (gender) dataToUpdate.gender = gender;
@@ -203,6 +208,11 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     if (profileImageUrl) dataToUpdate.profileImageUrl = profileImageUrl;
     if (dob) dataToUpdate.dob = new Date(dob);
     if (nationality) dataToUpdate.nationality = nationality;
+
+    // If addresses are JSON, just assign them directly
+    // (If they come as strings, parse them first)
+    if (residentialAddress) dataToUpdate.residentialAddress = residentialAddress;
+    if (permanentAddress) dataToUpdate.permanentAddress = permanentAddress;
 
     if (joiningDate !== undefined && joiningDate !== null) {
       dataToUpdate.joiningDate = new Date(joiningDate);
@@ -287,7 +297,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     }
 
     // 8) Update main user record
-    const updatedUser = await prisma.user.update({
+    await prisma.user.update({
       where: { username },
       data: dataToUpdate,
     });
@@ -324,8 +334,8 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(200).json({ message: "No changes detected" });
     }
 
-    // 13) Audit log
-    await prisma.auditLog.create({
+    // 13) Create the audit log
+    const auditLog = await prisma.auditLog.create({
       data: {
         action: "UPDATE_USER",
         performedBy: session.user.username,
@@ -335,10 +345,19 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       },
     });
 
+    // 14) Create a notification for ADMIN, linking to the newly created log
+    await prisma.notification.create({
+      data: {
+        message: `User "${username}" was updated by ${session.user.username}`,
+        roleTargets: ["ADMIN"], // Only Admin sees this
+        targetUrl: `/activity?highlightLog=${auditLog.id}`,
+      },
+    });
+
     return res.status(200).json({
       message: "User updated successfully",
       resetPassword: resetPassword ? "Password reset email sent" : undefined,
-      updatedUser,
+      updatedUser: newUser,
     });
   } catch (error: any) {
     logger.error("Error updating user:", error);
@@ -368,10 +387,6 @@ async function handleEmergencyContacts(username: string, emergencyContacts: any[
   }
 }
 
-/**
- * For optional DateTime? fields (startDate, endDate), we only define
- * them if they exist, avoiding null or undefined issues.
- */
 async function handleQualifications(username: string, qualifications: any[]) {
   if (Array.isArray(qualifications)) {
     await prisma.qualification.deleteMany({ where: { username } });
@@ -385,11 +400,9 @@ async function handleQualifications(username: string, qualifications: any[]) {
         username,
       };
 
-      // Only set startDate if it exists
       if (qual.startDate) {
         record.startDate = new Date(qual.startDate);
       }
-      // Only set endDate if it exists
       if (qual.endDate) {
         record.endDate = new Date(qual.endDate);
       }

@@ -44,11 +44,8 @@ function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
     "lastName",
     "email",
     "phoneNumber",
-
-    // Notice we treat these as objects if they're JSON columns
     "residentialAddress",
     "permanentAddress",
-
     "role",
     "dob",
     "gender",
@@ -66,7 +63,6 @@ function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
     const newVal = (newUser as any)[key];
 
     if (oldVal instanceof Date && newVal instanceof Date) {
-      // Compare timestamps if both are dates
       if (oldVal.getTime() !== newVal.getTime()) {
         changedFields[key] = { old: oldVal, new: newVal };
       }
@@ -76,12 +72,10 @@ function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
       typeof newVal === "object" &&
       newVal !== null
     ) {
-      // If both are objects (like JSON addresses), compare via JSON
       if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
         changedFields[key] = { old: oldVal, new: newVal };
       }
     } else {
-      // Fallback direct comparison
       if (oldVal !== newVal) {
         changedFields[key] = { old: oldVal, new: newVal };
       }
@@ -105,7 +99,7 @@ function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
     }
   }
 
-  // 3. Compare array fields (qualifications, experiences, etc.)
+  // 3. Compare array fields
   function compareArray(fieldName: keyof FullUser) {
     const oldFieldValue = oldUser[fieldName];
     const newFieldValue = newUser[fieldName];
@@ -128,7 +122,6 @@ function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
   }
 
   function simplifyRecord(obj: any) {
-    // Remove fields that we don't consider relevant to the diff
     const { id, dateCreated, ...rest } = obj;
     return rest;
   }
@@ -209,8 +202,6 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     if (dob) dataToUpdate.dob = new Date(dob);
     if (nationality) dataToUpdate.nationality = nationality;
 
-    // If addresses are JSON, just assign them directly
-    // (If they come as strings, parse them first)
     if (residentialAddress) dataToUpdate.residentialAddress = residentialAddress;
     if (permanentAddress) dataToUpdate.permanentAddress = permanentAddress;
 
@@ -224,13 +215,12 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       const hashedPassword = await bcrypt.hash(newPassword, 10);
       dataToUpdate.password = hashedPassword;
 
-      try {
-        await sendUpdateEmail(email, username, newPassword);
-        logger.info(`Password reset email sent to user ${username}.`);
-      } catch (error) {
-        logger.error(`Failed to send password reset email to ${username}:`, error);
-        return res.status(500).json({ message: "Failed to send password reset email" });
-      }
+      // Send the email asynchronously so it doesn’t block the update
+      sendUpdateEmail(email, username, newPassword)
+        .then(() => logger.info(`Password reset email sent to user ${username}.`))
+        .catch((error) =>
+          logger.error(`Failed to send password reset email to ${username}:`, error)
+        );
     } else if (password) {
       dataToUpdate.password = await bcrypt.hash(password, 10);
     }
@@ -302,12 +292,14 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       data: dataToUpdate,
     });
 
-    // 9) Update sub-collections
-    await handleQualifications(username, qualifications);
-    await handleExperiences(username, experiences);
-    await handleCertifications(username, certifications);
-    await handleDocuments(username, documents);
-    await handleEmergencyContacts(username, emergencyContacts);
+    // 9) Update sub-collections concurrently
+    await Promise.all([
+      handleQualifications(username, qualifications),
+      handleExperiences(username, experiences),
+      handleCertifications(username, certifications),
+      handleDocuments(username, documents),
+      handleEmergencyContacts(username, emergencyContacts),
+    ]);
 
     // 10) Re-fetch new user
     const newUser = (await prisma.user.findUnique({
@@ -345,11 +337,11 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       },
     });
 
-    // 14) Create a notification for ADMIN, linking to the newly created log
+    // 14) Create a notification for ADMIN
     await prisma.notification.create({
       data: {
         message: `User "${username}" was updated by ${session.user.username}`,
-        roleTargets: ["ADMIN"], // Only Admin sees this
+        roleTargets: ["ADMIN"],
         targetUrl: `/activity?highlightLog=${auditLog.id}`,
       },
     });

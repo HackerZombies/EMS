@@ -311,34 +311,56 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       }
     }
 
-    // 9) Update main user record using nested writes for addresses
+    // 9) Update main user record using nested upsert for addresses
     await prisma.user.update({
       where: { username },
       data: {
         ...dataToUpdate,
         residentialAddress: parsedResidentialAddress
           ? {
-              update: {
-                flat: parsedResidentialAddress.flat,
-                street: parsedResidentialAddress.street,
-                landmark: parsedResidentialAddress.landmark,
-                city: parsedResidentialAddress.city,
-                district: parsedResidentialAddress.district,
-                state: parsedResidentialAddress.state,
-                pin: parsedResidentialAddress.pin,
+              upsert: {
+                update: {
+                  flat: parsedResidentialAddress.flat,
+                  street: parsedResidentialAddress.street,
+                  landmark: parsedResidentialAddress.landmark,
+                  city: parsedResidentialAddress.city,
+                  district: parsedResidentialAddress.district,
+                  state: parsedResidentialAddress.state,
+                  pin: parsedResidentialAddress.pin,
+                },
+                create: {
+                  flat: parsedResidentialAddress.flat,
+                  street: parsedResidentialAddress.street,
+                  landmark: parsedResidentialAddress.landmark,
+                  city: parsedResidentialAddress.city,
+                  district: parsedResidentialAddress.district,
+                  state: parsedResidentialAddress.state,
+                  pin: parsedResidentialAddress.pin,
+                },
               },
             }
           : undefined,
         permanentAddress: parsedPermanentAddress
           ? {
-              update: {
-                flat: parsedPermanentAddress.flat,
-                street: parsedPermanentAddress.street,
-                landmark: parsedPermanentAddress.landmark,
-                city: parsedPermanentAddress.city,
-                district: parsedPermanentAddress.district,
-                state: parsedPermanentAddress.state,
-                pin: parsedPermanentAddress.pin,
+              upsert: {
+                update: {
+                  flat: parsedPermanentAddress.flat,
+                  street: parsedPermanentAddress.street,
+                  landmark: parsedPermanentAddress.landmark,
+                  city: parsedPermanentAddress.city,
+                  district: parsedPermanentAddress.district,
+                  state: parsedPermanentAddress.state,
+                  pin: parsedPermanentAddress.pin,
+                },
+                create: {
+                  flat: parsedPermanentAddress.flat,
+                  street: parsedPermanentAddress.street,
+                  landmark: parsedPermanentAddress.landmark,
+                  city: parsedPermanentAddress.city,
+                  district: parsedPermanentAddress.district,
+                  state: parsedPermanentAddress.state,
+                  pin: parsedPermanentAddress.pin,
+                },
               },
             }
           : undefined,

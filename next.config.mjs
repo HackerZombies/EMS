@@ -16,10 +16,8 @@ const nextConfig = {
   async headers() {
     return [
       {
-        // Apply to all routes.
         source: "/(.*)",
         headers: [
-          // Here you set your own Permissions-Policy header with supported features.
           {
             key: "Permissions-Policy",
             value: "geolocation=(self), microphone=(), camera=()",
@@ -30,4 +28,4 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+export default nextConfig;

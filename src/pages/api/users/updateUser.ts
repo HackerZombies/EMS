@@ -154,8 +154,8 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       lastName,
       email,
       phoneNumber,
-      residentialAddress, // now sent as either a JSON string or an object
-      permanentAddress,   // now sent as either a JSON string or an object
+      residentialAddress, // expected to be a JS object
+      permanentAddress,   // expected to be a JS object
       role,
       password,
       dob,
@@ -282,33 +282,12 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(404).json({ message: "User not found" });
     }
 
-    // 8) Parse addresses from the request.
-    // If the address is a string, attempt to parse it.
-    // If it is already an object, use it directly.
-    let parsedResidentialAddress = null;
-    if (residentialAddress) {
-      if (typeof residentialAddress === "string") {
-        try {
-          parsedResidentialAddress = JSON.parse(residentialAddress);
-        } catch (err) {
-          return res.status(400).json({ message: "Invalid JSON for residentialAddress" });
-        }
-      } else if (typeof residentialAddress === "object") {
-        parsedResidentialAddress = residentialAddress;
-      }
+    // 8) Validate addresses are objects (they are sent from the front-end as objects)
+    if (!residentialAddress || typeof residentialAddress !== "object") {
+      return res.status(400).json({ message: "Invalid residentialAddress provided" });
     }
-
-    let parsedPermanentAddress = null;
-    if (permanentAddress) {
-      if (typeof permanentAddress === "string") {
-        try {
-          parsedPermanentAddress = JSON.parse(permanentAddress);
-        } catch (err) {
-          return res.status(400).json({ message: "Invalid JSON for permanentAddress" });
-        }
-      } else if (typeof permanentAddress === "object") {
-        parsedPermanentAddress = permanentAddress;
-      }
+    if (!permanentAddress || typeof permanentAddress !== "object") {
+      return res.status(400).json({ message: "Invalid permanentAddress provided" });
     }
 
     // 9) Update main user record using nested upsert for addresses
@@ -316,54 +295,52 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       where: { username },
       data: {
         ...dataToUpdate,
-        residentialAddress: parsedResidentialAddress
-          ? {
-              upsert: {
-                update: {
-                  flat: parsedResidentialAddress.flat,
-                  street: parsedResidentialAddress.street,
-                  landmark: parsedResidentialAddress.landmark,
-                  city: parsedResidentialAddress.city,
-                  district: parsedResidentialAddress.district,
-                  state: parsedResidentialAddress.state,
-                  pin: parsedResidentialAddress.pin,
-                },
-                create: {
-                  flat: parsedResidentialAddress.flat,
-                  street: parsedResidentialAddress.street,
-                  landmark: parsedResidentialAddress.landmark,
-                  city: parsedResidentialAddress.city,
-                  district: parsedResidentialAddress.district,
-                  state: parsedResidentialAddress.state,
-                  pin: parsedResidentialAddress.pin,
-                },
-              },
-            }
-          : undefined,
-        permanentAddress: parsedPermanentAddress
-          ? {
-              upsert: {
-                update: {
-                  flat: parsedPermanentAddress.flat,
-                  street: parsedPermanentAddress.street,
-                  landmark: parsedPermanentAddress.landmark,
-                  city: parsedPermanentAddress.city,
-                  district: parsedPermanentAddress.district,
-                  state: parsedPermanentAddress.state,
-                  pin: parsedPermanentAddress.pin,
-                },
-                create: {
-                  flat: parsedPermanentAddress.flat,
-                  street: parsedPermanentAddress.street,
-                  landmark: parsedPermanentAddress.landmark,
-                  city: parsedPermanentAddress.city,
-                  district: parsedPermanentAddress.district,
-                  state: parsedPermanentAddress.state,
-                  pin: parsedPermanentAddress.pin,
-                },
-              },
-            }
-          : undefined,
+        residentialAddress: {
+          upsert: {
+            update: {
+              flat: residentialAddress.flat,
+              street: residentialAddress.street,
+              landmark: residentialAddress.landmark,
+              city: residentialAddress.city,
+              district: residentialAddress.district,
+              state: residentialAddress.state,
+              pin: residentialAddress.pin,
+            },
+            create: {
+              flat: residentialAddress.flat,
+              street: residentialAddress.street,
+              landmark: residentialAddress.landmark,
+              city: residentialAddress.city,
+              district: residentialAddress.district,
+              state: residentialAddress.state,
+              pin: residentialAddress.pin,
+              userUsername: username,
+            },
+          },
+        },
+        permanentAddress: {
+          upsert: {
+            update: {
+              flat: permanentAddress.flat,
+              street: permanentAddress.street,
+              landmark: permanentAddress.landmark,
+              city: permanentAddress.city,
+              district: permanentAddress.district,
+              state: permanentAddress.state,
+              pin: permanentAddress.pin,
+            },
+            create: {
+              flat: permanentAddress.flat,
+              street: permanentAddress.street,
+              landmark: permanentAddress.landmark,
+              city: permanentAddress.city,
+              district: permanentAddress.district,
+              state: permanentAddress.state,
+              pin: permanentAddress.pin,
+              userUsername: username,
+            },
+          },
+        },
       },
     });
 
@@ -457,7 +434,6 @@ async function handleEmergencyContacts(username: string, emergencyContacts: any[
 async function handleQualifications(username: string, qualifications: any[]) {
   if (Array.isArray(qualifications)) {
     await prisma.qualification.deleteMany({ where: { username } });
-
     const data = qualifications.map((qual) => {
       const record: any = {
         name: qual.name,
@@ -466,17 +442,14 @@ async function handleQualifications(username: string, qualifications: any[]) {
         institution: qual.institution || null,
         username,
       };
-
       if (qual.startDate) {
         record.startDate = new Date(qual.startDate);
       }
       if (qual.endDate) {
         record.endDate = new Date(qual.endDate);
       }
-
       return record;
     });
-
     if (data.length > 0) {
       await prisma.qualification.createMany({ data });
     }
@@ -493,17 +466,14 @@ async function handleExperiences(username: string, experiences: any[]) {
         description: exp.description,
         username,
       };
-
       if (exp.startDate) {
         record.startDate = new Date(exp.startDate);
       }
       if (exp.endDate) {
         record.endDate = new Date(exp.endDate);
       }
-
       return record;
     });
-
     if (data.length > 0) {
       await prisma.experience.createMany({ data });
     }
@@ -520,17 +490,14 @@ async function handleCertifications(username: string, certifications: any[]) {
         licenseNumber: cert.licenseNumber || null,
         username,
       };
-
       if (cert.issueDate) {
         record.issueDate = new Date(cert.issueDate);
       }
       if (cert.expiryDate) {
         record.expiryDate = new Date(cert.expiryDate);
       }
-
       return record;
     });
-
     if (data.length > 0) {
       await prisma.certification.createMany({ data });
     }
@@ -540,7 +507,6 @@ async function handleCertifications(username: string, certifications: any[]) {
 async function handleDocuments(username: string, documents: any) {
   if (documents && typeof documents === "object") {
     await prisma.employeeDocument.deleteMany({ where: { userUsername: username } });
-
     const allDocs = Object.keys(documents).flatMap((category) => {
       const docs = Array.isArray(documents[category]) ? documents[category] : [];
       return docs
@@ -561,7 +527,6 @@ async function handleDocuments(username: string, documents: any) {
         })
         .filter((doc) => doc !== null);
     });
-
     if (allDocs.length > 0) {
       await prisma.employeeDocument.createMany({ data: allDocs });
     }

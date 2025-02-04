@@ -311,7 +311,6 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     }
 
     // 9) Update main user record using nested upsert for addresses.
-    // Notice that we do NOT include the 'userUsername' field in the create data.
     await prisma.user.update({
       where: { username },
       data: {
@@ -457,7 +456,6 @@ async function handleEmergencyContacts(username: string, emergencyContacts: any[
 async function handleQualifications(username: string, qualifications: any[]) {
   if (Array.isArray(qualifications)) {
     await prisma.qualification.deleteMany({ where: { username } });
-
     const data = qualifications.map((qual) => {
       const record: any = {
         name: qual.name,
@@ -466,17 +464,14 @@ async function handleQualifications(username: string, qualifications: any[]) {
         institution: qual.institution || null,
         username,
       };
-
       if (qual.startDate) {
         record.startDate = new Date(qual.startDate);
       }
       if (qual.endDate) {
         record.endDate = new Date(qual.endDate);
       }
-
       return record;
     });
-
     if (data.length > 0) {
       await prisma.qualification.createMany({ data });
     }
@@ -493,17 +488,14 @@ async function handleExperiences(username: string, experiences: any[]) {
         description: exp.description,
         username,
       };
-
       if (exp.startDate) {
         record.startDate = new Date(exp.startDate);
       }
       if (exp.endDate) {
         record.endDate = new Date(exp.endDate);
       }
-
       return record;
     });
-
     if (data.length > 0) {
       await prisma.experience.createMany({ data });
     }
@@ -520,17 +512,14 @@ async function handleCertifications(username: string, certifications: any[]) {
         licenseNumber: cert.licenseNumber || null,
         username,
       };
-
       if (cert.issueDate) {
         record.issueDate = new Date(cert.issueDate);
       }
       if (cert.expiryDate) {
         record.expiryDate = new Date(cert.expiryDate);
       }
-
       return record;
     });
-
     if (data.length > 0) {
       await prisma.certification.createMany({ data });
     }
@@ -540,7 +529,6 @@ async function handleCertifications(username: string, certifications: any[]) {
 async function handleDocuments(username: string, documents: any) {
   if (documents && typeof documents === "object") {
     await prisma.employeeDocument.deleteMany({ where: { userUsername: username } });
-
     const allDocs = Object.keys(documents).flatMap((category) => {
       const docs = Array.isArray(documents[category]) ? documents[category] : [];
       return docs
@@ -561,7 +549,6 @@ async function handleDocuments(username: string, documents: any) {
         })
         .filter((doc) => doc !== null);
     });
-
     if (allDocs.length > 0) {
       await prisma.employeeDocument.createMany({ data: allDocs });
     }

@@ -154,8 +154,8 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       lastName,
       email,
       phoneNumber,
-      residentialAddress, // now sent as a JSON string
-      permanentAddress,   // now sent as a JSON string
+      residentialAddress, // now sent as either a JSON string or an object
+      permanentAddress,   // now sent as either a JSON string or an object
       role,
       password,
       dob,
@@ -282,21 +282,32 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(404).json({ message: "User not found" });
     }
 
-    // 8) Parse addresses from JSON strings
+    // 8) Parse addresses from the request.
+    // If the address is a string, attempt to parse it.
+    // If it is already an object, use it directly.
     let parsedResidentialAddress = null;
     if (residentialAddress) {
-      try {
-        parsedResidentialAddress = JSON.parse(residentialAddress);
-      } catch (err) {
-        return res.status(400).json({ message: "Invalid JSON for residentialAddress" });
+      if (typeof residentialAddress === "string") {
+        try {
+          parsedResidentialAddress = JSON.parse(residentialAddress);
+        } catch (err) {
+          return res.status(400).json({ message: "Invalid JSON for residentialAddress" });
+        }
+      } else if (typeof residentialAddress === "object") {
+        parsedResidentialAddress = residentialAddress;
       }
     }
+
     let parsedPermanentAddress = null;
     if (permanentAddress) {
-      try {
-        parsedPermanentAddress = JSON.parse(permanentAddress);
-      } catch (err) {
-        return res.status(400).json({ message: "Invalid JSON for permanentAddress" });
+      if (typeof permanentAddress === "string") {
+        try {
+          parsedPermanentAddress = JSON.parse(permanentAddress);
+        } catch (err) {
+          return res.status(400).json({ message: "Invalid JSON for permanentAddress" });
+        }
+      } else if (typeof permanentAddress === "object") {
+        parsedPermanentAddress = permanentAddress;
       }
     }
 

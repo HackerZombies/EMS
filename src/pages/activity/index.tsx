@@ -28,6 +28,17 @@ import {
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/router";
 
+// Update the Address interface so that all fields are required.
+export interface Address {
+  flat: string;
+  street: string;
+  landmark: string;
+  city: string;
+  district: string;
+  state: string;
+  pin: string;
+}
+
 interface AuditLog {
   id: string;
   action: string;
@@ -267,7 +278,6 @@ const ActivityPage: React.FC<ActivityPageProps> = ({ logs }) => {
             </div>
           )}
           {fieldEntries.map(([fieldName, { old, new: newVal }]) => {
-            // Wrap each element in a fragment with a key to improve predictability.
             if (Array.isArray(old) || Array.isArray(newVal)) {
               return (
                 <React.Fragment key={`${log.id}-${fieldName}`}>
@@ -306,7 +316,6 @@ const ActivityPage: React.FC<ActivityPageProps> = ({ logs }) => {
     [handleRevertAll, handleRevertField, isRevertingAll, isRevertingField]
   );
 
-  // Reuse existing render functions for objects and complex fields.
   function renderObjectField(log: AuditLog, fieldName: string, oldObj: any, newObj: any) {
     const isFieldReverting = !!isRevertingField[log.id]?.[fieldName];
     const isRevertLog = log.action === "REVERT_CHANGES";

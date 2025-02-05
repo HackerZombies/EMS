@@ -37,8 +37,9 @@ interface FormFields {
   dob?: string;
   phoneNumber?: string;
   email?: string;
-  residentialAddress?: string; // Will parse this into JSON
-  permanentAddress?: string; // Will parse this into JSON
+  // We no longer expect these as JSON strings:
+  // residentialAddress?: string;
+  // permanentAddress?: string;
   nationality?: string;
   gender?: string;
   bloodGroup?: string;
@@ -189,9 +190,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       // Handle text fields
       bb.on("field", (fieldname, value) => {
         // e.g. "documents[resume][0][displayName]" or "firstName"
-        const docMatch = fieldname.match(
-          /^documents\[(.+?)\]\[(\d+)\]\[(.+?)\]$/
-        );
+        const docMatch = fieldname.match(/^documents\[(.+?)\]\[(\d+)\]\[(.+?)\]$/);
         if (docMatch) {
           const [_, docCategory, docIndexStr, docField] = docMatch;
           const docIndex = parseInt(docIndexStr, 10);
@@ -212,9 +211,9 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
           if (docField === "displayName") {
             documentsMap[docCategory][docIndex].displayName = value;
           } else if (docField === "category") {
-            documentsMap[docCategory][docIndex].category = Object.values(
-              DocumentCategory
-            ).includes(value as DocumentCategory)
+            documentsMap[docCategory][docIndex].category = Object.values(DocumentCategory).includes(
+              value as DocumentCategory
+            )
               ? (value as DocumentCategory)
               : DocumentCategory.others;
           }
@@ -245,9 +244,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
           return reject(new Error(`Invalid file type: ${mimeType}`));
         }
 
-        const docMatch = fieldname.match(
-          /^documents\[(.+?)\]\[(\d+)\]\[file\]$/
-        );
+        const docMatch = fieldname.match(/^documents\[(.+?)\]\[(\d+)\]\[file\]$/);
         if (!docMatch) {
           file.resume(); // skip
           return;
@@ -311,8 +308,6 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       phoneNumber,
       role,
       dob,
-      residentialAddress,
-      permanentAddress,
       department,
       position,
       nationality,
@@ -347,23 +342,30 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(400).json({ message: "Invalid email format" });
     }
 
-    // Parse addresses from JSON strings
-    let parsedResidentialAddress = {};
-    let parsedPermanentAddress = {};
-    try {
-      if (residentialAddress) {
-        parsedResidentialAddress = JSON.parse(residentialAddress);
-      }
-      if (permanentAddress) {
-        parsedPermanentAddress = JSON.parse(permanentAddress);
-      }
-    } catch (parseErr) {
-      return res.status(400).json({
-        message: "Invalid JSON for residential/permanent address fields",
-      });
-    }
+    // ───────────────────────────────────────────────────────
+    // Build address objects from individual fields (no JSON parsing)
+    // ───────────────────────────────────────────────────────
+    const parsedResidentialAddress = {
+      flat: fields["residentialAddress_flat"] || "",
+      street: fields["residentialAddress_street"] || "",
+      landmark: fields["residentialAddress_landmark"] || "",
+      city: fields["residentialAddress_city"] || "",
+      district: fields["residentialAddress_district"] || "",
+      state: fields["residentialAddress_state"] || "",
+      pin: fields["residentialAddress_pin"] || "",
+    };
 
-    // Parse arrays
+    const parsedPermanentAddress = {
+      flat: fields["permanentAddress_flat"] || "",
+      street: fields["permanentAddress_street"] || "",
+      landmark: fields["permanentAddress_landmark"] || "",
+      city: fields["permanentAddress_city"] || "",
+      district: fields["permanentAddress_district"] || "",
+      state: fields["permanentAddress_state"] || "",
+      pin: fields["permanentAddress_pin"] || "",
+    };
+
+    // Parse arrays from JSON strings
     const parsedEmergencyContacts = safeJsonParse<EmergencyContactInput>(
       emergencyContacts
     );
@@ -467,31 +469,13 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
           ? (employmentType as EmploymentType)
           : undefined,
         dob: dob ? new Date(dob) : undefined,
-
         // Nested create for address models
         residentialAddress: {
-          create: parsedResidentialAddress as {
-            flat?: string;
-            street?: string;
-            landmark?: string;
-            city?: string;
-            district?: string;
-            state?: string;
-            pin?: string;
-          },
+          create: parsedResidentialAddress,
         },
         permanentAddress: {
-          create: parsedPermanentAddress as {
-            flat?: string;
-            street?: string;
-            landmark?: string;
-            city?: string;
-            district?: string;
-            state?: string;
-            pin?: string;
-          },
+          create: parsedPermanentAddress,
         },
-
         department: department ? (department as Department) : undefined,
         position: position ? (position as Position) : undefined,
         nationality,

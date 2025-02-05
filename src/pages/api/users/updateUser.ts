@@ -22,9 +22,12 @@ import { mapToDocumentCategory } from "@/lib/documentCategory";
 import logger from "@/lib/logger";
 import crypto from "crypto";
 
+// Allowed roles to update users
 const ALLOWED_ROLES = ["HR", "ADMIN"];
 
-/** A helper interface to represent the "full" user including relations. */
+/** 
+ * Helper interface representing a full user with relations.
+ */
 interface FullUser extends PrismaUser {
   qualifications: Qualification[];
   experiences: Experience[];
@@ -33,11 +36,13 @@ interface FullUser extends PrismaUser {
   emergencyContacts: EmergencyContact[];
 }
 
-/** Compare old vs. new user for an object describing changes. */
+/** 
+ * Build a diff object that describes what fields changed (including nested ones).
+ */
 function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
   const changedFields: Record<string, { old: any; new: any }> = {};
 
-  // 1. Compare top-level fields
+  // List of top-level fields to compare.
   const topLevelFields = [
     "firstName",
     "middleName",
@@ -82,7 +87,7 @@ function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
     }
   }
 
-  // 2. Compare joiningDate separately
+  // Compare joiningDate separately.
   if (oldUser.joiningDate instanceof Date && newUser.joiningDate instanceof Date) {
     if (oldUser.joiningDate.getTime() !== newUser.joiningDate.getTime()) {
       changedFields["joiningDate"] = {
@@ -99,7 +104,7 @@ function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
     }
   }
 
-  // 3. Compare array fields
+  // Compare array fields (e.g. qualifications, experiences, etc.)
   function compareArray(fieldName: keyof FullUser) {
     const oldFieldValue = oldUser[fieldName];
     const newFieldValue = newUser[fieldName];
@@ -136,26 +141,28 @@ function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
 }
 
 export default async function handle(req: NextApiRequest, res: NextApiResponse) {
+  // 1) Only allow PUT requests.
   if (req.method !== "PUT") {
     return res.status(405).json({ message: "Method Not Allowed" });
   }
 
   try {
-    // 1) Session & Role check
+    // 2) Check session and ensure user has proper role.
     const session = await getServerSession(req, res, authOptions);
     if (!session || !session.user || !ALLOWED_ROLES.includes(session.user.role as string)) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    // 2) Extract body
+    // 3) Destructure the payload from req.body.
+    // Expect addresses to be nested objects (not JSON strings).
     const {
       username,
       firstName,
       lastName,
       email,
       phoneNumber,
-      residentialAddress, // expected to be an object
-      permanentAddress,   // expected to be an object
+      residentialAddress, // Expected as an object: { flat, street, landmark, city, district, state, pin }
+      permanentAddress,   // Expected as an object: { flat, street, landmark, city, district, state, pin }
       role,
       password,
       dob,
@@ -177,12 +184,12 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       resetPassword,
     } = req.body;
 
-    // 3) Basic validation
+    // 4) Basic validation of mandatory fields.
     if (!username || !firstName || !lastName || !email || !role) {
       return res.status(400).json({ message: "Missing mandatory fields" });
     }
 
-    // 4) Prepare main user data for update (do NOT include addresses here)
+    // 5) Prepare the main user data to update (addresses are handled separately).
     const dataToUpdate: Record<string, any> = {
       firstName,
       lastName,
@@ -205,13 +212,13 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       dataToUpdate.joiningDate = new Date(joiningDate);
     }
 
-    // 5) Handle password reset or direct password change
+    // 6) Handle password reset or direct password change.
     if (resetPassword) {
       const newPassword = crypto.randomBytes(12).toString("hex");
       const hashedPassword = await bcrypt.hash(newPassword, 10);
       dataToUpdate.password = hashedPassword;
 
-      // Send password reset email asynchronously
+      // Send password reset email asynchronously.
       sendUpdateEmail(email, username, newPassword)
         .then(() => logger.info(`Password reset email sent to user ${username}.`))
         .catch((error) =>
@@ -221,7 +228,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       dataToUpdate.password = await bcrypt.hash(password, 10);
     }
 
-    // 6) Enum Validations
+    // 7) Validate enum values.
     const validDepartments: Department[] = [
       Department.Admin,
       Department.HR,
@@ -266,7 +273,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(400).json({ message: "Invalid employment type" });
     }
 
-    // 7) Fetch old user
+    // 8) Fetch the old user data (with relations) for diffing.
     const oldUser = (await prisma.user.findUnique({
       where: { username },
       include: {
@@ -282,15 +289,17 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(404).json({ message: "User not found" });
     }
 
-    // 8) Use addresses as provided (no JSON parsing needed)
-    const parsedResidentialAddress = residentialAddress && typeof residentialAddress === "object" 
-      ? residentialAddress 
-      : null;
-    const parsedPermanentAddress = permanentAddress && typeof permanentAddress === "object" 
-      ? permanentAddress 
-      : null;
+    // 9) Use addresses as provided (they should be objects).
+    const parsedResidentialAddress =
+      residentialAddress && typeof residentialAddress === "object"
+        ? residentialAddress
+        : null;
+    const parsedPermanentAddress =
+      permanentAddress && typeof permanentAddress === "object"
+        ? permanentAddress
+        : null;
 
-    // 9) Update main user record using nested upsert for addresses.
+    // 10) Update the main user record using nested upsert for addresses.
     await prisma.user.update({
       where: { username },
       data: {
@@ -346,7 +355,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       },
     });
 
-    // 10) Update sub-collections concurrently
+    // 11) Update sub-collections concurrently.
     await Promise.all([
       handleQualifications(username, qualifications),
       handleExperiences(username, experiences),
@@ -355,7 +364,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       handleEmergencyContacts(username, emergencyContacts),
     ]);
 
-    // 11) Re-fetch new user
+    // 12) Re-fetch the updated user.
     const newUser = (await prisma.user.findUnique({
       where: { username },
       include: {
@@ -371,16 +380,16 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(500).json({ message: "Could not re-fetch updated user." });
     }
 
-    // 12) Build diff
+    // 13) Build the diff between old and new user.
     const changedFields = buildChangesDiff(oldUser, newUser);
 
-    // 13) If no changes, respond
+    // 14) If no changes detected (and no reset), return early.
     const hasChanges = Object.keys(changedFields).length > 0 || resetPassword;
     if (!hasChanges) {
       return res.status(200).json({ message: "No changes detected" });
     }
 
-    // 14) Create the audit log
+    // 15) Create an audit log with the changes.
     const auditLog = await prisma.auditLog.create({
       data: {
         action: "UPDATE_USER",
@@ -391,7 +400,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       },
     });
 
-    // 15) Create a notification for ADMIN
+    // 16) Create a notification for ADMIN.
     await prisma.notification.create({
       data: {
         message: `User "${username}" was updated by ${session.user.username}`,
@@ -415,7 +424,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
 }
 
 // ------------------------------
-//  Sub-collection Handlers
+// Sub-collection Handlers
 // ------------------------------
 async function handleEmergencyContacts(username: string, emergencyContacts: any[]) {
   if (Array.isArray(emergencyContacts)) {
@@ -520,7 +529,7 @@ async function handleDocuments(username: string, documents: any) {
           }
           return {
             userUsername: username,
-            filename: doc.displayName || "Untitled",
+            filename: doc.displayName || doc.fileName || "Untitled",
             fileType: doc.fileType || null,
             data: doc.fileData ? Buffer.from(doc.fileData, "base64") : Buffer.from([]),
             size: doc.size || 0,

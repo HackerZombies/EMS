@@ -314,7 +314,7 @@ export default function CreateUserPage() {
       // Build FormData
       const formDataToSend = new FormData();
 
-      // Simple fields
+      // Append simple fields
       const simpleFields: Array<keyof CreateUserFormData> = [
         "firstName",
         "middleName",
@@ -343,9 +343,13 @@ export default function CreateUserPage() {
         }
       });
 
-      // Append addresses as JSON strings from proper address objects
-      formDataToSend.append("residentialAddress", JSON.stringify(formData.residentialAddress));
-      formDataToSend.append("permanentAddress", JSON.stringify(formData.permanentAddress));
+      // Append addresses field by field (without JSON.stringify)
+      Object.entries(formData.residentialAddress).forEach(([key, value]) => {
+        formDataToSend.append(`residentialAddress_${key}`, value);
+      });
+      Object.entries(formData.permanentAddress).forEach(([key, value]) => {
+        formDataToSend.append(`permanentAddress_${key}`, value);
+      });
 
       // Append array fields
       const complexFields: Array<keyof CreateUserFormData> = [
@@ -361,7 +365,7 @@ export default function CreateUserPage() {
         }
       });
 
-      // Append documents
+      // Append documents (assuming your document handling remains the same)
       Object.entries(formData.documents).forEach(([docType, docsArray]) => {
         (docsArray as UploadedDocument[]).forEach((doc: UploadedDocument, index) => {
           formDataToSend.append(`documents[${docType}][${index}][file]`, doc.file);
@@ -456,9 +460,7 @@ export default function CreateUserPage() {
                     setFormData((prev) => ({
                       ...prev,
                       documents:
-                        typeof value === "function"
-                          ? value(prev.documents)
-                          : value,
+                        typeof value === "function" ? value(prev.documents) : value,
                     }))
                   }
                 />

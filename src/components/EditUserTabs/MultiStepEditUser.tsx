@@ -43,7 +43,7 @@ import {
 } from "@heroicons/react/24/outline";
 
 /** 
- * Updated Qualification type with startDate/endDate.
+ * Qualification type with startDate/endDate.
  */
 export interface Qualification {
   name: string;
@@ -71,8 +71,7 @@ export interface Certification {
 }
 
 /** 
- * Updated Address interface.  
- * In the UI we expect all fields to be defined as strings.
+ * Address interface – all fields are strings.
  */
 export interface Address {
   flat: string;
@@ -147,7 +146,7 @@ const MultiStepEditUser: React.FC = () => {
   } = useUserData();
   const { auditLogs, fetchAuditLogs } = useAuditLogs();
 
-  // Sub-form states
+  // Sub-form states (addresses are stored as nested objects)
   const [personalInfo, setPersonalInfo] = useState<PersonalInfoData>({
     firstName: "",
     middleName: "",
@@ -193,7 +192,7 @@ const MultiStepEditUser: React.FC = () => {
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Load user + logs
+  // Load user & logs on mount (or when username changes)
   useEffect(() => {
     if (typeof username === "string") {
       fetchUser(username);
@@ -207,7 +206,7 @@ const MultiStepEditUser: React.FC = () => {
   // Populate states once user data is loaded
   useEffect(() => {
     if (userData) {
-      // Normalize address values: if any field is missing (undefined), default it to an empty string.
+      // Normalize address values: if any field is missing, default to an empty string.
       const normResidentialAddress: Address = {
         flat: userData.residentialAddress?.flat ?? "",
         street: userData.residentialAddress?.street ?? "",
@@ -261,7 +260,7 @@ const MultiStepEditUser: React.FC = () => {
     }
   }, [userData]);
 
-  // Check if changes were made
+  // Check if changes were made (using lodash isEqual)
   const changesMade = useMemo(() => {
     if (!userData) return false;
 
@@ -294,7 +293,7 @@ const MultiStepEditUser: React.FC = () => {
     return !isEqual(userData, currentFormData);
   }, [userData, personalInfo, jobDetails, qualifications]);
 
-  // Toggle edit mode (revert if turning off)
+  // Toggle edit mode (reverting changes when turning off)
   const toggleEditMode = useCallback(() => {
     if (isEditMode && userData) {
       // Revert to original user data (normalize addresses as needed)
@@ -355,7 +354,7 @@ const MultiStepEditUser: React.FC = () => {
     setIsEditMode(!isEditMode);
   }, [isEditMode, userData]);
 
-  // Submit changes
+  // Submit changes – note that addresses are sent as nested objects!
   const handleSubmit = useCallback(async () => {
     if (!userData) {
       setGlobalError("No user data loaded yet.");
@@ -364,6 +363,7 @@ const MultiStepEditUser: React.FC = () => {
     setGlobalError(null);
     setSuccessMessage(null);
 
+    // Build the payload with nested objects for addresses.
     const payload = {
       username: userData.username,
       firstName: personalInfo.firstName,
@@ -392,6 +392,7 @@ const MultiStepEditUser: React.FC = () => {
     };
 
     try {
+      // The updateUser hook should send a JSON payload with Content-Type application/json.
       await updateUser(payload);
       setSuccessMessage("User details have been successfully updated!");
       setIsEditMode(false);
@@ -419,7 +420,7 @@ const MultiStepEditUser: React.FC = () => {
     }
   }, [deleteUser, userData, router]);
 
-  // Switch tab
+  // Switch tab and scroll to top
   const handleTabChange = useCallback((value: string) => {
     setActiveTab(value);
     containerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
@@ -466,7 +467,12 @@ const MultiStepEditUser: React.FC = () => {
             </div>
           )}
 
-          <Button onClick={() => setDeleteConfirm(true)} variant="destructive" disabled={!userData} className="flex items-center bg-red-700 hover:bg-red-800 text-white">
+          <Button
+            onClick={() => setDeleteConfirm(true)}
+            variant="destructive"
+            disabled={!userData}
+            className="flex items-center bg-red-700 hover:bg-red-800 text-white"
+          >
             <TrashIcon className="w-4 h-4 mr-1" />
             Delete
           </Button>
@@ -555,8 +561,7 @@ const MultiStepEditUser: React.FC = () => {
               Confirm Deletion
             </DialogTitle>
             <DialogDescription>
-              This action cannot be undone. Are you sure you want to delete the user{" "}
-              <strong>{userData?.username}</strong>?
+              This action cannot be undone. Are you sure you want to delete the user <strong>{userData?.username}</strong>?
             </DialogDescription>
           </DialogHeader>
           <div className="mt-4 flex justify-end space-x-2">
@@ -579,8 +584,7 @@ const MultiStepEditUser: React.FC = () => {
               Confirm Save
             </DialogTitle>
             <DialogDescription>
-              You're about to save all changes made for <strong>{userData?.username}</strong>. Please ensure everything is
-              correct before proceeding.
+              You're about to save all changes made for <strong>{userData?.username}</strong>. Please ensure everything is correct before proceeding.
             </DialogDescription>
           </DialogHeader>
           <div className="mt-4 flex justify-end space-x-2">

@@ -1,4 +1,4 @@
-//src\components\EditUserTabs\GeneralInfo.tsx
+// src/components/EditUserTabs/GeneralInfo.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -28,7 +28,6 @@ import {
 
 // ----------- Types -----------
 
-// Define a proper Address interface where all properties are required
 export interface Address {
   flat: string;
   street: string;
@@ -56,7 +55,6 @@ export interface PersonalInfoData {
   nationality?: string;
   gender?: string;
   bloodGroup?: string;
-  // Addresses are now required objects (even if empty strings)
   residentialAddress: Address;
   permanentAddress: Address;
   sameAsResidential?: boolean;
@@ -443,6 +441,16 @@ export default function PersonalInfoForm({
                   />
                   {renderHistoryIcon("firstName")}
                 </div>
+                {/* Conditionally render history details */}
+                {openFields["firstName"] && (
+                  <HistorySection
+                    field="firstName"
+                    historyList={getFieldHistory("firstName")}
+                    totalCount={getFieldHistory("firstName").length}
+                    currentPage={pagination["firstName"] || 1}
+                    onPageChange={handlePageChange}
+                  />
+                )}
                 {errors.firstName && (
                   <p className="text-red-500 text-sm">{errors.firstName}</p>
                 )}
@@ -464,6 +472,15 @@ export default function PersonalInfoForm({
                   />
                   {renderHistoryIcon("middleName")}
                 </div>
+                {openFields["middleName"] && (
+                  <HistorySection
+                    field="middleName"
+                    historyList={getFieldHistory("middleName")}
+                    totalCount={getFieldHistory("middleName").length}
+                    currentPage={pagination["middleName"] || 1}
+                    onPageChange={handlePageChange}
+                  />
+                )}
               </div>
 
               {/* Last Name */}
@@ -482,6 +499,15 @@ export default function PersonalInfoForm({
                   />
                   {renderHistoryIcon("lastName")}
                 </div>
+                {openFields["lastName"] && (
+                  <HistorySection
+                    field="lastName"
+                    historyList={getFieldHistory("lastName")}
+                    totalCount={getFieldHistory("lastName").length}
+                    currentPage={pagination["lastName"] || 1}
+                    onPageChange={handlePageChange}
+                  />
+                )}
                 {errors.lastName && (
                   <p className="text-red-500 text-sm">{errors.lastName}</p>
                 )}
@@ -507,6 +533,15 @@ export default function PersonalInfoForm({
                   />
                   {renderHistoryIcon("email")}
                 </div>
+                {openFields["email"] && (
+                  <HistorySection
+                    field="email"
+                    historyList={getFieldHistory("email")}
+                    totalCount={getFieldHistory("email").length}
+                    currentPage={pagination["email"] || 1}
+                    onPageChange={handlePageChange}
+                  />
+                )}
                 {errors.email && (
                   <p className="text-red-500 text-sm">{errors.email}</p>
                 )}
@@ -537,6 +572,15 @@ export default function PersonalInfoForm({
                 />
                 {renderHistoryIcon("dob")}
               </div>
+              {openFields["dob"] && (
+                <HistorySection
+                  field="dob"
+                  historyList={getFieldHistory("dob")}
+                  totalCount={getFieldHistory("dob").length}
+                  currentPage={pagination["dob"] || 1}
+                  onPageChange={handlePageChange}
+                />
+              )}
             </div>
 
             {/* Nationality */}
@@ -552,6 +596,15 @@ export default function PersonalInfoForm({
                 />
                 {renderHistoryIcon("nationality")}
               </div>
+              {openFields["nationality"] && (
+                <HistorySection
+                  field="nationality"
+                  historyList={getFieldHistory("nationality")}
+                  totalCount={getFieldHistory("nationality").length}
+                  currentPage={pagination["nationality"] || 1}
+                  onPageChange={handlePageChange}
+                />
+              )}
             </div>
 
             {/* Gender */}
@@ -574,6 +627,15 @@ export default function PersonalInfoForm({
                 </SelectContent>
               </Select>
               {renderHistoryIcon("gender")}
+              {openFields["gender"] && (
+                <HistorySection
+                  field="gender"
+                  historyList={getFieldHistory("gender")}
+                  totalCount={getFieldHistory("gender").length}
+                  currentPage={pagination["gender"] || 1}
+                  onPageChange={handlePageChange}
+                />
+              )}
             </div>
           </div>
 
@@ -604,6 +666,15 @@ export default function PersonalInfoForm({
                 </SelectContent>
               </Select>
               {renderHistoryIcon("bloodGroup")}
+              {openFields["bloodGroup"] && (
+                <HistorySection
+                  field="bloodGroup"
+                  historyList={getFieldHistory("bloodGroup")}
+                  totalCount={getFieldHistory("bloodGroup").length}
+                  currentPage={pagination["bloodGroup"] || 1}
+                  onPageChange={handlePageChange}
+                />
+              )}
             </div>
 
             {/* Phone Number */}
@@ -625,6 +696,15 @@ export default function PersonalInfoForm({
                 />
                 {renderHistoryIcon("phoneNumber")}
               </div>
+              {openFields["phoneNumber"] && (
+                <HistorySection
+                  field="phoneNumber"
+                  historyList={getFieldHistory("phoneNumber")}
+                  totalCount={getFieldHistory("phoneNumber").length}
+                  currentPage={pagination["phoneNumber"] || 1}
+                  onPageChange={handlePageChange}
+                />
+              )}
             </div>
 
             {/* Reset Password */}
@@ -699,6 +779,16 @@ export default function PersonalInfoForm({
                   )
                 )}
               </div>
+              {openFields["residentialAddress"] && (
+                <HistorySection
+                  field="residentialAddress"
+                  historyList={getFieldHistory("residentialAddress")}
+                  totalCount={getFieldHistory("residentialAddress").length}
+                  currentPage={pagination["residentialAddress"] || 1}
+                  onPageChange={handlePageChange}
+                  customLabel="Residential Address"
+                />
+              )}
             </CollapsibleContent>
           </Collapsible>
 
@@ -750,6 +840,16 @@ export default function PersonalInfoForm({
                   )
                 )}
               </div>
+              {openFields["permanentAddress"] && (
+                <HistorySection
+                  field="permanentAddress"
+                  historyList={getFieldHistory("permanentAddress")}
+                  totalCount={getFieldHistory("permanentAddress").length}
+                  currentPage={pagination["permanentAddress"] || 1}
+                  onPageChange={handlePageChange}
+                  customLabel="Permanent Address"
+                />
+              )}
               <div className="flex items-center mt-2">
                 <input
                   type="checkbox"
@@ -825,6 +925,15 @@ export default function PersonalInfoForm({
                           />
                           {renderHistoryIcon(`emergencyContacts.${i}.name`)}
                         </div>
+                        {openFields[`emergencyContacts.${i}.name`] && (
+                          <HistorySection
+                            field={`emergencyContacts.${i}.name`}
+                            historyList={getFieldHistory(`emergencyContacts.${i}.name`)}
+                            totalCount={getFieldHistory(`emergencyContacts.${i}.name`).length}
+                            currentPage={pagination[`emergencyContacts.${i}.name`] || 1}
+                            onPageChange={handlePageChange}
+                          />
+                        )}
                       </div>
 
                       {/* Relationship */}
@@ -840,6 +949,15 @@ export default function PersonalInfoForm({
                           />
                           {renderHistoryIcon(`emergencyContacts.${i}.relationship`)}
                         </div>
+                        {openFields[`emergencyContacts.${i}.relationship`] && (
+                          <HistorySection
+                            field={`emergencyContacts.${i}.relationship`}
+                            historyList={getFieldHistory(`emergencyContacts.${i}.relationship`)}
+                            totalCount={getFieldHistory(`emergencyContacts.${i}.relationship`).length}
+                            currentPage={pagination[`emergencyContacts.${i}.relationship`] || 1}
+                            onPageChange={handlePageChange}
+                          />
+                        )}
                       </div>
 
                       {/* Phone Number */}
@@ -858,6 +976,15 @@ export default function PersonalInfoForm({
                           />
                           {renderHistoryIcon(`emergencyContacts.${i}.phoneNumber`)}
                         </div>
+                        {openFields[`emergencyContacts.${i}.phoneNumber`] && (
+                          <HistorySection
+                            field={`emergencyContacts.${i}.phoneNumber`}
+                            historyList={getFieldHistory(`emergencyContacts.${i}.phoneNumber`)}
+                            totalCount={getFieldHistory(`emergencyContacts.${i}.phoneNumber`).length}
+                            currentPage={pagination[`emergencyContacts.${i}.phoneNumber`] || 1}
+                            onPageChange={handlePageChange}
+                          />
+                        )}
                       </div>
 
                       {/* Email */}
@@ -875,6 +1002,15 @@ export default function PersonalInfoForm({
                           />
                           {renderHistoryIcon(`emergencyContacts.${i}.email`)}
                         </div>
+                        {openFields[`emergencyContacts.${i}.email`] && (
+                          <HistorySection
+                            field={`emergencyContacts.${i}.email`}
+                            historyList={getFieldHistory(`emergencyContacts.${i}.email`)}
+                            totalCount={getFieldHistory(`emergencyContacts.${i}.email`).length}
+                            currentPage={pagination[`emergencyContacts.${i}.email`] || 1}
+                            onPageChange={handlePageChange}
+                          />
+                        )}
                       </div>
                     </div>
                   </div>

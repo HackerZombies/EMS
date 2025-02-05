@@ -182,85 +182,111 @@ enum DocumentCategory {
 }
 
 // ──────────────────────────────────────────────────────────
-// Models
-// ──────────────────────────────────────────────────────────
+
+// ------------------------------
+// User Model
+// ------------------------------
 model User {
-  id                   String               @id @default(auto()) @map("_id") @db.ObjectId
-  username             String               @unique
-  password             String
-  firstName            String
-  middleName           String?
-  lastName             String
-  email                String               @unique
-  phoneNumber          String               @unique
-  dateCreated          DateTime             @default(now())
-  leaveBalance         Int                  @default(28)
-  role                 UserRole             @default(EMPLOYEE)
-  dob                  DateTime?
-  // Removed JSON address fields; added relations to the address models instead:
-  residentialAddress   ResidentialAddress?
-  permanentAddress     PermanentAddress?
-  department           Department?
-  position             Position?
-  nationality          String?
-  gender               Gender?
-  maritalStatus        MaritalStatus?
-  bloodGroup           BloodGroup?          @default(UNKNOWN)
-  joiningDate          DateTime?
-  employmentType       EmploymentType?
-  workLocation         WorkLocation?
-  profileImageUrl      String?
-  avatarImageUrl       String?
-  isFirstTime          Boolean?             @default(true)
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  username     String    @unique
+  password     String
+  firstName    String
+  middleName   String?
+  lastName     String
+  email        String    @unique
+  phoneNumber  String    @unique
+  dateCreated  DateTime  @default(now())
+  leaveBalance Int       @default(28)
+  role         UserRole  @default(EMPLOYEE)
+  dob          DateTime?
+
+  residentialAddress ResidentialAddress?
+  permanentAddress   PermanentAddress?
+  department         Department?
+  position           Position?
+  nationality        String?
+  gender             Gender?
+  maritalStatus      MaritalStatus?
+  bloodGroup         BloodGroup?         @default(UNKNOWN)
+  joiningDate        DateTime?
+  employmentType     EmploymentType?
+  workLocation       WorkLocation?
+  profileImageUrl    String?
+  avatarImageUrl     String?
+  isFirstTime        Boolean?            @default(true)
 
   // Relations
-  leaveRequests        LeaveRequest[]       @relation("UserLeaveRequests")
-  digilocker           Digilocker[]         @relation("UserDigilocker")
-  documents            Document[]           @relation("UserDocuments")
-  tickets              Ticket[]             @relation("UserTickets")
-  messages             Message[]            @relation("UserMessages")
-  hrDocuments          HrDocument[]         @relation("UserHrDocuments")
-  otps                 OTP[]                @relation("UserOTPs")
-  qualifications       Qualification[]      @relation("UserQualifications")
-  employeeDocuments    EmployeeDocument[]   @relation("UserEmployeeDocuments")
-  attendances          Attendance[]         @relation("UserAttendances")
-  experiences          Experience[]         @relation("UserExperiences")
-  certifications       Certification[]      @relation("UserCertifications")
-  auditLogs            AuditLog[]           @relation("UserAuditLogs")
-  emergencyContacts    EmergencyContact[]   @relation("UserEmergencyContacts")
-  notifications        Notification[]       @relation("UserNotifications")
+  leaveRequests     LeaveRequest[]     @relation("UserLeaveRequests")
+  digilocker        Digilocker[]       @relation("UserDigilocker")
+  documents         Document[]         @relation("UserDocuments")
+  tickets           Ticket[]           @relation("UserTickets")
+  messages          Message[]          @relation("UserMessages")
+  hrDocuments       HrDocument[]       @relation("UserHrDocuments")
+  otps              OTP[]              @relation("UserOTPs")
+  qualifications    Qualification[]    @relation("UserQualifications")
+  employeeDocuments EmployeeDocument[] @relation("UserEmployeeDocuments")
+  attendances       Attendance[]       @relation("UserAttendances")
+  experiences       Experience[]       @relation("UserExperiences")
+  certifications    Certification[]    @relation("UserCertifications")
+  auditLogs         AuditLog[]         @relation("UserAuditLogs")
+  emergencyContacts EmergencyContact[] @relation("UserEmergencyContacts")
+
+  // This is the pivot-based notification relationship
+  userNotifications UserNotification[]
+
+  // This is the single-recipient relationship if you want to track who directly received a notification
+  notificationRecipients Notification[] @relation("NotificationRecipient")
 
   @@index([email, phoneNumber], name: "user_contact_index")
 }
 
+// ------------------------------
+// Notification Model
+// ------------------------------
 model Notification {
   id                String   @id @default(auto()) @map("_id") @db.ObjectId
   message           String
   createdAt         DateTime @default(now())
-  isRead            Boolean  @default(false)
-  targetUrl         String? 
-
-  // For a single user:
+  targetUrl         String?
   recipientUsername String?
-  recipient         User?    @relation("UserNotifications", fields: [recipientUsername], references: [username], onDelete: Cascade)
 
-  // For role-based notifications (an array of roles this message targets):
-  roleTargets       String[] // e.g. ["ADMIN","EMPLOYEE","HR"]
+  // Single-recipient reference
+  recipient User? @relation("NotificationRecipient", fields: [recipientUsername], references: [username], onDelete: Cascade)
 
-  // If you want a truly global (to all connected users):
-  // you could just leave both of the above null or default to "everyone"
-    // pinned    Boolean  @default(false)
-  // archived  Boolean  @default(false)
+  // Role-based or broadcast notifications:
+  roleTargets String[]
+
+  // Pivot relationship for many users
+  userNotifications UserNotification[]
+}
+
+// ------------------------------
+// Pivot Model: UserNotification
+// ------------------------------
+model UserNotification {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  // These must match the native types of `User.id` and `Notification.id`.
+  userId         String @db.ObjectId
+  notificationId String @db.ObjectId
+
+  user         User         @relation(fields: [userId], references: [id])
+  notification Notification @relation(fields: [notificationId], references: [id])
+
+  isRead Boolean @default(false)
+
+  @@index([userId])
+  @@index([notificationId])
 }
 
 model EmergencyContact {
-  id           String @id @default(auto()) @map("_id") @db.ObjectId
+  id           String  @id @default(auto()) @map("_id") @db.ObjectId
   name         String
   relationship String
   phoneNumber  String
   email        String?
   userUsername String
-  user         User   @relation("UserEmergencyContacts", fields: [userUsername], references: [username], onDelete: Cascade)
+  user         User    @relation("UserEmergencyContacts", fields: [userUsername], references: [username], onDelete: Cascade)
 }
 
 model Qualification {
@@ -278,38 +304,38 @@ model Qualification {
 }
 
 model Experience {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
   jobTitle    String
   company     String
   startDate   DateTime
   endDate     DateTime?
   description String?
   username    String
-  user        User     @relation("UserExperiences", fields: [username], references: [username], onDelete: Cascade)
+  user        User      @relation("UserExperiences", fields: [username], references: [username], onDelete: Cascade)
 
   @@index([username])
 }
 
 model Certification {
-  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
   name             String
   issuingAuthority String
   licenseNumber    String?
   expiryDate       DateTime?
   username         String
-  user             User     @relation("UserCertifications", fields: [username], references: [username], onDelete: Cascade)
+  user             User      @relation("UserCertifications", fields: [username], references: [username], onDelete: Cascade)
   issueDate        DateTime?
 
   @@index([username])
 }
 
 model EmployeeDocument {
-  id           String          @id @default(auto()) @map("_id") @db.ObjectId
+  id           String            @id @default(auto()) @map("_id") @db.ObjectId
   filename     String
   fileType     String?
   data         Bytes
   size         Int
-  dateUploaded DateTime        @default(now())
+  dateUploaded DateTime          @default(now())
   userUsername String
   category     DocumentCategory?
 
@@ -317,15 +343,15 @@ model EmployeeDocument {
 }
 
 model LeaveRequest {
-  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
   reason        String
   startDate     DateTime
   endDate       DateTime
-  requestStatus String   @default("Pending")
-  dateCreated   DateTime @default(now())
+  requestStatus String    @default("Pending")
+  dateCreated   DateTime  @default(now())
   dateResponded DateTime?
   userUsername  String
-  user          User     @relation("UserLeaveRequests", fields: [userUsername], references: [username], onDelete: Cascade)
+  user          User      @relation("UserLeaveRequests", fields: [userUsername], references: [username], onDelete: Cascade)
 }
 
 model Digilocker {
@@ -370,19 +396,17 @@ model Announcement {
   dateCreated DateTime @default(now())
 
   // For pinned items
-  pinned      Boolean  @default(false)
+  pinned Boolean @default(false)
 
   // For archiving
-  archived    Boolean  @default(false)
+  archived Boolean @default(false)
 
   // Optional image
-  imageUrl    String?
+  imageUrl String?
 
-   // For role-based notifications (an array of roles this message targets):
-  roleTargets       String[] // e.g. ["ADMIN","EMPLOYEE","HR"]
-
+  // For role-based notifications (an array of roles this message targets):
+  roleTargets String[] // e.g. ["ADMIN","EMPLOYEE","HR"]
 }
-
 
 model Ticket {
   id           String    @id @default(auto()) @map("_id") @db.ObjectId
@@ -413,7 +437,7 @@ model OTP {
 }
 
 model Attendance {
-  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
   date              DateTime
   checkInTime       DateTime?
   checkOutTime      DateTime?
@@ -423,11 +447,11 @@ model Attendance {
   checkOutLongitude Float?
 
   // New fields for check-in and check-out addresses
-  checkInAddress    String?
-  checkOutAddress   String?
+  checkInAddress  String?
+  checkOutAddress String?
 
-  userUsername      String
-  user              User     @relation("UserAttendances", fields: [userUsername], references: [username], onDelete: Cascade)
+  userUsername String
+  user         User   @relation("UserAttendances", fields: [userUsername], references: [username], onDelete: Cascade)
 
   @@unique([userUsername, date])
 }
@@ -437,9 +461,9 @@ model Attendance {
 // ──────────────────────────────────────────────────────────
 
 model AuditLog {
-  id             String   @id @default(auto()) @map("_id") @db.ObjectId
-  userUsername   String?
-  user           User?    @relation("UserAuditLogs", fields: [userUsername], references: [username], onDelete: Cascade)
+  id           String  @id @default(auto()) @map("_id") @db.ObjectId
+  userUsername String?
+  user         User?   @relation("UserAuditLogs", fields: [userUsername], references: [username], onDelete: Cascade)
 
   action         String
   performedBy    String
@@ -447,15 +471,16 @@ model AuditLog {
   datePerformed  DateTime @default(now())
   details        String
 }
+
 model ResidentialAddress {
-  id           String @id @default(auto()) @map("_id") @db.ObjectId
-  flat         String?
-  street       String?
-  landmark     String?
-  city         String?
-  district     String?
-  state        String?
-  pin          String?
+  id       String  @id @default(auto()) @map("_id") @db.ObjectId
+  flat     String?
+  street   String?
+  landmark String?
+  city     String?
+  district String?
+  state    String?
+  pin      String?
 
   // One-to-one relation with User
   userUsername String @unique
@@ -463,14 +488,14 @@ model ResidentialAddress {
 }
 
 model PermanentAddress {
-  id           String @id @default(auto()) @map("_id") @db.ObjectId
-  flat         String?
-  street       String?
-  landmark     String?
-  city         String?
-  district     String?
-  state        String?
-  pin          String?
+  id       String  @id @default(auto()) @map("_id") @db.ObjectId
+  flat     String?
+  street   String?
+  landmark String?
+  city     String?
+  district String?
+  state    String?
+  pin      String?
 
   // One-to-one relation with User
   userUsername String @unique

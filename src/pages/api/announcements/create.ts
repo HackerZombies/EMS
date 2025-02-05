@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import cloudinary from "@/lib/cloudinary";
 import formidable, { Fields, Files, File as FormidableFile } from "formidable";
 import fs from "fs";
+
+// 1) Import your updated createNotification
 import { createNotification } from "@/services/notificationService";
 
 export const config = {
@@ -102,19 +104,16 @@ export default async function createAnnouncement(
           },
         });
 
-        // 6) Create notifications
-        // If the user chose "EVERYONE" or left roleTargets empty => all roles
-        // Otherwise, we just pass the roles the user chose in the front end
-        // e.g. ["ADMIN"], or ["ADMIN", "EMPLOYEE"], etc.
+        // 6) Create notifications via your updated service
         let notificationRoles = rolesArray;
-        if (rolesArray.includes("EVERYONE") || rolesArray.length === 0) {
+        // If the user chose "EVERYONE" or left roleTargets empty, assume all roles
+        if (notificationRoles.includes("EVERYONE") || notificationRoles.length === 0) {
           notificationRoles = ["ADMIN", "HR", "EMPLOYEE"];
         }
 
-        // Create a notification for these roles
         await createNotification({
           message: newAnnouncement.title,
-          roleTargets: notificationRoles, // e.g. ["ADMIN", "HR", "EMPLOYEE"]
+          roleTargets: notificationRoles, // e.g. ["ADMIN","HR","EMPLOYEE"]
           targetUrl: `/announcements/${newAnnouncement.id}`,
         });
 

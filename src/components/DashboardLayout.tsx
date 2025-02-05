@@ -19,6 +19,13 @@ import Breadcrumbs from "@/components/Breadcrumbs";
 // 1) Import the ShadCN ScrollArea
 import { ScrollArea } from "@/components/ui/scroll-area";
 
+// 2) Import your custom hook
+import { useSidebarNotifications } from "@/hooks/useSidebarNotifications";
+
+// 3) Import the Badge from shadcn/ui
+import { Badge } from "@/components/ui/badge";
+
+// Helper to fetch the user's avatar image
 async function fetchAvatarImage(): Promise<string> {
   const response = await fetch("/api/users/user/avatar");
   if (!response.ok) throw new Error("Failed to fetch avatar image");
@@ -26,10 +33,12 @@ async function fetchAvatarImage(): Promise<string> {
   return data.avatarImageUrl;
 }
 
+// Type definitions
 type NavItemType = {
   url: string;
   title: string;
   icon: string;
+  unreadCount?: number;
 };
 
 type NavCategoryType = {
@@ -37,11 +46,7 @@ type NavCategoryType = {
   items: NavItemType[];
 };
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
   const router = useRouter();
 
@@ -57,6 +62,13 @@ export default function DashboardLayout({
   // Refs to handle closing the mobile sidebar on outside click
   const sidebarRef = useRef<HTMLDivElement>(null);
   const toggleButtonRef = useRef<HTMLButtonElement>(null);
+
+  // -------------------------------------
+  // Notifications from our custom hook
+  // -------------------------------------
+  const { notifications, markAllNotificationsAsRead } = useSidebarNotifications();
+  // Get total unread
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   // -------------------------------------
   // Fetch Avatar on Mount
@@ -92,6 +104,7 @@ export default function DashboardLayout({
         category: "General",
         items: [
           { url: "/", title: "Home", icon: "ph:house" },
+          // We'll attach the unreadCount to Alerts:
           { url: "/announcements", title: "Alerts", icon: "ph:megaphone" },
           { url: "/leave", title: "Leave", icon: "ph:airplane-takeoff" },
           { url: "/documents", title: "Get Payslips", icon: "ph:file-text" },
@@ -107,9 +120,21 @@ export default function DashboardLayout({
       baseItems.push({
         category: "ADMIN",
         items: [
-          { url: "/add-New-Employee", title: "Add Employees", icon: "ph:address-book" },
-          { url: "/manage/users", title: "Manage Employees", icon: "ph:address-book" },
-          { url: "/hr/attendance", title: "Manage Attendance", icon: "ph:calendar-check" },
+          {
+            url: "/add-New-Employee",
+            title: "Add Employees",
+            icon: "ph:address-book",
+          },
+          {
+            url: "/manage/users",
+            title: "Manage Employees",
+            icon: "ph:address-book",
+          },
+          {
+            url: "/hr/attendance",
+            title: "Manage Attendance",
+            icon: "ph:calendar-check",
+          },
           { url: "/activity", title: "Activity Logs", icon: "ph:clock-clockwise" },
         ],
       });
@@ -119,12 +144,32 @@ export default function DashboardLayout({
       baseItems.push({
         category: "HR Employees",
         items: [
-          { url: "/manage/users", title: "Manage Employees", icon: "ph:address-book" },
-          { url: "/hr/attendance", title: "Manage Attendance", icon: "ph:calendar-check" },
+          {
+            url: "/manage/users",
+            title: "Manage Employees",
+            icon: "ph:address-book",
+          },
+          {
+            url: "/hr/attendance",
+            title: "Manage Attendance",
+            icon: "ph:calendar-check",
+          },
           { url: "/manage/tickets", title: "Resolve Tickets", icon: "ph:ticket" },
-          { url: "/hr/documents", title: "Approve Documents", icon: "ph:files-duotone" },
-          { url: "/manage/documents", title: "Upload Documents", icon: "ph:upload-simple" },
-          { url: "/manage/leave", title: "Manage Leave", icon: "ph:airplane-takeoff" },
+          {
+            url: "/hr/documents",
+            title: "Approve Documents",
+            icon: "ph:files-duotone",
+          },
+          {
+            url: "/manage/documents",
+            title: "Upload Documents",
+            icon: "ph:upload-simple",
+          },
+          {
+            url: "/manage/leave",
+            title: "Manage Leave",
+            icon: "ph:airplane-takeoff",
+          },
         ],
       });
     }
@@ -133,25 +178,42 @@ export default function DashboardLayout({
   }, [session]);
 
   // -------------------------------------
+  // Assign the unreadCount to "Alerts"
+  // -------------------------------------
+  const navItemsWithUnread = useMemo<NavCategoryType[]>(() => {
+    return navItems.map((cat) => {
+      const newCat = { ...cat, items: [...cat.items] };
+      newCat.items = newCat.items.map((item) => {
+        if (item.url === "/announcements") {
+          // attach the count
+          return {
+            ...item,
+            unreadCount: unreadCount,
+          };
+        }
+        return item;
+      });
+      return newCat;
+    });
+  }, [navItems, unreadCount]);
+
+  // -------------------------------------
   // Multiple Category Expand/Collapse
   // -------------------------------------
   const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
 
-  // On mount (or change of role), set default open categories
+  // Expand default categories based on role
   useEffect(() => {
     if (!session?.user) return;
-
     if (session.user.role === "ADMIN") {
       setExpandedCategories(["General", "ADMIN"]);
     } else if (session.user.role === "HR") {
       setExpandedCategories(["General", "HR Employees"]);
     } else {
-      // EMPLOYEE
       setExpandedCategories(["General"]);
     }
   }, [session?.user]);
 
-  // Toggle an individual category
   const toggleCategory = useCallback((cat: string) => {
     setExpandedCategories((prev) =>
       prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
@@ -193,7 +255,6 @@ export default function DashboardLayout({
     return null;
   }, [session?.user.role]);
 
-  // If still loading session
   if (status === "loading") {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -238,21 +299,19 @@ export default function DashboardLayout({
             flex flex-col
           `}
         >
-          {/* 2) Wrap your nav content in a ScrollArea for desktop scrolling */}
+          {/* Use a ScrollArea so the sidebar scrolls on desktop */}
           <ScrollArea className="flex-1 px-3 pb-4 text-white">
             <ul className="pt-2 space-y-2">
-              {/* Render your nav categories */}
-              {navItems.map((category) => {
+              {navItemsWithUnread.map((category) => {
                 const isCollapsed = !expandedCategories.includes(category.category);
                 return (
                   <li key={category.category}>
                     <button
                       onClick={() => toggleCategory(category.category)}
                       className="flex items-center justify-between w-full p-2
-                        cursor-pointer rounded-lg
-                        hover:bg-white/10
-                        transition-colors
-                      "
+                                 cursor-pointer rounded-lg
+                                 hover:bg-white/10
+                                 transition-colors"
                       aria-expanded={!isCollapsed}
                     >
                       <span className="font-medium capitalize">
@@ -268,8 +327,14 @@ export default function DashboardLayout({
                         <li key={item.url}>
                           <Link
                             href={item.url}
+                            onClick={async () => {
+                              // If user clicks on Alerts AND there are unread items, mark them all read
+                              if (item.url === "/announcements" && (item.unreadCount ?? 0) > 0) {
+                                await markAllNotificationsAsRead();
+                              }
+                            }}
                             className={`
-                              flex items-center p-2 text-sm
+                              relative flex items-center p-2 text-sm
                               rounded-lg hover:bg-white/10
                               transition-colors
                               ${
@@ -280,7 +345,24 @@ export default function DashboardLayout({
                             `}
                           >
                             <Icon icon={item.icon} className="w-4 h-4 mr-2" />
-                            {item.title}
+                            <span className="relative inline-block">
+                              {item.title}
+                              {(item.unreadCount ?? 0) > 0 && (
+                                <Badge
+                                  variant="destructive"
+                                  className="
+                                    absolute -top-2 -right-4
+                                    h-5 w-5 text-[0.75rem] leading-none
+                                    p-0 text-center
+                                    font-bold
+                                    flex items-center justify-center
+                                    shadow
+                                  "
+                                >
+                                  {item.unreadCount}
+                                </Badge>
+                              )}
+                            </span>
                           </Link>
                         </li>
                       ))}

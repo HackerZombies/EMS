@@ -22,19 +22,18 @@ import { mapToDocumentCategory } from "@/lib/documentCategory";
 import logger from "@/lib/logger";
 import crypto from "crypto";
 
-// Allowed roles to update users
+// 1) Import your pivot-based createNotification service
+import { createNotification } from "@/services/notificationService";
+
 const ALLOWED_ROLES = ["HR", "ADMIN"];
 
-/** 
- * Helper interface representing a full user with relations.
- */
+/** Helper interface representing a full user with relations. */
 interface FullUser extends PrismaUser {
   qualifications: Qualification[];
   experiences: Experience[];
   certifications: Certification[];
   employeeDocuments: EmployeeDocument[];
   emergencyContacts: EmergencyContact[];
-  // Include addresses so they can be compared.
   residentialAddress: {
     flat: string | null;
     street: string | null;
@@ -55,13 +54,12 @@ interface FullUser extends PrismaUser {
   } | null;
 }
 
-/** 
+/**
  * Build a diff object that describes what fields changed (including nested ones).
  */
 function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
   const changedFields: Record<string, { old: any; new: any }> = {};
 
-  // List of top-level fields to compare.
   const topLevelFields = [
     "firstName",
     "middleName",
@@ -123,7 +121,7 @@ function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
     }
   }
 
-  // Compare array fields (e.g. qualifications, experiences, etc.)
+  // Compare array fields
   function compareArray(fieldName: keyof FullUser) {
     const oldFieldValue = oldUser[fieldName];
     const newFieldValue = newUser[fieldName];
@@ -172,16 +170,15 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    // 3) Destructure the payload from req.body.
-    // Expect addresses to be nested objects (not JSON strings).
+    // 3) Destructure the payload
     const {
       username,
       firstName,
       lastName,
       email,
       phoneNumber,
-      residentialAddress, // Expected as an object: { flat, street, landmark, city, district, state, pin }
-      permanentAddress,   // Expected as an object: { flat, street, landmark, city, district, state, pin }
+      residentialAddress,
+      permanentAddress,
       role,
       password,
       dob,
@@ -203,12 +200,12 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       resetPassword,
     } = req.body;
 
-    // 4) Basic validation of mandatory fields.
+    // 4) Basic validation
     if (!username || !firstName || !lastName || !email || !role) {
       return res.status(400).json({ message: "Missing mandatory fields" });
     }
 
-    // 5) Prepare the main user data to update (addresses are handled separately).
+    // 5) Prepare main user data
     const dataToUpdate: Record<string, any> = {
       firstName,
       lastName,
@@ -231,13 +228,13 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       dataToUpdate.joiningDate = new Date(joiningDate);
     }
 
-    // 6) Handle password reset or direct password change.
+    // 6) Handle password reset or direct password change
     if (resetPassword) {
       const newPassword = crypto.randomBytes(12).toString("hex");
       const hashedPassword = await bcrypt.hash(newPassword, 10);
       dataToUpdate.password = hashedPassword;
 
-      // Send password reset email asynchronously.
+      // Send password reset email asynchronously
       sendUpdateEmail(email, username, newPassword)
         .then(() => logger.info(`Password reset email sent to user ${username}.`))
         .catch((error) =>
@@ -247,7 +244,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       dataToUpdate.password = await bcrypt.hash(password, 10);
     }
 
-    // 7) Validate enum values.
+    // 7) Validate enum values
     const validDepartments: Department[] = [
       Department.Admin,
       Department.HR,
@@ -292,7 +289,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(400).json({ message: "Invalid employment type" });
     }
 
-    // 8) Fetch the old user data (with relations including addresses) for diffing.
+    // 8) Fetch the old user data (with relations)
     const oldUser = (await prisma.user.findUnique({
       where: { username },
       include: {
@@ -310,7 +307,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(404).json({ message: "User not found" });
     }
 
-    // 9) Use addresses as provided (they should be objects).
+    // 9) Parse addresses
     const parsedResidentialAddress =
       residentialAddress && typeof residentialAddress === "object"
         ? residentialAddress
@@ -320,7 +317,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
         ? permanentAddress
         : null;
 
-    // 10) Update the main user record using nested upsert for addresses.
+    // 10) Update the main user record with nested upserts for addresses
     await prisma.user.update({
       where: { username },
       data: {
@@ -376,7 +373,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       },
     });
 
-    // 11) Update sub-collections concurrently.
+    // 11) Update sub-collections concurrently
     await Promise.all([
       handleQualifications(username, qualifications),
       handleExperiences(username, experiences),
@@ -385,7 +382,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       handleEmergencyContacts(username, emergencyContacts),
     ]);
 
-    // 12) Re-fetch the updated user (including addresses).
+    // 12) Re-fetch the updated user
     const newUser = (await prisma.user.findUnique({
       where: { username },
       include: {
@@ -403,16 +400,16 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(500).json({ message: "Could not re-fetch updated user." });
     }
 
-    // 13) Build the diff between old and new user.
+    // 13) Build the diff
     const changedFields = buildChangesDiff(oldUser, newUser);
 
-    // 14) If no changes detected (and no reset), return early.
+    // 14) Check if there are changes or password reset
     const hasChanges = Object.keys(changedFields).length > 0 || resetPassword;
     if (!hasChanges) {
       return res.status(200).json({ message: "No changes detected" });
     }
 
-    // 15) Create an audit log with the changes.
+    // 15) Create an audit log
     const auditLog = await prisma.auditLog.create({
       data: {
         action: "UPDATE_USER",
@@ -423,13 +420,12 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       },
     });
 
-    // 16) Create a notification for ADMIN.
-    await prisma.notification.create({
-      data: {
-        message: `User "${username}" was updated by ${session.user.username}`,
-        roleTargets: ["ADMIN"],
-        targetUrl: `/activity?highlightLog=${auditLog.id}`,
-      },
+    // 16) Instead of creating the Notification directly, call createNotification
+    //     This sets up pivot rows for each user who should see it.
+    await createNotification({
+      message: `User "${username}" was updated by ${session.user.username}`,
+      roleTargets: ["ADMIN"], // or any roles you want to notify
+      targetUrl: `/activity?highlightLog=${auditLog.id}`,
     });
 
     return res.status(200).json({

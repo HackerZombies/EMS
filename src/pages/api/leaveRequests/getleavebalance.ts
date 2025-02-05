@@ -9,18 +9,21 @@ export default async function handler(
     const { username } = req.query;
 
     try {
-      const balance = await prisma.user.findUnique({
+      const user = await prisma.user.findUnique({
         where: { username: String(username) },
         select: { leaveBalance: true },
       });
 
-      if (balance) {
-        res.status(200).json(balance);
+      if (user) {
+        // Use the stored leaveBalance or default to 28 if it's null/undefined.
+        res.status(200).json({ leaveBalance: user.leaveBalance ?? 28 });
       } else {
-        res.status(404).json({ message: "User  not found" });
+        res.status(404).json({ message: "User not found" });
       }
     } catch (error) {
-      res.status(500).json({ message: "Internal server error", error });
+      res
+        .status(500)
+        .json({ message: "Internal server error", error });
     }
   } else {
     res.setHeader("Allow", ["GET"]);

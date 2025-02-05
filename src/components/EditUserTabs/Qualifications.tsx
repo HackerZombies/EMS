@@ -5,8 +5,11 @@ import {
   PlusIcon,
   TrashIcon,
   ArrowPathIcon,
-} from "@heroicons/react/24/outline";
-import { ChevronDown, ChevronRight, AlertCircle } from "lucide-react";
+  ChevronDownIcon,
+  ChevronRightIcon,
+  ExclamationCircleIcon,
+} from '@heroicons/react/24/outline';
+
 
 // Shadcn UI components
 import { Button } from "@/components/ui/button";
@@ -19,11 +22,6 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import {
-  HoverCard,
-  HoverCardTrigger,
-  HoverCardContent,
-} from "@/components/ui/hover-card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Table,
@@ -33,11 +31,57 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge"; // For “Recently Updated” status
+import { Badge } from "@/components/ui/badge";
 
 // Types
 import { ChangeHistoryEntry } from "@/types/audit";
 
+// Utility: Format ISO date to yyyy-MM-dd for <input type="date">
+function formatDate(isoDate?: string) {
+  return isoDate ? new Date(isoDate).toISOString().split("T")[0] : "";
+}
+
+/**
+ * HistorySection component displays the change history for a given field.
+ */
+function HistorySection({
+  field,
+  historyList,
+  onClose,
+}: {
+  field: string;
+  historyList: ChangeHistoryEntry[];
+  onClose: () => void;
+}) {
+  return (
+    <div className="mt-2 p-2 bg-gray-50 border border-gray-300 rounded-md">
+      <div className="flex justify-between items-center">
+        <span className="text-sm font-semibold">History for {field}</span>
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          Close
+        </Button>
+      </div>
+      <ScrollArea className="max-h-48 mt-2">
+        {historyList.map((entry, i) => (
+          <div key={i} className="border-b pb-1 mb-1">
+            <p className="text-xs">
+              <strong>{entry.performedBy}</strong> at{" "}
+              {new Date(entry.datePerformed).toLocaleString()}
+            </p>
+            <p className="text-xs">
+              <strong>From:</strong> {entry.old}
+            </p>
+            <p className="text-xs">
+              <strong>To:</strong> {entry.new}
+            </p>
+          </div>
+        ))}
+      </ScrollArea>
+    </div>
+  );
+}
+
+/** Qualification type */
 export interface Qualification {
   name: string;
   level: string;
@@ -47,6 +91,7 @@ export interface Qualification {
   endDate?: string;
 }
 
+/** Experience type */
 export interface Experience {
   jobTitle: string;
   company: string;
@@ -55,6 +100,7 @@ export interface Experience {
   description: string;
 }
 
+/** Certification type */
 export interface Certification {
   name: string;
   issuingAuthority: string;
@@ -63,12 +109,14 @@ export interface Certification {
   expiryDate: string;
 }
 
+/** QualificationsData type */
 export interface QualificationsData {
   qualifications: Qualification[];
   experiences: Experience[];
   certifications: Certification[];
 }
 
+/** Props for QualificationsForm */
 interface QualificationsFormProps {
   formData: QualificationsData;
   setFormData: React.Dispatch<React.SetStateAction<QualificationsData>>;
@@ -76,37 +124,31 @@ interface QualificationsFormProps {
   isEditMode: boolean;
 }
 
-/** Convert ISO date to yyyy-MM-dd for <input type="date"> */
-function formatDate(isoDate?: string) {
-  return isoDate ? new Date(isoDate).toISOString().split("T")[0] : "";
-}
-
-/** Returns all changes for a field path (e.g. “qualifications.0.level”) */
+/** Helper: Retrieve the history for a given field path */
 function getFieldHistory(
   changeHistory: Record<string, ChangeHistoryEntry[]>,
   path: string
-) {
+): ChangeHistoryEntry[] {
   return changeHistory[path] || [];
 }
 
-/** Finds the largest datePerformed among all changes for an item prefix (e.g. “qualifications.0.”). */
+/** Helper: Get the latest change date for an item given a prefix (e.g. "qualifications.0.") */
 function getLatestChangeForItem(
   changeHistory: Record<string, ChangeHistoryEntry[]>,
   itemPath: string
 ): Date | null {
   let latest: Date | null = null;
   const prefix = itemPath + ".";
-  for (const path of Object.keys(changeHistory)) {
+  Object.keys(changeHistory).forEach((path) => {
     if (path.startsWith(prefix)) {
-      const entries = changeHistory[path];
-      for (const entry of entries) {
+      getFieldHistory(changeHistory, path).forEach((entry) => {
         const d = new Date(entry.datePerformed);
         if (!latest || d > latest) {
           latest = d;
         }
-      }
+      });
     }
-  }
+  });
   return latest;
 }
 
@@ -116,22 +158,24 @@ export default function QualificationsForm({
   changeHistory,
   isEditMode,
 }: QualificationsFormProps) {
-  // track which row is expanded in each table
+  // State for expanded rows in each section:
   const [openQualRows, setOpenQualRows] = useState<Record<number, boolean>>({});
   const [openExpRows, setOpenExpRows] = useState<Record<number, boolean>>({});
   const [openCertRows, setOpenCertRows] = useState<Record<number, boolean>>({});
+  // State for open history panels (keyed by field path)
+  const [openHistoryPanels, setOpenHistoryPanels] = useState<Record<string, boolean>>({});
 
-  // track which field’s history is open
-  const [openFields, setOpenFields] = useState<Record<string, boolean>>({});
+  // Toggle history panel for a given field path.
+  const toggleHistoryPanel = (fieldPath: string) => {
+    setOpenHistoryPanels((prev) => ({
+      ...prev,
+      [fieldPath]: !prev[fieldPath],
+    }));
+  };
 
-  /** Toggle a field’s history panel. */
-  function toggleFieldHistory(fieldPath: string) {
-    setOpenFields((prev) => ({ ...prev, [fieldPath]: !prev[fieldPath] }));
-  }
-
-  // ---------------------------
-  //    QUALIFICATIONS LOGIC
-  // ---------------------------
+  // =============================
+  // Qualifications Logic
+  // =============================
   function handleQualificationChange(
     idx: number,
     field: keyof Qualification,
@@ -151,14 +195,7 @@ export default function QualificationsForm({
       ...formData,
       qualifications: [
         ...formData.qualifications,
-        {
-          name: "",
-          level: "",
-          specializations: [],
-          institution: "",
-          startDate: "",
-          endDate: "",
-        },
+        { name: "", level: "", specializations: [], institution: "", startDate: "", endDate: "" },
       ],
     });
   }
@@ -172,16 +209,16 @@ export default function QualificationsForm({
     setOpenQualRows((prev) => ({ ...prev, [idx]: !prev[idx] }));
   }
 
-  // ---------------------------
-  //    EXPERIENCES LOGIC
-  // ---------------------------
+  // =============================
+  // Experiences Logic
+  // =============================
   function handleExperienceChange(
     idx: number,
     field: keyof Experience,
     value: string
   ) {
     const updated = [...formData.experiences];
-    (updated[idx] as any)[field] = value;
+    updated[idx] = { ...updated[idx], [field]: value };
     setFormData({ ...formData, experiences: updated });
   }
 
@@ -204,16 +241,16 @@ export default function QualificationsForm({
     setOpenExpRows((prev) => ({ ...prev, [idx]: !prev[idx] }));
   }
 
-  // ---------------------------
-  //    CERTIFICATIONS LOGIC
-  // ---------------------------
+  // =============================
+  // Certifications Logic
+  // =============================
   function handleCertificationChange(
     idx: number,
     field: keyof Certification,
     value: string
   ) {
     const updated = [...formData.certifications];
-    (updated[idx] as any)[field] = value;
+    updated[idx] = { ...updated[idx], [field]: value };
     setFormData({ ...formData, certifications: updated });
   }
 
@@ -222,13 +259,7 @@ export default function QualificationsForm({
       ...formData,
       certifications: [
         ...formData.certifications,
-        {
-          name: "",
-          issuingAuthority: "",
-          licenseNumber: "",
-          issueDate: "",
-          expiryDate: "",
-        },
+        { name: "", issuingAuthority: "", licenseNumber: "", issueDate: "", expiryDate: "" },
       ],
     });
   }
@@ -242,75 +273,60 @@ export default function QualificationsForm({
     setOpenCertRows((prev) => ({ ...prev, [idx]: !prev[idx] }));
   }
 
-  // ---------------------------
-  //    RENDER
-  // ---------------------------
   return (
-    <div className="space-y-10 text-gray-900 bg-white/80 p-4 md:p-6 rounded-md shadow-sm">
+    <div className="space-y-8 text-gray-900 bg-white p-4 md:p-6 rounded-md shadow-sm">
       {/* QUALIFICATIONS TABLE */}
       <div>
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg md:text-xl font-bold text-black">Qualifications</h2>
+          <h2 className="text-xl font-bold">Qualifications</h2>
           {isEditMode && (
-            <Button
-              onClick={addQualification}
-              className="bg-gray-800 hover:bg-gray-700 text-white text-sm md:text-base"
-            >
-              <PlusIcon className="w-4 h-4 mr-1" />
+            <Button onClick={addQualification} className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-white">
+              <PlusIcon className="w-4 h-4" />
               Add
             </Button>
           )}
         </div>
-
-        {/* Wrap table in an overflow-x-auto container for mobile */}
-        <div className="w-full overflow-x-auto border border-gray-300 rounded-md">
-          <Table className="min-w-[600px]"> 
+        <div className="overflow-x-auto border border-gray-300 rounded-md">
+          <Table className="min-w-[600px]">
             <TableHeader>
               <TableRow className="bg-gray-100">
-                <TableHead className="w-1/4 text-black text-sm md:text-base">Level</TableHead>
-                <TableHead className="w-1/4 text-black text-sm md:text-base">Name</TableHead>
-                <TableHead className="w-1/4 text-black text-sm md:text-base">Start Date</TableHead>
-                <TableHead className="w-1/4 text-black text-sm md:text-base">End Date</TableHead>
-                <TableHead className="text-right text-black text-sm md:text-base">Actions</TableHead>
+                <TableHead className="w-1/4">Level</TableHead>
+                <TableHead className="w-1/4">Name</TableHead>
+                <TableHead className="w-1/4">Start Date</TableHead>
+                <TableHead className="w-1/4">End Date</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {formData.qualifications.map((q, idx) => {
                 const rowOpen = openQualRows[idx] || false;
                 const itemPath = `qualifications.${idx}`;
-                const lastChanged = getLatestChangeForItem(changeHistory, itemPath);
-
+                const latestChange = getLatestChangeForItem(changeHistory, itemPath);
                 return (
                   <React.Fragment key={idx}>
                     {/* Summary Row */}
-                    <TableRow className="hover:bg-gray-50 text-sm md:text-base">
+                    <TableRow className="hover:bg-gray-50">
                       <TableCell>
-                        <div className="flex items-center space-x-2">
-                          {lastChanged && (
-                            <AlertCircle className="w-4 h-4 text-red-600" />
-                          )}
+                        <div className="flex items-center gap-2">
                           <span>{q.level || "N/A"}</span>
-                          {/* If lastChanged => show badge */}
-                          {lastChanged && (
+                          {latestChange && (
                             <Badge variant="outline" className="text-red-800 border-red-300">
-                              Updated {lastChanged.toLocaleString()}
+                              Updated {latestChange.toLocaleString()}
                             </Badge>
                           )}
                         </div>
                       </TableCell>
-                      <TableCell>
-                        {q.level === "Schooling" ? "N/A" : q.name || "N/A"}
-                      </TableCell>
+                      <TableCell>{q.level === "Schooling" ? "N/A" : q.name || "N/A"}</TableCell>
                       <TableCell>{formatDate(q.startDate) || "N/A"}</TableCell>
                       <TableCell>{formatDate(q.endDate) || "N/A"}</TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end space-x-2">
+                        <div className="flex items-center justify-end gap-2">
                           {isEditMode && (
                             <Button
                               variant="destructive"
                               size="sm"
                               onClick={() => removeQualification(idx)}
-                              className="bg-red-700 hover:bg-red-800 text-white text-sm md:text-base"
+                              className="bg-red-700 hover:bg-red-800 text-white"
                             >
                               <TrashIcon className="w-4 h-4" />
                             </Button>
@@ -318,29 +334,26 @@ export default function QualificationsForm({
                           <Button
                             variant="outline"
                             size="sm"
-                            className="flex items-center space-x-1 border-gray-300 text-gray-700 hover:bg-gray-200"
                             onClick={() => toggleQualRow(idx)}
+                            className="flex items-center gap-1"
                           >
                             {rowOpen ? (
-                              <ChevronDown className="w-4 h-4 text-gray-700" />
+                              <ChevronDownIcon className="w-4 h-4" />
                             ) : (
-                              <ChevronRight className="w-4 h-4 text-gray-700" />
+                              <ChevronRightIcon className="w-4 h-4" />
                             )}
                             <span>View</span>
                           </Button>
                         </div>
                       </TableCell>
                     </TableRow>
-
-                    {/* Expanded Row */}
                     {rowOpen && (
-                      <TableRow className="bg-gray-50 text-sm md:text-base">
+                      <TableRow className="bg-gray-50">
                         <TableCell colSpan={5} className="p-4">
-                          {/* Expandable content */}
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {/* Level */}
+                            {/* Level Field */}
                             <div className="relative">
-                              <Label className="text-black text-sm md:text-base">Level</Label>
+                              <Label className="text-sm">Level</Label>
                               <Select
                                 onValueChange={(val) =>
                                   handleQualificationChange(idx, "level", val)
@@ -348,10 +361,10 @@ export default function QualificationsForm({
                                 value={q.level}
                                 disabled={!isEditMode}
                               >
-                                <SelectTrigger className="mt-1 border border-gray-300 text-black text-sm md:text-base">
+                                <SelectTrigger className="mt-1 border border-gray-300">
                                   <SelectValue placeholder="Select level" />
                                 </SelectTrigger>
-                                <SelectContent className="bg-white border border-gray-300 text-black text-sm md:text-base">
+                                <SelectContent className="bg-white border border-gray-300">
                                   <SelectItem value="Schooling">Schooling</SelectItem>
                                   <SelectItem value="Graduate">Graduate</SelectItem>
                                   <SelectItem value="Masters">Masters</SelectItem>
@@ -359,88 +372,83 @@ export default function QualificationsForm({
                                   <SelectItem value="Other">Other</SelectItem>
                                 </SelectContent>
                               </Select>
-                              {/* Field-level history icon for level */}
-                              {getFieldHistory(changeHistory, `${itemPath}.level`).length > 0 && (
-                                <HoverCard>
-                                  <HoverCardTrigger asChild>
-                                    <button
-                                      type="button"
-                                      className="absolute top-[2.3rem] right-2 text-red-500"
-                                      onClick={() => {
-                                        toggleFieldHistory(`${itemPath}.level`);
-                                      }}
-                                    >
-                                      <ArrowPathIcon className="w-5 h-5" />
-                                    </button>
-                                  </HoverCardTrigger>
-                                  <HoverCardContent>
-                                    <p className="text-sm text-gray-900">Changes History</p>
-                                  </HoverCardContent>
-                                  {openFields[`${itemPath}.level`] && (
-                                    <div className="mt-2 p-4 bg-white border border-gray-200 rounded-md">
-                                      <ScrollArea className="h-48 space-y-2 text-sm text-gray-900">
-                                        {getFieldHistory(changeHistory, `${itemPath}.level`).map(
-                                          (entry, i) => (
-                                            <div key={i} className="border-b pb-1">
-                                              <p>
-                                                <strong>{entry.performedBy}</strong> at{" "}
-                                                {new Date(entry.datePerformed).toLocaleString()}
-                                              </p>
-                                              <p>
-                                                <strong>From:</strong> {entry.old}
-                                              </p>
-                                              <p>
-                                                <strong>To:</strong> {entry.new}
-                                              </p>
-                                            </div>
-                                          )
-                                        )}
-                                      </ScrollArea>
-                                    </div>
-                                  )}
-                                </HoverCard>
+                              <button
+                                type="button"
+                                className="absolute top-0 right-0 mt-1 mr-1 text-red-500"
+                                onClick={() => toggleHistoryPanel(`${itemPath}.level`)}
+                              >
+                                <ArrowPathIcon className="w-4 h-4" />
+                              </button>
+                              {openHistoryPanels[`${itemPath}.level`] && (
+                                <HistorySection
+                                  field="Level"
+                                  historyList={getFieldHistory(changeHistory, `${itemPath}.level`)}
+                                  onClose={() => toggleHistoryPanel(`${itemPath}.level`)}
+                                />
                               )}
                             </div>
 
-                            {/* Name (hidden if schooling) */}
+                            {/* Name Field */}
                             {q.level !== "Schooling" && (
-                              <div>
-                                <Label className="text-black text-sm md:text-base">Name</Label>
+                              <div className="relative">
+                                <Label className="text-sm">Name</Label>
                                 <Input
                                   value={q.name}
                                   onChange={(e) =>
                                     handleQualificationChange(idx, "name", e.target.value)
                                   }
                                   disabled={!isEditMode}
-                                  className="border border-gray-300 text-black text-sm md:text-base"
+                                  className="mt-1 border border-gray-300"
                                 />
+                                <button
+                                  type="button"
+                                  className="absolute top-0 right-0 mt-1 mr-1 text-red-500"
+                                  onClick={() => toggleHistoryPanel(`${itemPath}.name`)}
+                                >
+                                  <ArrowPathIcon className="w-4 h-4" />
+                                </button>
+                                {openHistoryPanels[`${itemPath}.name`] && (
+                                  <HistorySection
+                                    field="Name"
+                                    historyList={getFieldHistory(changeHistory, `${itemPath}.name`)}
+                                    onClose={() => toggleHistoryPanel(`${itemPath}.name`)}
+                                  />
+                                )}
                               </div>
                             )}
 
-                            {/* Specializations */}
-                            <div>
-                              <Label className="text-black text-sm md:text-base">
-                                Specializations
-                              </Label>
+                            {/* Specializations Field */}
+                            <div className="relative">
+                              <Label className="text-sm">Specializations</Label>
                               <Input
                                 value={q.specializations.join(", ")}
                                 onChange={(e) =>
-                                  handleQualificationChange(
-                                    idx,
-                                    "specializations",
-                                    e.target.value
-                                  )
+                                  handleQualificationChange(idx, "specializations", e.target.value)
                                 }
                                 disabled={!isEditMode}
-                                className="border border-gray-300 text-black text-sm md:text-base"
+                                className="mt-1 border border-gray-300"
                               />
+                              <button
+                                type="button"
+                                className="absolute top-0 right-0 mt-1 mr-1 text-red-500"
+                                onClick={() =>
+                                  toggleHistoryPanel(`${itemPath}.specializations`)
+                                }
+                              >
+                                <ArrowPathIcon className="w-4 h-4" />
+                              </button>
+                              {openHistoryPanels[`${itemPath}.specializations`] && (
+                                <HistorySection
+                                  field="Specializations"
+                                  historyList={getFieldHistory(changeHistory, `${itemPath}.specializations`)}
+                                  onClose={() => toggleHistoryPanel(`${itemPath}.specializations`)}
+                                />
+                              )}
                             </div>
 
-                            {/* Institution (textarea) */}
-                            <div className="md:col-span-2">
-                              <Label className="text-black text-sm md:text-base">
-                                Institution (Address)
-                              </Label>
+                            {/* Institution Field */}
+                            <div className="relative md:col-span-2">
+                              <Label className="text-sm">Institution (Address)</Label>
                               <textarea
                                 value={q.institution}
                                 onChange={(e) =>
@@ -448,13 +456,27 @@ export default function QualificationsForm({
                                 }
                                 rows={2}
                                 disabled={!isEditMode}
-                                className="w-full mt-1 border border-gray-300 rounded-md p-2 text-black text-sm md:text-base"
+                                className="mt-1 w-full border border-gray-300 rounded-md p-2"
                               />
+                              <button
+                                type="button"
+                                className="absolute top-0 right-0 mt-1 mr-1 text-red-500"
+                                onClick={() => toggleHistoryPanel(`${itemPath}.institution`)}
+                              >
+                                <ArrowPathIcon className="w-4 h-4" />
+                              </button>
+                              {openHistoryPanels[`${itemPath}.institution`] && (
+                                <HistorySection
+                                  field="Institution"
+                                  historyList={getFieldHistory(changeHistory, `${itemPath}.institution`)}
+                                  onClose={() => toggleHistoryPanel(`${itemPath}.institution`)}
+                                />
+                              )}
                             </div>
 
-                            {/* Start Date */}
-                            <div>
-                              <Label className="text-black text-sm md:text-base">Start Date</Label>
+                            {/* Start Date Field */}
+                            <div className="relative">
+                              <Label className="text-sm">Start Date</Label>
                               <Input
                                 type="date"
                                 value={formatDate(q.startDate)}
@@ -462,13 +484,27 @@ export default function QualificationsForm({
                                   handleQualificationChange(idx, "startDate", e.target.value)
                                 }
                                 disabled={!isEditMode}
-                                className="border border-gray-300 text-black text-sm md:text-base"
+                                className="mt-1 border border-gray-300"
                               />
+                              <button
+                                type="button"
+                                className="absolute top-0 right-0 mt-1 mr-1 text-red-500"
+                                onClick={() => toggleHistoryPanel(`${itemPath}.startDate`)}
+                              >
+                                <ArrowPathIcon className="w-4 h-4" />
+                              </button>
+                              {openHistoryPanels[`${itemPath}.startDate`] && (
+                                <HistorySection
+                                  field="Start Date"
+                                  historyList={getFieldHistory(changeHistory, `${itemPath}.startDate`)}
+                                  onClose={() => toggleHistoryPanel(`${itemPath}.startDate`)}
+                                />
+                              )}
                             </div>
 
-                            {/* End Date */}
-                            <div>
-                              <Label className="text-black text-sm md:text-base">End Date</Label>
+                            {/* End Date Field */}
+                            <div className="relative">
+                              <Label className="text-sm">End Date</Label>
                               <Input
                                 type="date"
                                 value={formatDate(q.endDate)}
@@ -476,8 +512,22 @@ export default function QualificationsForm({
                                   handleQualificationChange(idx, "endDate", e.target.value)
                                 }
                                 disabled={!isEditMode}
-                                className="border border-gray-300 text-black text-sm md:text-base"
+                                className="mt-1 border border-gray-300"
                               />
+                              <button
+                                type="button"
+                                className="absolute top-0 right-0 mt-1 mr-1 text-red-500"
+                                onClick={() => toggleHistoryPanel(`${itemPath}.endDate`)}
+                              >
+                                <ArrowPathIcon className="w-4 h-4" />
+                              </button>
+                              {openHistoryPanels[`${itemPath}.endDate`] && (
+                                <HistorySection
+                                  field="End Date"
+                                  historyList={getFieldHistory(changeHistory, `${itemPath}.endDate`)}
+                                  onClose={() => toggleHistoryPanel(`${itemPath}.endDate`)}
+                                />
+                              )}
                             </div>
                           </div>
                         </TableCell>
@@ -494,27 +544,26 @@ export default function QualificationsForm({
       {/* EXPERIENCES TABLE */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg md:text-xl font-bold text-black">Experiences</h2>
+          <h2 className="text-xl font-bold text-black">Experiences</h2>
           {isEditMode && (
             <Button
               onClick={addExperience}
-              className="bg-gray-800 hover:bg-gray-700 text-white text-sm md:text-base"
+              className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-white"
             >
-              <PlusIcon className="w-4 h-4 mr-1" />
+              <PlusIcon className="w-4 h-4" />
               Add
             </Button>
           )}
         </div>
-
-        <div className="w-full overflow-x-auto border border-gray-300 rounded-md">
+        <div className="overflow-x-auto border border-gray-300 rounded-md">
           <Table className="min-w-[600px]">
             <TableHeader>
               <TableRow className="bg-gray-100">
-                <TableHead className="w-1/5 text-black text-sm md:text-base">Job Title</TableHead>
-                <TableHead className="w-1/5 text-black text-sm md:text-base">Company</TableHead>
-                <TableHead className="w-1/5 text-black text-sm md:text-base">Start Date</TableHead>
-                <TableHead className="w-1/5 text-black text-sm md:text-base">End Date</TableHead>
-                <TableHead className="text-right text-black text-sm md:text-base">Actions</TableHead>
+                <TableHead className="w-1/4">Job Title</TableHead>
+                <TableHead className="w-1/4">Company</TableHead>
+                <TableHead className="w-1/4">Start Date</TableHead>
+                <TableHead className="w-1/4">End Date</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -522,16 +571,11 @@ export default function QualificationsForm({
                 const rowOpen = openExpRows[idx] || false;
                 const itemPath = `experiences.${idx}`;
                 const lastChanged = getLatestChangeForItem(changeHistory, itemPath);
-
                 return (
                   <React.Fragment key={idx}>
-                    {/* Summary Row */}
-                    <TableRow className="hover:bg-gray-50 text-sm md:text-base">
+                    <TableRow className="hover:bg-gray-50">
                       <TableCell>
-                        <div className="flex items-center space-x-2">
-                          {lastChanged && (
-                            <AlertCircle className="w-4 h-4 text-red-600" />
-                          )}
+                        <div className="flex items-center gap-2">
                           <span>{exp.jobTitle || "N/A"}</span>
                           {lastChanged && (
                             <Badge variant="outline" className="text-red-800 border-red-300">
@@ -547,13 +591,13 @@ export default function QualificationsForm({
                       <TableCell>{formatDate(exp.startDate) || "N/A"}</TableCell>
                       <TableCell>{formatDate(exp.endDate) || "N/A"}</TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end space-x-2">
+                        <div className="flex items-center gap-2">
                           {isEditMode && (
                             <Button
                               variant="destructive"
                               size="sm"
                               onClick={() => removeExperience(idx)}
-                              className="bg-red-700 hover:bg-red-800 text-white text-sm md:text-base"
+                              className="bg-red-700 hover:bg-red-800 text-white"
                             >
                               <TrashIcon className="w-4 h-4" />
                             </Button>
@@ -561,55 +605,78 @@ export default function QualificationsForm({
                           <Button
                             variant="outline"
                             size="sm"
-                            className="flex items-center space-x-1 border-gray-300 text-gray-700 hover:bg-gray-200"
                             onClick={() => toggleExpRow(idx)}
+                            className="flex items-center gap-1"
                           >
                             {rowOpen ? (
-                              <ChevronDown className="w-4 h-4 text-gray-700" />
+                              <ChevronDownIcon className="w-4 h-4" />
                             ) : (
-                              <ChevronRight className="w-4 h-4 text-gray-700" />
+                              <ChevronRightIcon className="w-4 h-4" />
                             )}
                             <span>View</span>
                           </Button>
                         </div>
                       </TableCell>
                     </TableRow>
-
-                    {/* Expanded Row */}
                     {rowOpen && (
-                      <TableRow className="bg-gray-50 text-sm md:text-base">
+                      <TableRow className="bg-gray-50">
                         <TableCell colSpan={5} className="p-4">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {/* Job Title */}
-                            <div>
-                              <Label className="text-black text-sm md:text-base">Job Title</Label>
+                            {/* Job Title Field */}
+                            <div className="relative">
+                              <Label className="text-sm">Job Title</Label>
                               <Input
                                 value={exp.jobTitle}
                                 onChange={(e) =>
                                   handleExperienceChange(idx, "jobTitle", e.target.value)
                                 }
                                 disabled={!isEditMode}
-                                className="mt-1 border-gray-300 text-black text-sm md:text-base"
+                                className="mt-1 border border-gray-300"
                               />
+                              <button
+                                type="button"
+                                className="absolute top-0 right-0 mt-1 mr-1 text-red-500"
+                                onClick={() => toggleHistoryPanel(`${itemPath}.jobTitle`)}
+                              >
+                                <ArrowPathIcon className="w-4 h-4" />
+                              </button>
+                              {openHistoryPanels[`${itemPath}.jobTitle`] && (
+                                <HistorySection
+                                  field="Job Title"
+                                  historyList={getFieldHistory(changeHistory, `${itemPath}.jobTitle`)}
+                                  onClose={() => toggleHistoryPanel(`${itemPath}.jobTitle`)}
+                                />
+                              )}
                             </div>
-
-                            {/* Company (textarea) */}
-                            <div>
-                              <Label className="text-black text-sm md:text-base">Company</Label>
-                              <textarea
-                                rows={2}
+                            {/* Company Field */}
+                            <div className="relative">
+                              <Label className="text-sm">Company</Label>
+                              <Input
                                 value={exp.company}
                                 onChange={(e) =>
                                   handleExperienceChange(idx, "company", e.target.value)
                                 }
                                 disabled={!isEditMode}
-                                className="mt-1 w-full border border-gray-300 rounded-md p-2 text-black text-sm md:text-base"
+                                className="mt-1 border border-gray-300"
                               />
+                              <button
+                                type="button"
+                                className="absolute top-0 right-0 mt-1 mr-1 text-red-500"
+                                onClick={() => toggleHistoryPanel(`${itemPath}.company`)}
+                              >
+                                <ArrowPathIcon className="w-4 h-4" />
+                              </button>
+                              {openHistoryPanels[`${itemPath}.company`] && (
+                                <HistorySection
+                                  field="Company"
+                                  historyList={getFieldHistory(changeHistory, `${itemPath}.company`)}
+                                  onClose={() => toggleHistoryPanel(`${itemPath}.company`)}
+                                />
+                              )}
                             </div>
-
-                            {/* Start Date */}
-                            <div>
-                              <Label className="text-black text-sm md:text-base">Start Date</Label>
+                            {/* Start Date Field */}
+                            <div className="relative">
+                              <Label className="text-sm">Start Date</Label>
                               <Input
                                 type="date"
                                 value={formatDate(exp.startDate)}
@@ -617,13 +684,26 @@ export default function QualificationsForm({
                                   handleExperienceChange(idx, "startDate", e.target.value)
                                 }
                                 disabled={!isEditMode}
-                                className="mt-1 border-gray-300 text-black text-sm md:text-base"
+                                className="mt-1 border border-gray-300"
                               />
+                              <button
+                                type="button"
+                                className="absolute top-0 right-0 mt-1 mr-1 text-red-500"
+                                onClick={() => toggleHistoryPanel(`${itemPath}.startDate`)}
+                              >
+                                <ArrowPathIcon className="w-4 h-4" />
+                              </button>
+                              {openHistoryPanels[`${itemPath}.startDate`] && (
+                                <HistorySection
+                                  field="Start Date"
+                                  historyList={getFieldHistory(changeHistory, `${itemPath}.startDate`)}
+                                  onClose={() => toggleHistoryPanel(`${itemPath}.startDate`)}
+                                />
+                              )}
                             </div>
-
-                            {/* End Date */}
-                            <div>
-                              <Label className="text-black text-sm md:text-base">End Date</Label>
+                            {/* End Date Field */}
+                            <div className="relative">
+                              <Label className="text-sm">End Date</Label>
                               <Input
                                 type="date"
                                 value={formatDate(exp.endDate)}
@@ -631,13 +711,26 @@ export default function QualificationsForm({
                                   handleExperienceChange(idx, "endDate", e.target.value)
                                 }
                                 disabled={!isEditMode}
-                                className="mt-1 border-gray-300 text-black text-sm md:text-base"
+                                className="mt-1 border border-gray-300"
                               />
+                              <button
+                                type="button"
+                                className="absolute top-0 right-0 mt-1 mr-1 text-red-500"
+                                onClick={() => toggleHistoryPanel(`${itemPath}.endDate`)}
+                              >
+                                <ArrowPathIcon className="w-4 h-4" />
+                              </button>
+                              {openHistoryPanels[`${itemPath}.endDate`] && (
+                                <HistorySection
+                                  field="End Date"
+                                  historyList={getFieldHistory(changeHistory, `${itemPath}.endDate`)}
+                                  onClose={() => toggleHistoryPanel(`${itemPath}.endDate`)}
+                                />
+                              )}
                             </div>
-
-                            {/* Description */}
-                            <div className="md:col-span-2">
-                              <Label className="text-black text-sm md:text-base">Description</Label>
+                            {/* Description Field */}
+                            <div className="relative md:col-span-2">
+                              <Label className="text-sm">Description</Label>
                               <textarea
                                 rows={3}
                                 value={exp.description}
@@ -645,8 +738,22 @@ export default function QualificationsForm({
                                   handleExperienceChange(idx, "description", e.target.value)
                                 }
                                 disabled={!isEditMode}
-                                className="mt-1 w-full border border-gray-300 rounded-md p-2 text-black text-sm md:text-base"
+                                className="mt-1 w-full border border-gray-300 rounded-md p-2"
                               />
+                              <button
+                                type="button"
+                                className="absolute top-0 right-0 mt-1 mr-1 text-red-500"
+                                onClick={() => toggleHistoryPanel(`${itemPath}.description`)}
+                              >
+                                <ArrowPathIcon className="w-4 h-4" />
+                              </button>
+                              {openHistoryPanels[`${itemPath}.description`] && (
+                                <HistorySection
+                                  field="Description"
+                                  historyList={getFieldHistory(changeHistory, `${itemPath}.description`)}
+                                  onClose={() => toggleHistoryPanel(`${itemPath}.description`)}
+                                />
+                              )}
                             </div>
                           </div>
                         </TableCell>
@@ -663,29 +770,26 @@ export default function QualificationsForm({
       {/* CERTIFICATIONS TABLE */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg md:text-xl font-bold text-black">Certifications</h2>
+          <h2 className="text-xl font-bold text-black">Certifications</h2>
           {isEditMode && (
             <Button
               onClick={addCertification}
-              className="bg-gray-800 hover:bg-gray-700 text-white text-sm md:text-base"
+              className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-white"
             >
-              <PlusIcon className="w-4 h-4 mr-1" />
+              <PlusIcon className="w-4 h-4" />
               Add
             </Button>
           )}
         </div>
-
-        <div className="w-full overflow-x-auto border border-gray-300 rounded-md">
+        <div className="overflow-x-auto border border-gray-300 rounded-md">
           <Table className="min-w-[600px]">
             <TableHeader>
               <TableRow className="bg-gray-100">
-                <TableHead className="w-1/5 text-black text-sm md:text-base">Name</TableHead>
-                <TableHead className="w-1/5 text-black text-sm md:text-base">
-                  Issuing Authority
-                </TableHead>
-                <TableHead className="w-1/5 text-black text-sm md:text-base">Issue Date</TableHead>
-                <TableHead className="w-1/5 text-black text-sm md:text-base">Expiry Date</TableHead>
-                <TableHead className="text-right text-black text-sm md:text-base">Actions</TableHead>
+                <TableHead className="w-1/5">Name</TableHead>
+                <TableHead className="w-1/5">Issuing Authority</TableHead>
+                <TableHead className="w-1/5">Issue Date</TableHead>
+                <TableHead className="w-1/5">Expiry Date</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -693,16 +797,11 @@ export default function QualificationsForm({
                 const rowOpen = openCertRows[idx] || false;
                 const itemPath = `certifications.${idx}`;
                 const lastChanged = getLatestChangeForItem(changeHistory, itemPath);
-
                 return (
                   <React.Fragment key={idx}>
-                    {/* Summary Row */}
-                    <TableRow className="hover:bg-gray-50 text-sm md:text-base">
+                    <TableRow className="hover:bg-gray-50">
                       <TableCell>
-                        <div className="flex items-center space-x-2">
-                          {lastChanged && (
-                            <AlertCircle className="w-4 h-4 text-red-600" />
-                          )}
+                        <div className="flex items-center gap-2">
                           <span>{cert.name || "N/A"}</span>
                           {lastChanged && (
                             <Badge variant="outline" className="text-red-800 border-red-300">
@@ -715,21 +814,18 @@ export default function QualificationsForm({
                         {cert.issuingAuthority
                           ? cert.issuingAuthority.substring(0, 20)
                           : "N/A"}
-                        {cert.issuingAuthority &&
-                        cert.issuingAuthority.length > 20
-                          ? "..."
-                          : ""}
+                        {cert.issuingAuthority && cert.issuingAuthority.length > 20 ? "..." : ""}
                       </TableCell>
                       <TableCell>{formatDate(cert.issueDate) || "N/A"}</TableCell>
                       <TableCell>{formatDate(cert.expiryDate) || "N/A"}</TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end space-x-2">
+                        <div className="flex items-center gap-2">
                           {isEditMode && (
                             <Button
                               variant="destructive"
                               size="sm"
                               onClick={() => removeCertification(idx)}
-                              className="bg-red-700 hover:bg-red-800 text-white text-sm md:text-base"
+                              className="bg-red-700 hover:bg-red-800 text-white"
                             >
                               <TrashIcon className="w-4 h-4" />
                             </Button>
@@ -737,81 +833,107 @@ export default function QualificationsForm({
                           <Button
                             variant="outline"
                             size="sm"
-                            className="flex items-center space-x-1 border-gray-300 text-gray-700 hover:bg-gray-200"
                             onClick={() => toggleCertRow(idx)}
+                            className="flex items-center gap-1"
                           >
                             {rowOpen ? (
-                              <ChevronDown className="w-4 h-4 text-gray-700" />
+                              <ChevronDownIcon className="w-4 h-4" />
                             ) : (
-                              <ChevronRight className="w-4 h-4 text-gray-700" />
+                              <ChevronRightIcon className="w-4 h-4" />
                             )}
                             <span>View</span>
                           </Button>
                         </div>
                       </TableCell>
                     </TableRow>
-
-                    {/* Expanded Row */}
                     {rowOpen && (
-                      <TableRow className="bg-gray-50 text-sm md:text-base">
+                      <TableRow className="bg-gray-50">
                         <TableCell colSpan={5} className="p-4">
-                          {/* Full detail row */}
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {/* Name */}
-                            <div>
-                              <Label className="text-black text-sm md:text-base">Name</Label>
+                            {/* Name Field */}
+                            <div className="relative">
+                              <Label className="text-sm">Name</Label>
                               <Input
                                 value={cert.name}
                                 onChange={(e) =>
                                   handleCertificationChange(idx, "name", e.target.value)
                                 }
                                 disabled={!isEditMode}
-                                className="mt-1 border-gray-300 text-black text-sm md:text-base"
+                                className="mt-1 border border-gray-300"
                               />
+                              <button
+                                type="button"
+                                className="absolute top-0 right-0 mt-1 mr-1 text-red-500"
+                                onClick={() => toggleHistoryPanel(`${itemPath}.name`)}
+                              >
+                                <ArrowPathIcon className="w-4 h-4" />
+                              </button>
+                              {openHistoryPanels[`${itemPath}.name`] && (
+                                <HistorySection
+                                  field="Name"
+                                  historyList={getFieldHistory(changeHistory, `${itemPath}.name`)}
+                                  onClose={() => toggleHistoryPanel(`${itemPath}.name`)}
+                                />
+                              )}
                             </div>
-
-                            {/* Issuing Authority (textarea) */}
-                            <div>
-                              <Label className="text-black text-sm md:text-base">
-                                Issuing Authority
-                              </Label>
+                            {/* Issuing Authority Field */}
+                            <div className="relative">
+                              <Label className="text-sm">Issuing Authority</Label>
                               <textarea
                                 rows={2}
                                 value={cert.issuingAuthority}
                                 onChange={(e) =>
-                                  handleCertificationChange(
-                                    idx,
-                                    "issuingAuthority",
-                                    e.target.value
-                                  )
+                                  handleCertificationChange(idx, "issuingAuthority", e.target.value)
                                 }
                                 disabled={!isEditMode}
-                                className="mt-1 w-full border border-gray-300 rounded-md p-2 text-black text-sm md:text-base"
+                                className="mt-1 w-full border border-gray-300 rounded-md p-2"
                               />
+                              <button
+                                type="button"
+                                className="absolute top-0 right-0 mt-1 mr-1 text-red-500"
+                                onClick={() =>
+                                  toggleHistoryPanel(`${itemPath}.issuingAuthority`)
+                                }
+                              >
+                                <ArrowPathIcon className="w-4 h-4" />
+                              </button>
+                              {openHistoryPanels[`${itemPath}.issuingAuthority`] && (
+                                <HistorySection
+                                  field="Issuing Authority"
+                                  historyList={getFieldHistory(changeHistory, `${itemPath}.issuingAuthority`)}
+                                  onClose={() => toggleHistoryPanel(`${itemPath}.issuingAuthority`)}
+                                />
+                              )}
                             </div>
-
-                            {/* License Number */}
-                            <div>
-                              <Label className="text-black text-sm md:text-base">
-                                License Number
-                              </Label>
+                            {/* License Number Field */}
+                            <div className="relative">
+                              <Label className="text-sm">License Number</Label>
                               <Input
                                 value={cert.licenseNumber}
                                 onChange={(e) =>
-                                  handleCertificationChange(
-                                    idx,
-                                    "licenseNumber",
-                                    e.target.value
-                                  )
+                                  handleCertificationChange(idx, "licenseNumber", e.target.value)
                                 }
                                 disabled={!isEditMode}
-                                className="mt-1 border-gray-300 text-black text-sm md:text-base"
+                                className="mt-1 border border-gray-300"
                               />
+                              <button
+                                type="button"
+                                className="absolute top-0 right-0 mt-1 mr-1 text-red-500"
+                                onClick={() => toggleHistoryPanel(`${itemPath}.licenseNumber`)}
+                              >
+                                <ArrowPathIcon className="w-4 h-4" />
+                              </button>
+                              {openHistoryPanels[`${itemPath}.licenseNumber`] && (
+                                <HistorySection
+                                  field="License Number"
+                                  historyList={getFieldHistory(changeHistory, `${itemPath}.licenseNumber`)}
+                                  onClose={() => toggleHistoryPanel(`${itemPath}.licenseNumber`)}
+                                />
+                              )}
                             </div>
-
-                            {/* Issue Date */}
-                            <div>
-                              <Label className="text-black text-sm md:text-base">Issue Date</Label>
+                            {/* Issue Date Field */}
+                            <div className="relative">
+                              <Label className="text-sm">Issue Date</Label>
                               <Input
                                 type="date"
                                 value={formatDate(cert.issueDate)}
@@ -819,13 +941,26 @@ export default function QualificationsForm({
                                   handleCertificationChange(idx, "issueDate", e.target.value)
                                 }
                                 disabled={!isEditMode}
-                                className="mt-1 border-gray-300 text-black text-sm md:text-base"
+                                className="mt-1 border border-gray-300"
                               />
+                              <button
+                                type="button"
+                                className="absolute top-0 right-0 mt-1 mr-1 text-red-500"
+                                onClick={() => toggleHistoryPanel(`${itemPath}.issueDate`)}
+                              >
+                                <ArrowPathIcon className="w-4 h-4" />
+                              </button>
+                              {openHistoryPanels[`${itemPath}.issueDate`] && (
+                                <HistorySection
+                                  field="Issue Date"
+                                  historyList={getFieldHistory(changeHistory, `${itemPath}.issueDate`)}
+                                  onClose={() => toggleHistoryPanel(`${itemPath}.issueDate`)}
+                                />
+                              )}
                             </div>
-
-                            {/* Expiry Date */}
-                            <div>
-                              <Label className="text-black text-sm md:text-base">Expiry Date</Label>
+                            {/* Expiry Date Field */}
+                            <div className="relative">
+                              <Label className="text-sm">Expiry Date</Label>
                               <Input
                                 type="date"
                                 value={formatDate(cert.expiryDate)}
@@ -833,8 +968,22 @@ export default function QualificationsForm({
                                   handleCertificationChange(idx, "expiryDate", e.target.value)
                                 }
                                 disabled={!isEditMode}
-                                className="mt-1 border-gray-300 text-black text-sm md:text-base"
+                                className="mt-1 border border-gray-300"
                               />
+                              <button
+                                type="button"
+                                className="absolute top-0 right-0 mt-1 mr-1 text-red-500"
+                                onClick={() => toggleHistoryPanel(`${itemPath}.expiryDate`)}
+                              >
+                                <ArrowPathIcon className="w-4 h-4" />
+                              </button>
+                              {openHistoryPanels[`${itemPath}.expiryDate`] && (
+                                <HistorySection
+                                  field="Expiry Date"
+                                  historyList={getFieldHistory(changeHistory, `${itemPath}.expiryDate`)}
+                                  onClose={() => toggleHistoryPanel(`${itemPath}.expiryDate`)}
+                                />
+                              )}
                             </div>
                           </div>
                         </TableCell>

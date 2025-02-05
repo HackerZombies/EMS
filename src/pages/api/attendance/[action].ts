@@ -3,6 +3,8 @@ import { NextApiRequest, NextApiResponse } from "next";
 import { prisma } from "@/lib/prisma";
 import { broadcastAttendanceUpdate } from "../socket";
 import { reverseGeocodeFromMapbox } from "@/lib/mapbox";
+
+// 1) Import the updated createNotification
 import { createNotification } from "@/services/notificationService";
 
 export default async function handleAttendanceAction(
@@ -83,7 +85,7 @@ export default async function handleAttendanceAction(
           checkInTime: new Date(checkInTime),
           checkInLatitude: parseFloat(checkInLatitude),
           checkInLongitude: parseFloat(checkInLongitude),
-          checkInAddress, // <--- Now recognized by Prisma
+          checkInAddress,
           userUsername: username,
         },
         include: {
@@ -93,6 +95,7 @@ export default async function handleAttendanceAction(
         },
       });
 
+      // Create notifications for HR & ADMIN if needed
       if (updatedAttendance) {
         await createNotification({
           message: `User ${updatedAttendance.user.username} just checked in`,
@@ -146,7 +149,7 @@ export default async function handleAttendanceAction(
           checkOutTime: new Date(checkOutTime),
           checkOutLatitude: parseFloat(checkOutLatitude),
           checkOutLongitude: parseFloat(checkOutLongitude),
-          checkOutAddress, // <--- Also recognized by Prisma
+          checkOutAddress,
         },
         include: {
           user: {
@@ -155,6 +158,7 @@ export default async function handleAttendanceAction(
         },
       });
 
+      // Create notifications for HR & ADMIN if needed
       if (updatedAttendance) {
         await createNotification({
           message: `User ${updatedAttendance.user.username} just checked out`,

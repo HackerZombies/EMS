@@ -1,154 +1,131 @@
-import Head from "next/head";
-import LeaveCard from "@/components/LeaveCard";
-import { useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
-import { LeaveRequest } from "@prisma/client";
-import { motion } from "framer-motion";
-import Link from "next/link";
-import { Icon } from "@iconify/react";
+"use client"
+
+import { useEffect, useState, useCallback } from "react"
+import { useSession } from "next-auth/react"
+import type { LeaveRequest } from "@prisma/client"
+import Link from "next/link"
+import { Plane, Plus } from "lucide-react"
+import LeaveCard from "@/components/LeaveCard"
+import { Button } from "@/components/ui/button"
 
 export default function Leave() {
-  const { data: session } = useSession();
+  const { data: session } = useSession()
+  const [balance, setBalance] = useState<number>(28)
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([])
+  const [totalLeaveDuration, setTotalLeaveDuration] = useState<number>(0)
 
-  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
-  const [totalLeaveDuration, setTotalLeaveDuration] = useState<number>(0);
-  const [balance, setBalance] = useState<number>(0);
-
-  // Improved duration calculation: inclusive of start and end dates
-  const calculateDurationInDays = (start: string | Date, end: string | Date): number => {
-    const startDate = start instanceof Date ? start : new Date(start + "T00:00:00Z");
-    const endDate = end instanceof Date ? end : new Date(end + "T00:00:00Z");
-    const diffMs = endDate.getTime() - startDate.getTime();
-    if (diffMs < 0) return 0;
-    return Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
-  };
+  const calculateDurationInDays = useCallback(
+    (start: string | Date, end: string | Date): number => {
+      const startDate =
+        start instanceof Date ? start : new Date(`${start}T00:00:00Z`)
+      const endDate =
+        end instanceof Date ? end : new Date(`${end}T00:00:00Z`)
+      const diffMs = endDate.getTime() - startDate.getTime()
+      if (diffMs < 0) return 0
+      return Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1
+    },
+    []
+  )
 
   useEffect(() => {
-    if (!session?.user?.username) return;
+    if (!session?.user?.username) return
 
     const fetchLeaveRequests = async () => {
       try {
         const response = await fetch(
           `/api/leaveRequests?userUsername=${session.user.username}`
-        );
-        const data: LeaveRequest[] = await response.json();
+        )
+        if (!response.ok) {
+          throw new Error("Failed to fetch leave requests")
+        }
+        const data: LeaveRequest[] = await response.json()
 
-        // Sort using Date objects conversion to ensure proper sorting
-        const sortedData = data.sort((a, b) => 
-          new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
-        );
+        // Sort by earliest start date
+        const sortedData = data.sort(
+          (a, b) =>
+            new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+        )
+        setLeaveRequests(sortedData)
 
-        setLeaveRequests(sortedData);
-
-        let totalDuration = 0;
-        sortedData.forEach((request) => {
+        // Calculate total accepted/pending duration
+        const totalDuration = sortedData.reduce((acc, request) => {
           if (request.requestStatus !== "Declined") {
-            const duration = calculateDurationInDays(
-              request.startDate,
-              request.endDate
-            );
-            totalDuration += duration;
+            return acc + calculateDurationInDays(request.startDate, request.endDate)
           }
-        });
-        setTotalLeaveDuration(totalDuration);
+          return acc
+        }, 0)
+        setTotalLeaveDuration(totalDuration)
       } catch (error) {
-        console.error("Error fetching leave requests:", error);
+        console.error("Error fetching leave requests:", error)
       }
-    };
-
-    fetchLeaveRequests();
-  }, [session]);
-
-  useEffect(() => {
-    if (!session?.user?.username) return;
+    }
 
     const fetchBalance = async () => {
       try {
         const response = await fetch(
           `/api/leaveRequests/getleavebalance?username=${session.user.username}`
-        );
+        )
         if (!response.ok) {
-          throw new Error("Failed to fetch leave balance");
+          throw new Error("Failed to fetch leave balance")
         }
-        const data = await response.json();
-        setBalance(data.leaveBalance);
+        const data = await response.json()
+        setBalance(data.leaveBalance ?? 28)
       } catch (error) {
-        console.error("Error fetching leave balance:", error);
+        console.error("Error fetching leave balance:", error)
+        setBalance(28)
       }
-    };
+    }
 
-    fetchBalance();
-  }, [session]);
+    fetchLeaveRequests()
+    fetchBalance()
+  }, [session, calculateDurationInDays])
 
-  const listVariants = {
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.07,
-      },
-    },
-    hidden: {
-      opacity: 0,
-      transition: {
-        when: "afterChildren",
-      },
-    },
-  };
-
-  const itemVariants = {
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: { type: "tween" },
-    },
-    hidden: { opacity: 0, y: 10 },
-  };
+  const usedDays = totalLeaveDuration
+  const remainingDays = balance - usedDays
 
   return (
-    <>
-      <Head>
-        <title>EMS - Leave</title>
-      </Head>
-      <div className="min-h-screen p-5 bg-gradient-to-b from-gray-800 to-black bg-opacity-20 rounded-lg">
-        <div className="flex flex-col md:flex-row justify-between items-center mb-4">
-          <h1 className="text-3xl md:text-4xl font-semibold text-white">
-            Leave
-          </h1>
-          <Link scroll={false} href="/leave/new">
-            <button className="mt-2 md:mt-0 px-4 py-2 font-bold text-white bg-gradient-to-r from-green-400 to-green-600 rounded-2xl shadow-lg transition-transform transform hover:scale-105 hover:shadow-xl">
+    <div className="min-h-screen  p-6 md:p-10">
+      <div className="max-w-5xl mx-auto">
+        {/* Header Section */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+         
+          <Link href="/leave/new" passHref>
+            <Button className="bg-teal-600 hover:bg-teal-700 text-white font-medium shadow">
+              <Plus className="mr-2 h-4 w-4" />
               New Leave Request
-            </button>
+            </Button>
           </Link>
         </div>
-        <div className="mb-4">
-          <h2 className="text-white font-bold">
-            Leave Balance: Granted: {balance} days | Used: {totalLeaveDuration} days |{" "}
-            Remaining: {balance - totalLeaveDuration} days
-          </h2>
+
+        {/* Small Leave Balance Overview */}
+        <div className="mb-6 flex flex-wrap items-center space-x-4 text-sm text-white">
+          <span className="font-medium">Used:</span>
+          <span>{usedDays} days</span>
+          <span className="font-medium">| Remaining:</span>
+          <span>{remainingDays < 0 ? 0 : remainingDays} days</span>
+          <span className="font-medium">| Total Granted:</span>
+          <span>{balance} days</span>
         </div>
+
+        {/* Leave Requests List */}
         {leaveRequests.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-2 text-center text-neutral-400 mt-10">
-            <Icon icon="ph:airplane-takeoff-light" width="8em" />
-            <h2 className="text-2xl font-semibold text-white">No leave requests</h2>
-            <p className="text-neutral-500">
-              Click &apos;New Leave Request&apos; in the top right to create one.
+          <div className="text-center py-12">
+            <Plane className="h-16 w-16 text-gray-400 mb-4 mx-auto" />
+            <h3 className="text-lg font-semibold text-gray-700 mb-2">
+              No Leave Requests
+            </h3>
+            <p className="text-white">
+              Click &apos;New Leave Request&apos; to create one.
             </p>
           </div>
         ) : (
-          <motion.div
-            className="flex flex-col gap-2"
-            initial="hidden"
-            animate="visible"
-            variants={listVariants}
-          >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {leaveRequests.map((leave) => (
-              <motion.div key={leave.id} variants={itemVariants}>
-                <LeaveCard leaveData={leave} />
-              </motion.div>
+              <LeaveCard key={leave.id} leaveData={leave} />
             ))}
-          </motion.div>
+          </div>
         )}
       </div>
-    </>
-  );
+    </div>
+  )
 }

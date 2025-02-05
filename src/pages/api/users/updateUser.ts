@@ -154,8 +154,8 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       lastName,
       email,
       phoneNumber,
-      residentialAddress, // now sent as either a JSON string or an object
-      permanentAddress,   // now sent as either a JSON string or an object
+      residentialAddress, // expected to be an object
+      permanentAddress,   // expected to be an object
       role,
       password,
       dob,
@@ -282,33 +282,13 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(404).json({ message: "User not found" });
     }
 
-    // 8) Parse addresses from the request.
-    // If the address is a string, attempt to parse it; if it is an object, use it directly.
-    let parsedResidentialAddress = null;
-    if (residentialAddress) {
-      if (typeof residentialAddress === "string") {
-        try {
-          parsedResidentialAddress = JSON.parse(residentialAddress);
-        } catch (err) {
-          return res.status(400).json({ message: "Invalid JSON for residentialAddress" });
-        }
-      } else if (typeof residentialAddress === "object") {
-        parsedResidentialAddress = residentialAddress;
-      }
-    }
-
-    let parsedPermanentAddress = null;
-    if (permanentAddress) {
-      if (typeof permanentAddress === "string") {
-        try {
-          parsedPermanentAddress = JSON.parse(permanentAddress);
-        } catch (err) {
-          return res.status(400).json({ message: "Invalid JSON for permanentAddress" });
-        }
-      } else if (typeof permanentAddress === "object") {
-        parsedPermanentAddress = permanentAddress;
-      }
-    }
+    // 8) Use addresses as provided (no JSON parsing needed)
+    const parsedResidentialAddress = residentialAddress && typeof residentialAddress === "object" 
+      ? residentialAddress 
+      : null;
+    const parsedPermanentAddress = permanentAddress && typeof permanentAddress === "object" 
+      ? permanentAddress 
+      : null;
 
     // 9) Update main user record using nested upsert for addresses.
     await prisma.user.update({

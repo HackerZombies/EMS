@@ -4,7 +4,6 @@ import { NextApiRequest, NextApiResponse } from "next";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../auth/[...nextauth]";
-import { DocumentCategory } from "@prisma/client"; // Import DocumentCategory from Prisma
 
 const ALLOWED_ROLES = ["HR", "ADMIN"];
 
@@ -32,7 +31,7 @@ export default async function handler(
       return res.status(400).json({ message: "Username is required" });
     }
 
-    // Fetch user with qualifications, experiences, certifications, employeeDocuments
+    // Fetch the user with all desired relations.
     const user = await prisma.user.findUnique({
       where: { username: username as string },
       include: {
@@ -50,7 +49,10 @@ export default async function handler(
             category: true,
           },
         },
-      },
+        // Include the address relations.
+        residentialAddress: true,
+        permanentAddress: true,
+      } as any, // Use "as any" if TS still complains (ideally, run `npx prisma generate` first)
     });
 
     if (!user) {

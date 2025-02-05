@@ -34,6 +34,25 @@ interface FullUser extends PrismaUser {
   certifications: Certification[];
   employeeDocuments: EmployeeDocument[];
   emergencyContacts: EmergencyContact[];
+  // Include addresses so they can be compared.
+  residentialAddress: {
+    flat: string | null;
+    street: string | null;
+    landmark: string | null;
+    city: string | null;
+    district: string | null;
+    state: string | null;
+    pin: string | null;
+  } | null;
+  permanentAddress: {
+    flat: string | null;
+    street: string | null;
+    landmark: string | null;
+    city: string | null;
+    district: string | null;
+    state: string | null;
+    pin: string | null;
+  } | null;
 }
 
 /** 
@@ -273,7 +292,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(400).json({ message: "Invalid employment type" });
     }
 
-    // 8) Fetch the old user data (with relations) for diffing.
+    // 8) Fetch the old user data (with relations including addresses) for diffing.
     const oldUser = (await prisma.user.findUnique({
       where: { username },
       include: {
@@ -282,6 +301,8 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
         certifications: true,
         employeeDocuments: true,
         emergencyContacts: true,
+        residentialAddress: true,
+        permanentAddress: true,
       },
     })) as FullUser | null;
 
@@ -364,7 +385,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       handleEmergencyContacts(username, emergencyContacts),
     ]);
 
-    // 12) Re-fetch the updated user.
+    // 12) Re-fetch the updated user (including addresses).
     const newUser = (await prisma.user.findUnique({
       where: { username },
       include: {
@@ -373,6 +394,8 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
         certifications: true,
         employeeDocuments: true,
         emergencyContacts: true,
+        residentialAddress: true,
+        permanentAddress: true,
       },
     })) as FullUser | null;
 

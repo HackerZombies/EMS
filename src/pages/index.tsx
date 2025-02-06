@@ -42,7 +42,7 @@ export default function Dashboard() {
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         {/* First Row: Notification & Announcement side by side */}
         <motion.div
-          className="sm:col-span-1 lg:col-span-2 mt-6"
+          className="sm:col-span-1 lg:col-span-2 "
           variants={itemVariants}
           whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
         >

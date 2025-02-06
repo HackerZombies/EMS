@@ -15,10 +15,7 @@ export default function NotificationCard() {
 
   // Sort descending by creation date, then take the 5 most recent notifications
   const recentNotifications = [...notifications]
-    .sort(
-      (a, b) =>
-        new Date(b.createdAt).valueOf() - new Date(a.createdAt).valueOf()
-    )
+    .sort((a, b) => new Date(b.createdAt).valueOf() - new Date(a.createdAt).valueOf())
     .slice(0, 5);
 
   // Mark notification as read when clicking the notification (opening it)
@@ -32,7 +29,7 @@ export default function NotificationCard() {
   }
 
   return (
-    <Card className="bg-white dark:bg-gray-800 shadow-lg p-2 rounded-lg overflow-hidden min-h-[400px]">
+    <Card className="bg-white dark:bg-gray-800 shadow-lg p-2 rounded-lg min-h-[450px]">
       <CardHeader className="p-1">
         <CardTitle className="text-sm">Notifications</CardTitle>
       </CardHeader>
@@ -51,7 +48,7 @@ export default function NotificationCard() {
           ))
         )}
         {/* Link to view all notifications on the announcements page (notifications tab) */}
-        <div className="mt-1 text-right">
+        <div className="mt-8 text-right">
           <Link
             href="/announcements?tab=notifications"
             className="text-xs text-blue-500 hover:underline"

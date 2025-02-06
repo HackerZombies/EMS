@@ -1,22 +1,16 @@
+// src/components/AttendanceDetails.tsx
 'use client'
 
 import React, { useMemo, useState } from 'react'
 import {
   format,
   differenceInMinutes,
-  startOfMonth,
-  endOfMonth,
+  startOfDay,
+  endOfDay,
 } from 'date-fns'
 import { motion } from 'framer-motion'
 import { Calendar, Clock } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Attendance } from '@prisma/client'
 
 interface MobileAttendanceDetailsProps {
@@ -33,7 +27,10 @@ export default function MobileAttendanceDetails({
   attendanceRecords,
   userName,
 }: MobileAttendanceDetailsProps) {
-  const [monthFilter, setMonthFilter] = useState<string>(format(new Date(), 'yyyy-MM'))
+  // Filtering is disabled by default.
+  const [filterEnabled, setFilterEnabled] = useState<boolean>(false)
+  // dateFilter holds a value like "2023-07-15" when filtering is enabled.
+  const [dateFilter, setDateFilter] = useState<string | null>(null)
 
   const processedRecords = useMemo(() => {
     return attendanceRecords.map((record): AttendanceWithDuration => {
@@ -69,16 +66,21 @@ export default function MobileAttendanceDetails({
     })
   }, [attendanceRecords])
 
+  // When filtering is enabled, filter records by the selected day.
+  // Otherwise, show all processed records.
   const filteredRecords = useMemo(() => {
-    const [year, month] = monthFilter.split('-')
-    const startDate = startOfMonth(new Date(parseInt(year), parseInt(month) - 1))
-    const endDate = endOfMonth(startDate)
+    if (!filterEnabled || !dateFilter) {
+      return processedRecords
+    }
+    const selectedDate = new Date(dateFilter)
+    const startDate = startOfDay(selectedDate)
+    const endDate = endOfDay(selectedDate)
 
     return processedRecords.filter((record) => {
       const recordDate = new Date(record.date)
       return recordDate >= startDate && recordDate <= endDate
     })
-  }, [processedRecords, monthFilter])
+  }, [processedRecords, filterEnabled, dateFilter])
 
   const stats = useMemo(() => {
     const total = filteredRecords.length
@@ -101,26 +103,40 @@ export default function MobileAttendanceDetails({
               Viewing attendance records for {userName || 'User'}
             </p>
           </div>
-          <Select value={monthFilter} onValueChange={setMonthFilter}>
-            <SelectTrigger className="w-[140px] bg-zinc-700 border-zinc-600 text-xs">
-              <Calendar className="w-3 h-3 mr-1" />
-              <SelectValue placeholder="Select month" />
-            </SelectTrigger>
-            <SelectContent className="bg-zinc-700 border-zinc-600">
-              {Array.from({ length: 12 }, (_, i) => {
-                const date = new Date(2024, i, 1)
-                return (
-                  <SelectItem
-                    key={i}
-                    value={format(date, 'yyyy-MM')}
-                    className="text-zinc-300 hover:bg-zinc-600 text-sm"
-                  >
-                    {format(date, 'MMMM yyyy')}
-                  </SelectItem>
-                )
-              })}
-            </SelectContent>
-          </Select>
+          {filterEnabled ? (
+            <div className="flex items-center space-x-2">
+              {/* Date Picker Input */}
+              <div className="flex items-center bg-zinc-700 border border-zinc-600 rounded px-2 py-1 text-xs">
+                <Calendar className="w-3 h-3 mr-1" />
+                <input
+                  type="date"
+                  value={dateFilter || format(new Date(), 'yyyy-MM-dd')}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                  className="bg-transparent text-zinc-200 outline-none"
+                />
+              </div>
+              <button
+                onClick={() => {
+                  setFilterEnabled(false)
+                  setDateFilter(null)
+                }}
+                className="text-xs text-zinc-400 underline"
+              >
+                Exit Filter
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                setFilterEnabled(true)
+                // Set default to today's date when enabling filter.
+                setDateFilter(format(new Date(), 'yyyy-MM-dd'))
+              }}
+              className="text-xs text-zinc-400 underline"
+            >
+              Enable Filter
+            </button>
+          )}
         </div>
 
         {/* Stats row */}

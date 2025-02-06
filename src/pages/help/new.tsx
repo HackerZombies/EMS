@@ -46,11 +46,11 @@ export default function NewTicket() {
         throw new Error(errorData.message || "Failed to create ticket."); // Throw error if response is not ok
       }
 
-      toast.success("Ticket created successfully!"); // Show success toast
+   
       await router.push("/help"); // Redirect to help page
     } catch (error: any) {
       console.error("Error creating ticket:", error);
-      toast.error(error.message || "An unexpected error occurred."); // Show error toast
+  
     } finally {
       setLoading(false); // Stop loading
     }
@@ -77,13 +77,13 @@ export default function NewTicket() {
                 Subject <span className="text-red-500">*</span>
               </label>
               <Input
-                id="subject"
-                name="subject"
-                type="text"
-                placeholder="Enter the subject of your ticket"
-                required
-                className="border border-gray-300 focus:border-blue-500"
-              />
+  id="subject"
+  name="subject"
+  type="text"
+  placeholder="Enter the subject of your ticket"
+  required
+  className="text-black border border-gray-300 focus:border-blue-500"
+/>
             </div>
 
             {/* Description Field */}
@@ -92,12 +92,12 @@ export default function NewTicket() {
                 Description <span className="text-red-500">*</span>
               </label>
               <Textarea
-                id="description"
-                name="description"
-                placeholder="Provide a detailed description of your issue"
-                required
-                className="border border-gray-300 focus:border-blue-500 resize-none h-32"
-              />
+  id="description"
+  name="description"
+  placeholder="Provide a detailed description of your issue"
+  required
+  className="text-black border border-gray-300 focus:border-blue-500 resize-none h-32"
+/>
             </div>
 
             {/* Submit Button */}

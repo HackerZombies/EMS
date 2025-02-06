@@ -1,4 +1,3 @@
-// src/pages/manage/leave.tsx
 "use client"
 
 import { useEffect, useState } from "react"
@@ -24,9 +23,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog"
 
-// Pagination from your code
+// Pagination components
 import {
   Pagination,
   PaginationContent,
@@ -38,9 +43,9 @@ import {
 
 import { ManageLeaveCard } from "@/components/ManageLeaveCards"
 
-// --------------
-// Type for user data
-// --------------
+// -------------------
+// Types
+// -------------------
 type UserData = {
   username: string
   firstName: string
@@ -56,21 +61,37 @@ type UserData = {
   gender?: string | null
   maritalStatus?: string | null
   dob?: Date | null
-  // ... etc. (any additional user fields you want)
+  // ... any additional fields
 }
 
 type LeaveRequestWithUser = LeaveRequest & {
   user: UserData
 }
 
-// --------------
-// Main Page
-// --------------
+// -------------------
+// Helper Function
+// -------------------
+const getProfileImageUrl = (url?: string | null) => {
+  if (url && url.includes("cloudinary")) {
+    const parts = url.split("/upload/")
+    if (parts.length === 2) {
+      // Insert transformation parameters after "/upload/"
+      const transformation = "w_128,h_128,c_fill,r_max"
+      return `${parts[0]}/upload/${transformation}/${parts[1]}`
+    }
+    return url
+  }
+  return url || "/default-avatar.png"
+}
+
+// -------------------
+// Main Page Component
+// -------------------
 export default function LeaveManagementPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
 
-  // Data states
+  // Data States
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequestWithUser[]>([])
   const [filter, setFilter] = useState("Pending")
 
@@ -78,14 +99,12 @@ export default function LeaveManagementPage() {
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [pageSize] = useState<number>(5)
 
-  // Search states
+  // Search State
   const [searchQuery, setSearchQuery] = useState<string>("")
 
-  // Dialog states for status update
+  // Dialog States for Status Update and User Info
   const [dialogOpen, setDialogOpen] = useState<boolean>(false)
   const [dialogMessage, setDialogMessage] = useState<React.ReactNode>(null)
-
-  // Dialog for user info
   const [userInfoOpen, setUserInfoOpen] = useState<boolean>(false)
   const [selectedUserData, setSelectedUserData] = useState<UserData | null>(null)
 
@@ -97,7 +116,7 @@ export default function LeaveManagementPage() {
     }
   }, [session, status, router])
 
-  // Fetch all leave requests
+  // Fetch leave requests
   useEffect(() => {
     const fetchAllLeaveRequests = async () => {
       try {
@@ -113,11 +132,11 @@ export default function LeaveManagementPage() {
             (request) => request.userUsername !== session.user.username
           )
 
-          // Sort by status priority, then startDate
+          // Sort by status priority, then by startDate
           const sortedData = filteredData.sort((a, b) => {
-            const statusPriority = { Pending: 1, Accepted: 2, Declined: 3 }
-            const priorityA = statusPriority[a.requestStatus as keyof typeof statusPriority] || 99
-            const priorityB = statusPriority[b.requestStatus as keyof typeof statusPriority] || 99
+            const statusPriority: Record<string, number> = { Pending: 1, Accepted: 2, Declined: 3 }
+            const priorityA = statusPriority[a.requestStatus] || 99
+            const priorityB = statusPriority[b.requestStatus] || 99
 
             if (priorityA !== priorityB) return priorityA - priorityB
 
@@ -138,7 +157,7 @@ export default function LeaveManagementPage() {
     fetchAllLeaveRequests()
   }, [session])
 
-  // Update status
+  // Update leave request status
   const handleStatusUpdate = async (id: string, newStatus: string) => {
     try {
       const response = await fetch(`/api/leaveRequests/updateleavestatus?id=${id}`, {
@@ -196,7 +215,7 @@ export default function LeaveManagementPage() {
   const endIndex = startIndex + pageSize
   const paginatedRequests = searchFilteredRequests.slice(startIndex, endIndex)
 
-  // For a simpler approach, reset to page 1 when filter/search changes
+  // Reset pagination on filter or search change
   useEffect(() => {
     setCurrentPage(1)
   }, [filter, searchQuery])
@@ -250,7 +269,7 @@ export default function LeaveManagementPage() {
         </CardHeader>
 
         <CardContent>
-          {/* Filter + Title + Search */}
+          {/* Filter, Title, and Search */}
           <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
             <h1 className="text-2xl font-semibold">Leave Requests</h1>
 
@@ -266,7 +285,7 @@ export default function LeaveManagementPage() {
               </SelectContent>
             </Select>
 
-            {/* Search bar */}
+            {/* Search Bar */}
             <div className="flex items-center gap-2 ml-auto">
               <Search className="w-5 h-5 text-gray-500" />
               <input
@@ -279,7 +298,7 @@ export default function LeaveManagementPage() {
             </div>
           </div>
 
-          {/* Content states */}
+          {/* Content States */}
           {leaveRequests.length === 0 ? (
             <div className="flex grow flex-col items-center justify-center gap-2 text-center text-gray-500">
               <Plane className="w-16 h-16" />
@@ -367,8 +386,10 @@ export default function LeaveManagementPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Leave Request Updated</DialogTitle>
+            <DialogDescription>
+              {dialogMessage}
+            </DialogDescription>
           </DialogHeader>
-          {dialogMessage}
         </DialogContent>
       </Dialog>
 
@@ -377,20 +398,17 @@ export default function LeaveManagementPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Employee Information</DialogTitle>
+            <DialogDescription>
+              Detailed profile information for the employee.
+            </DialogDescription>
           </DialogHeader>
 
           {selectedUserData && (
             <div className="grid gap-3 mt-2">
-              {/* If user has a profile image, we show it, else fallback */}
+              {/* Profile Image */}
               <div className="flex justify-center">
                 <img
-                  src={
-                    selectedUserData.profileImageUrl
-                      ? // if the db entry is "uploads/...", prepend a slash
-                        "/" + selectedUserData.profileImageUrl
-                      : // fallback image
-                        "/images/default-profile.png"
-                  }
+                  src={getProfileImageUrl(selectedUserData.profileImageUrl)}
                   alt={`${selectedUserData.firstName} ${selectedUserData.lastName} Profile`}
                   className="h-32 w-32 rounded-full object-cover ring-2 ring-gray-300"
                 />
@@ -398,8 +416,7 @@ export default function LeaveManagementPage() {
 
               <p>
                 <strong>Name:</strong> {selectedUserData.firstName}{" "}
-                {selectedUserData.middleName ?? ""}{" "}
-                {selectedUserData.lastName}
+                {selectedUserData.middleName ?? ""} {selectedUserData.lastName}
               </p>
               <p>
                 <strong>Username:</strong> {selectedUserData.username}
@@ -435,7 +452,6 @@ export default function LeaveManagementPage() {
                   <strong>Position:</strong> {selectedUserData.position}
                 </p>
               )}
-              {/* Add more fields as needed (dob, workLocation, etc.) */}
 
               <div className="flex justify-end">
                 <Button variant="outline" onClick={() => setUserInfoOpen(false)}>

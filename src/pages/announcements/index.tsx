@@ -1,5 +1,4 @@
 // src/pages/announcements/index.tsx
-
 "use client";
 
 import Head from "next/head";
@@ -11,7 +10,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { ToastContainer, toast } from "react-toastify";
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/router";
 
 // ShadCN UI
@@ -21,10 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { XCircle } from "lucide-react";
 
 // Notification logic
-import {
-  useSidebarNotifications,
-  NotificationItem,
-} from "@/hooks/useSidebarNotifications";
+import { useSidebarNotifications, NotificationItem } from "@/hooks/useSidebarNotifications";
 import { NotificationListCard } from "@/components/NotificationCard";
 
 // For Searching/Filtering announcements
@@ -69,7 +65,6 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
   };
 };
 
-// Example: If you still want to allow pin/unpin or delete from index
 async function togglePinAnnouncement(id: string, pinned: boolean) {
   const resp = await fetch("/api/announcements/pin", {
     method: "PATCH",
@@ -106,13 +101,9 @@ export default function AnnouncementsIndex({
   const { data: session } = useSession();
   const router = useRouter();
 
-  // State
-  const [announcements, setAnnouncements] = useState<ExtendedAnnouncement[]>(
-    initialAnnouncements
-  );
+  // State for announcements and filters
+  const [announcements, setAnnouncements] = useState<ExtendedAnnouncement[]>(initialAnnouncements);
   const [loading, setLoading] = useState(false);
-
-  // Filters
   const [searchTerm, setSearchTerm] = useState("");
   const [showPinnedOnly, setShowPinnedOnly] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
@@ -134,7 +125,7 @@ export default function AnnouncementsIndex({
     }
   }, [notifications, markNotificationAsRead]);
 
-  // Filter logic
+  // Filter logic for announcements
   const filteredAnnouncements = announcements.filter((a) => {
     const matchesSearch =
       a.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -146,7 +137,6 @@ export default function AnnouncementsIndex({
     return matchesSearch;
   });
 
-  // Pin/unpin
   async function handlePinToggle(a: ExtendedAnnouncement) {
     try {
       setLoading(true);
@@ -154,46 +144,43 @@ export default function AnnouncementsIndex({
       setAnnouncements((prev) =>
         prev.map((ann) => (ann.id === a.id ? { ...ann, pinned: !ann.pinned } : ann))
       );
-      toast.success("Pin state updated");
+    
     } catch (err) {
       console.error(err);
-      toast.error("Failed to pin/unpin");
+     
     } finally {
       setLoading(false);
     }
   }
 
-  // Delete
   async function handleDeleteAnnouncement(id: string) {
     try {
       setLoading(true);
       await deleteAnnouncementById(id);
       setAnnouncements((prev) => prev.filter((a) => a.id !== id));
-      toast.success("Announcement deleted");
+      
     } catch (err) {
       console.error(err);
-      toast.error("Delete failed");
+    
     } finally {
       setLoading(false);
     }
   }
 
-  // Clear all
   async function handleClearAll() {
     try {
       setLoading(true);
       await Promise.all(announcements.map((a) => deleteAnnouncementById(a.id)));
       setAnnouncements([]);
-      toast.success("All cleared!");
+      
     } catch (err) {
       console.error(err);
-      toast.error("Failed to clear");
+
     } finally {
       setLoading(false);
     }
   }
 
-  // Handle click on each notification
   async function handleViewDetails(notif: NotificationItem) {
     await markNotificationAsRead(notif.id);
     if (notif.targetUrl) {
@@ -201,7 +188,15 @@ export default function AnnouncementsIndex({
     }
   }
 
-  // Check user role
+  // Use a controlled Tabs state
+  const [selectedTab, setSelectedTab] = useState("announcements");
+
+  useEffect(() => {
+    if (router.query.tab && typeof router.query.tab === "string") {
+      setSelectedTab(router.query.tab);
+    }
+  }, [router.query.tab]);
+
   const userRole = session?.user.role || "";
 
   return (
@@ -214,7 +209,6 @@ export default function AnnouncementsIndex({
       <div className="p-4 md:p-8 min-h-screen text-white">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-bold">All Updates</h1>
-          {/* Only show "Create Announcement" button if HR or ADMIN */}
           {(userRole === "HR" || userRole === "ADMIN") && (
             <Link href="/announcements/new">
               <Button variant="default">Create Announcement</Button>
@@ -222,7 +216,7 @@ export default function AnnouncementsIndex({
           )}
         </div>
 
-        <Tabs defaultValue="announcements" onValueChange={() => {}}>
+        <Tabs value={selectedTab} onValueChange={setSelectedTab}>
           <TabsList>
             <TabsTrigger value="announcements">Announcements</TabsTrigger>
             <TabsTrigger value="notifications">
@@ -260,7 +254,6 @@ export default function AnnouncementsIndex({
             ) : (
               <AnnouncementsGrid
                 announcements={filteredAnnouncements}
-                // Optional for pin/unpin or delete
                 onPinToggle={(userRole === "HR" || userRole === "ADMIN") ? handlePinToggle : undefined}
                 onDelete={(userRole === "HR" || userRole === "ADMIN") ? handleDeleteAnnouncement : undefined}
                 loading={loading}
@@ -292,9 +285,6 @@ export default function AnnouncementsIndex({
                       title={notif.message}
                       time={notif.createdAt}
                       isNew={!notif.isRead}
-                      onClose={async () => {
-                        await markNotificationAsRead(notif.id);
-                      }}
                       onClick={() => handleViewDetails(notif)}
                     />
                   </motion.div>

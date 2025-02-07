@@ -453,7 +453,7 @@ model Attendance {
   userUsername String
   user         User   @relation("UserAttendances", fields: [userUsername], references: [username], onDelete: Cascade)
 
-  @@unique([userUsername, date])
+  @@unique([userUsername, date], name: "userUsername_date" )
 }
 
 // ──────────────────────────────────────────────────────────

@@ -13,11 +13,11 @@ export default async function attendanceHandler(
   // 1. Run CORS middleware
   await Cors(req, res, {
     methods: ['POST', 'OPTIONS'],
-    origin: '*',
+    origin: '*', // Consider limiting origins in production
     optionsSuccessStatus: 200,
   });
 
-  // 2. Preflight
+  // 2. Preflight for OPTIONS
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -27,22 +27,26 @@ export default async function attendanceHandler(
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
-  // 4. Get the `action` from the URL: /api/mobile/attendance/[action]
+  // 4. Get `action` from the URL
   const { action } = req.query;
   if (action !== 'checkin' && action !== 'checkout') {
     return res.status(404).json({ message: 'Invalid action' });
   }
 
-  // 5. Verify token from Authorization header
+  // 5. Check Authorization header
   const { authorization } = req.headers;
   if (!authorization) {
     return res.status(401).json({ message: 'Missing Authorization header.' });
   }
+
   const token = authorization.split(' ')[1];
   if (!token) {
-    return res.status(401).json({ message: 'Invalid Authorization header format.' });
+    return res
+      .status(401)
+      .json({ message: 'Invalid Authorization header format.' });
   }
 
+  // 6. Verify JWT
   let decoded: any;
   try {
     decoded = jwt.verify(token, JWT_SECRET);
@@ -51,7 +55,7 @@ export default async function attendanceHandler(
     return res.status(401).json({ message: 'Invalid token.' });
   }
 
-  // 6. Extract data from the body
+  // 7. Extract data from body
   const {
     date,
     checkInTime,
@@ -62,35 +66,35 @@ export default async function attendanceHandler(
     checkOutLongitude,
   } = req.body;
 
-  // We can get the username from the token or from the body if you prefer:
-  // e.g. const { username } = decoded;
-  // or you can pass it in the body. Here we do from token:
+  // We assume the payload has `username`
   const username = decoded.username;
-
   if (!username || !date) {
     return res.status(400).json({ message: 'username and date are required' });
   }
 
-  // Parse the date properly
-  let parsedDate = new Date(date); // e.g. '2023-10-10'
+  // Parse date
+  const parsedDate = new Date(date);
   if (isNaN(parsedDate.getTime())) {
     return res.status(400).json({ message: 'Invalid date format' });
   }
 
   try {
-    // 7. Attempt create / update in the DB
     let updatedAttendance = null;
 
+    // 8. "checkin" logic
     if (action === 'checkin') {
-      // Check we have needed fields
-      if (!checkInTime || checkInLatitude === undefined || checkInLongitude === undefined) {
+      if (
+        !checkInTime ||
+        checkInLatitude === undefined ||
+        checkInLongitude === undefined
+      ) {
         return res
           .status(400)
           .json({ message: 'Missing required fields for check-in' });
       }
 
-      // See if there's already an attendance record for this date
-      const existingAttendance = await prisma.attendance.findUnique({
+      // Ensure not already checked in
+      const existing = await prisma.attendance.findUnique({
         where: {
           userUsername_date: {
             userUsername: username,
@@ -98,12 +102,11 @@ export default async function attendanceHandler(
           },
         },
       });
-
-      if (existingAttendance) {
+      if (existing) {
         return res.status(400).json({ message: 'Already checked in today' });
       }
 
-      // Create a new record
+      // Create record
       updatedAttendance = await prisma.attendance.create({
         data: {
           date: parsedDate,
@@ -115,14 +118,19 @@ export default async function attendanceHandler(
       });
     }
 
+    // 9. "checkout" logic
     if (action === 'checkout') {
-      if (!checkOutTime || checkOutLatitude === undefined || checkOutLongitude === undefined) {
+      if (
+        !checkOutTime ||
+        checkOutLatitude === undefined ||
+        checkOutLongitude === undefined
+      ) {
         return res
           .status(400)
           .json({ message: 'Missing required fields for check-out' });
       }
 
-      // Attempt to find existing record
+      // Must have a record for this day
       const attendance = await prisma.attendance.findUnique({
         where: {
           userUsername_date: {
@@ -131,13 +139,13 @@ export default async function attendanceHandler(
           },
         },
       });
-
       if (!attendance) {
         return res
           .status(400)
           .json({ message: 'No check-in record found for today' });
       }
 
+      // Already checked out?
       if (attendance.checkOutTime) {
         return res.status(400).json({ message: 'Already checked out today' });
       }
@@ -153,13 +161,14 @@ export default async function attendanceHandler(
       });
     }
 
+    // 10. Confirm we successfully updated/created
     if (!updatedAttendance) {
       return res.status(500).json({ message: 'Could not update attendance' });
     }
 
-    // 8. Return success
     return res.status(200).json({
-      message: `${action === 'checkin' ? 'Check-In' : 'Check-Out'} successful`,
+      message:
+        action === 'checkin' ? 'Check-In successful' : 'Check-Out successful',
     });
   } catch (error) {
     console.error(`Error in attendance ${action}:`, error);

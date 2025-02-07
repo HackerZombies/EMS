@@ -4,6 +4,13 @@ import Cors from 'nextjs-cors';
 import { prisma } from '@/lib/prisma';
 import jwt from 'jsonwebtoken';
 
+// 1) Import your Mapbox reverse geocode function
+import { reverseGeocodeFromMapbox } from '@/lib/mapbox';
+
+// 2) (Optional) If you want socket broadcasts or notifications:
+import { broadcastAttendanceUpdate } from '@/pages/api/socket'; 
+import { createNotification } from '@/services/notificationService';
+
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
 
 export default async function attendanceHandler(
@@ -65,10 +72,11 @@ export default async function attendanceHandler(
   } = req.body;
 
   // 7) Ensure username + date
-  const username = decoded.username; // <= Make sure your token payload has 'username'
+  const username = decoded.username; // must be present in token payload
   if (!username || !date) {
     return res.status(400).json({ message: 'username and date are required' });
   }
+
   const parsedDate = new Date(date);
   if (isNaN(parsedDate.getTime())) {
     return res.status(400).json({ message: 'Invalid date format' });
@@ -77,7 +85,9 @@ export default async function attendanceHandler(
   try {
     let updatedAttendance = null;
 
-    // 8) checkin
+    // ------------------------------------------------------------------
+    // CHECK-IN
+    // ------------------------------------------------------------------
     if (action === 'checkin') {
       if (
         !checkInTime ||
@@ -102,19 +112,45 @@ export default async function attendanceHandler(
         return res.status(400).json({ message: 'Already checked in today' });
       }
 
-      // Create new attendance record
+      // 1) Reverse-geocode the check-in address using Mapbox
+      const checkInAddress = await reverseGeocodeFromMapbox(
+        parseFloat(checkInLatitude),
+        parseFloat(checkInLongitude)
+      );
+
+      // 2) Create new attendance record (save lat/long + address)
       updatedAttendance = await prisma.attendance.create({
         data: {
           date: parsedDate,
           checkInTime: new Date(checkInTime),
           checkInLatitude: parseFloat(checkInLatitude),
           checkInLongitude: parseFloat(checkInLongitude),
+          checkInAddress,
           userUsername: username,
         },
+        // If you need user data in the response for notifications:
+        include: {
+          user: {
+            select: { username: true, firstName: true, lastName: true, role: true },
+          },
+        },
       });
+
+      // 3) (Optional) Create notifications & broadcast
+      if (updatedAttendance) {
+        await createNotification({
+          message: `User ${updatedAttendance.user.username} just checked in`,
+          roleTargets: ['ADMIN', 'HR'],
+          targetUrl: `/hr/attendance?recordId=${updatedAttendance.id}`,
+        });
+
+        broadcastAttendanceUpdate(updatedAttendance);
+      }
     }
 
-    // 9) checkout
+    // ------------------------------------------------------------------
+    // CHECK-OUT
+    // ------------------------------------------------------------------
     if (action === 'checkout') {
       if (
         !checkOutTime ||
@@ -126,7 +162,7 @@ export default async function attendanceHandler(
           .json({ message: 'Missing required fields for check-out' });
       }
 
-      // Must have an existing checkin for the same date
+      // Must have an existing check-in
       const attendance = await prisma.attendance.findUnique({
         where: {
           userUsername_date: {
@@ -144,27 +180,50 @@ export default async function attendanceHandler(
         return res.status(400).json({ message: 'Already checked out today' });
       }
 
-      // Update the existing record
+      // 1) Reverse-geocode the check-out address using Mapbox
+      const checkOutAddress = await reverseGeocodeFromMapbox(
+        parseFloat(checkOutLatitude),
+        parseFloat(checkOutLongitude)
+      );
+
+      // 2) Update the existing record (save lat/long + address)
       updatedAttendance = await prisma.attendance.update({
         where: { id: attendance.id },
         data: {
           checkOutTime: new Date(checkOutTime),
           checkOutLatitude: parseFloat(checkOutLatitude),
           checkOutLongitude: parseFloat(checkOutLongitude),
+          checkOutAddress,
+        },
+        // If you need user data in the response for notifications:
+        include: {
+          user: {
+            select: { username: true, firstName: true, lastName: true, role: true },
+          },
         },
       });
+
+      // 3) (Optional) Create notifications & broadcast
+      if (updatedAttendance) {
+        await createNotification({
+          message: `User ${updatedAttendance.user.username} just checked out`,
+          roleTargets: ['ADMIN', 'HR'],
+          targetUrl: `/hr/attendance?recordId=${updatedAttendance.id}`,
+        });
+
+        broadcastAttendanceUpdate(updatedAttendance);
+      }
     }
 
-    // 10) Confirm success
+    // ------------------------------------------------------------------
+    // RESPONSE
+    // ------------------------------------------------------------------
     if (!updatedAttendance) {
       return res.status(500).json({ message: 'Could not update attendance' });
     }
 
     return res.status(200).json({
-      message:
-        action === 'checkin'
-          ? 'Check-In successful'
-          : 'Check-Out successful',
+      message: action === 'checkin' ? 'Check-In successful' : 'Check-Out successful',
     });
   } catch (error) {
     console.error(`Error in attendance ${action}:`, error);

@@ -65,7 +65,7 @@ export default async function attendanceHandler(
   } = req.body;
 
   // 7) Ensure username + date
-  const username = decoded.username;
+  const username = decoded.username; // <= Make sure your token payload has 'username'
   if (!username || !date) {
     return res.status(400).json({ message: 'username and date are required' });
   }
@@ -161,9 +161,10 @@ export default async function attendanceHandler(
     }
 
     return res.status(200).json({
-      message: action === 'checkin'
-        ? 'Check-In successful'
-        : 'Check-Out successful',
+      message:
+        action === 'checkin'
+          ? 'Check-In successful'
+          : 'Check-Out successful',
     });
   } catch (error) {
     console.error(`Error in attendance ${action}:`, error);

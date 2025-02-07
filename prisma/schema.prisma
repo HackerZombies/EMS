@@ -216,6 +216,7 @@ model User {
   isFirstTime        Boolean?            @default(true)
 
   // Relations
+  refreshTokens     RefreshToken[]     @relation("UserRefreshTokens")
   leaveRequests     LeaveRequest[]     @relation("UserLeaveRequests")
   digilocker        Digilocker[]       @relation("UserDigilocker")
   documents         Document[]         @relation("UserDocuments")
@@ -238,6 +239,21 @@ model User {
   notificationRecipients Notification[] @relation("NotificationRecipient")
 
   @@index([email, phoneNumber], name: "user_contact_index")
+}
+
+model RefreshToken {
+  // MongoDB typically uses `@id @default(auto()) @map("_id") @db.ObjectId` 
+  // for ObjectID-based primary keys
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  token     String   @unique
+  userId    String   @db.ObjectId
+  user      User     @relation(name: "UserRefreshTokens", fields: [userId], references: [id])
+  revoked   Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("refreshTokens") // (optional) explicitly name the MongoDB collection
 }
 
 // ------------------------------
@@ -453,7 +469,7 @@ model Attendance {
   userUsername String
   user         User   @relation("UserAttendances", fields: [userUsername], references: [username], onDelete: Cascade)
 
-  @@unique([userUsername, date], name: "userUsername_date" )
+  @@unique([userUsername, date], name: "userUsername_date")
 }
 
 // ──────────────────────────────────────────────────────────

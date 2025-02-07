@@ -8,10 +8,7 @@ import { prisma } from '@/lib/prisma';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // 1) Run the CORS middleware
   await Cors(req, res, {
     methods: ['POST', 'OPTIONS'],
@@ -32,9 +29,7 @@ export default async function handler(
   // 4) Extract credentials
   const { username, password } = req.body;
   if (!username || !password) {
-    return res
-      .status(400)
-      .json({ message: 'Missing username or password.' });
+    return res.status(400).json({ message: 'Missing username or password.' });
   }
 
   try {
@@ -52,8 +47,8 @@ export default async function handler(
       return res.status(401).json({ message: 'Invalid credentials.' });
     }
 
-    // 7) Generate JWT (example: 30 days)
-    const token = jwt.sign(
+    // 7) Generate an ACCESS TOKEN (short-lived)
+    const accessToken = jwt.sign(
       {
         id: user.id,
         username: user.username,
@@ -65,12 +60,24 @@ export default async function handler(
         isFirstTime: user.isFirstTime ?? false,
       },
       JWT_SECRET,
-      { expiresIn: '30d' }
+      { expiresIn: '15m' } // e.g. 15 minutes
     );
 
-    // 8) Return the token + user data
+    // 8) Generate a REFRESH TOKEN (longer-lived)
+    const refreshToken = jwt.sign(
+      {
+        // Often fewer claims go in the refresh token
+        id: user.id,
+        username: user.username,
+      },
+      JWT_SECRET,
+      { expiresIn: '30d' } // e.g. 30 days
+    );
+
+    // 9) Return both tokens + user data
     return res.status(200).json({
-      token,
+      accessToken,
+      refreshToken,
       user: {
         id: user.id,
         username: user.username,

@@ -334,7 +334,9 @@ export default function PersonalInfoForm({
         throw new Error("Upload to Cloudinary failed");
       }
 
-      const data = await res.json();
+      const text = await res.text();
+      console.log('Raw response:', text);
+      const data = JSON.parse(text);
       console.log("New profile image URL:", data.profileImageUrl);
 
       setFormData((prev) => ({ ...prev, profileImageUrl: data.profileImageUrl }));

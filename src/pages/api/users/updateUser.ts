@@ -14,12 +14,11 @@ import {
   Qualification,
   Experience,
   Certification,
-  // Removed EmployeeDocument
   EmergencyContact,
-  Prisma, // for input types
+  Prisma,
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import sendUpdateEmail from "@/lib/sendUserUpdateEmail";
+import sendUpdateEmail from "@/lib/sendUserUpdateEmail";  // Make sure this sends credentials
 import logger from "@/lib/logger";
 import { createNotification } from "@/services/notificationService";
 
@@ -269,16 +268,28 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       nationality: nationality || null,
     };
 
-    // Handle password
-    if (resetPassword) {
+    // Detect if the email has changed
+    const emailChanged = oldUser.email !== email;
+
+    //
+    // Handle password logic + sending update emails
+    //
+    if (password) {
+      // If the user explicitly provided a new password
+      dataToUpdate.password = await bcrypt.hash(password, 10);
+      // If email is also being changed, we can notify the user at the new email with that same password
+      if (emailChanged) {
+        sendUpdateEmail(email, username, password).catch((err) =>
+          logger.error(`Failed to send email change credentials:`, err)
+        );
+      }
+    } else if (resetPassword || emailChanged) {
+      // If user requested a reset OR user’s email changed, generate a new password
       const newPassword = crypto.randomBytes(12).toString("hex");
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
-      dataToUpdate.password = hashedPassword;
+      dataToUpdate.password = await bcrypt.hash(newPassword, 10);
       sendUpdateEmail(email, username, newPassword).catch((err) =>
         logger.error(`Failed to send password reset email:`, err)
       );
-    } else if (password) {
-      dataToUpdate.password = await bcrypt.hash(password, 10);
     }
 
     // Convert date strings
@@ -384,22 +395,22 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       transactionOps.push(prisma.experience.deleteMany({ where: { username } }));
       if (experiences.length > 0) {
         // since startDate is required, must always provide it
-        const eData: Prisma.ExperienceCreateManyInput[] = experiences.map((exp: any) => {
-          const record: Prisma.ExperienceCreateManyInput = {
-            jobTitle: exp.jobTitle,
-            company: exp.company,
-            description: exp.description,
-            username,
-            // fallback if missing
-            startDate: exp.startDate ? new Date(exp.startDate) : new Date(),
-          };
-          // if endDate is also required in your schema, fallback as well
-          // but if optional, only set if provided
-          if (exp.endDate) {
-            record.endDate = new Date(exp.endDate);
+        const eData: Prisma.ExperienceCreateManyInput[] = experiences.map(
+          (exp: any) => {
+            const record: Prisma.ExperienceCreateManyInput = {
+              jobTitle: exp.jobTitle,
+              company: exp.company,
+              description: exp.description,
+              username,
+              // fallback if missing
+              startDate: exp.startDate ? new Date(exp.startDate) : new Date(),
+            };
+            if (exp.endDate) {
+              record.endDate = new Date(exp.endDate);
+            }
+            return record;
           }
-          return record;
-        });
+        );
         transactionOps.push(prisma.experience.createMany({ data: eData }));
       }
     }
@@ -468,7 +479,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
 
     // Build diff
     const changedFields = buildChangesDiff(oldUser, newUser);
-    const hasChanges = Object.keys(changedFields).length > 0 || resetPassword;
+    const hasChanges = Object.keys(changedFields).length > 0 || resetPassword || emailChanged;
     if (!hasChanges) {
       return res.status(200).json({ message: "No changes detected." });
     }
@@ -493,7 +504,9 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
 
     return res.status(200).json({
       message: "User updated successfully",
-      resetPassword: resetPassword ? "Password reset email sent" : undefined,
+      resetPassword: resetPassword || emailChanged
+        ? "A credentials email was sent."
+        : undefined,
       updatedUser: newUser,
     });
   } catch (error: any) {

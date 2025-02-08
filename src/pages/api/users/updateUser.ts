@@ -27,47 +27,70 @@ import { createNotification } from "@/services/notificationService";
 
 const ALLOWED_ROLES = ["HR", "ADMIN"];
 
-/** Helper interface representing a full user with relations. */
+// Helper interface representing a full user with relations.
 interface FullUser extends PrismaUser {
   qualifications: Qualification[];
   experiences: Experience[];
   certifications: Certification[];
   employeeDocuments: EmployeeDocument[];
   emergencyContacts: EmergencyContact[];
-  residentialAddress: {
-    flat: string | null;
-    street: string | null;
-    landmark: string | null;
-    city: string | null;
-    district: string | null;
-    state: string | null;
-    pin: string | null;
-  } | null;
-  permanentAddress: {
-    flat: string | null;
-    street: string | null;
-    landmark: string | null;
-    city: string | null;
-    district: string | null;
-    state: string | null;
-    pin: string | null;
-  } | null;
+  residentialAddress: Address | null;
+  permanentAddress: Address | null;
 }
 
-/**
- * Build a diff object that describes what fields changed (including nested ones).
- */
+interface Address {
+  flat: string | null;
+  street: string | null;
+  landmark: string | null;
+  city: string | null;
+  district: string | null;
+  state: string | null;
+  pin: string | null;
+}
+
+/** Compare fields between oldUser and newUser and return a "diff". */
 function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
   const changedFields: Record<string, { old: any; new: any }> = {};
 
-  const topLevelFields = [
+  // Helper to check top-level fields
+  function checkField(fieldName: keyof FullUser) {
+    const oldVal = oldUser[fieldName];
+    const newVal = newUser[fieldName];
+
+    // Compare dates
+    if (oldVal instanceof Date && newVal instanceof Date) {
+      if (oldVal.getTime() !== newVal.getTime()) {
+        changedFields[fieldName] = { old: oldVal, new: newVal };
+      }
+      return;
+    }
+
+    // Compare objects (like addresses)
+    if (
+      oldVal &&
+      typeof oldVal === "object" &&
+      newVal &&
+      typeof newVal === "object"
+    ) {
+      if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+        changedFields[fieldName] = { old: oldVal, new: newVal };
+      }
+      return;
+    }
+
+    // Compare everything else
+    if (oldVal !== newVal) {
+      changedFields[fieldName] = { old: oldVal, new: newVal };
+    }
+  }
+
+  // A list of top-level fields to compare
+  const topLevelFields: (keyof FullUser)[] = [
     "firstName",
     "middleName",
     "lastName",
     "email",
     "phoneNumber",
-    "residentialAddress",
-    "permanentAddress",
     "role",
     "dob",
     "gender",
@@ -78,74 +101,55 @@ function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
     "position",
     "nationality",
     "profileImageUrl",
+    "residentialAddress",
+    "permanentAddress",
   ];
 
-  for (const key of topLevelFields) {
-    const oldVal = (oldUser as any)[key];
-    const newVal = (newUser as any)[key];
+  // Compare them
+  topLevelFields.forEach(checkField);
 
-    if (oldVal instanceof Date && newVal instanceof Date) {
-      if (oldVal.getTime() !== newVal.getTime()) {
-        changedFields[key] = { old: oldVal, new: newVal };
-      }
-    } else if (
-      typeof oldVal === "object" &&
-      oldVal !== null &&
-      typeof newVal === "object" &&
-      newVal !== null
-    ) {
-      if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
-        changedFields[key] = { old: oldVal, new: newVal };
-      }
-    } else {
-      if (oldVal !== newVal) {
-        changedFields[key] = { old: oldVal, new: newVal };
-      }
-    }
-  }
-
-  // Compare joiningDate separately.
-  if (oldUser.joiningDate instanceof Date && newUser.joiningDate instanceof Date) {
+  // Compare joiningDate separately
+  if (
+    oldUser.joiningDate instanceof Date &&
+    newUser.joiningDate instanceof Date
+  ) {
     if (oldUser.joiningDate.getTime() !== newUser.joiningDate.getTime()) {
       changedFields["joiningDate"] = {
         old: oldUser.joiningDate,
         new: newUser.joiningDate,
       };
     }
-  } else {
-    if (oldUser.joiningDate !== newUser.joiningDate) {
-      changedFields["joiningDate"] = {
-        old: oldUser.joiningDate,
-        new: newUser.joiningDate,
-      };
-    }
+  } else if (oldUser.joiningDate !== newUser.joiningDate) {
+    changedFields["joiningDate"] = {
+      old: oldUser.joiningDate,
+      new: newUser.joiningDate,
+    };
   }
 
   // Compare array fields
   function compareArray(fieldName: keyof FullUser) {
-    const oldFieldValue = oldUser[fieldName];
-    const newFieldValue = newUser[fieldName];
-
-    const oldArray = Array.isArray(oldFieldValue)
-      ? oldFieldValue.map(simplifyRecord)
+    const oldArr = Array.isArray(oldUser[fieldName])
+      ? oldUser[fieldName]
       : [];
-    const newArray = Array.isArray(newFieldValue)
-      ? newFieldValue.map(simplifyRecord)
+    const newArr = Array.isArray(newUser[fieldName])
+      ? newUser[fieldName]
       : [];
 
-    const oldVal = JSON.stringify(oldArray);
-    const newVal = JSON.stringify(newArray);
+    // Remove some fields that won't matter for equality (like 'id' or 'dateCreated').
+    const simplify = (item: any) => {
+      const { id, dateCreated, ...rest } = item;
+      return rest;
+    };
+
+    const oldVal = JSON.stringify(oldArr.map(simplify));
+    const newVal = JSON.stringify(newArr.map(simplify));
+
     if (oldVal !== newVal) {
       changedFields[fieldName as string] = {
         old: JSON.parse(oldVal),
         new: JSON.parse(newVal),
       };
     }
-  }
-
-  function simplifyRecord(obj: any) {
-    const { id, dateCreated, ...rest } = obj;
-    return rest;
   }
 
   compareArray("qualifications");
@@ -157,6 +161,123 @@ function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
   return changedFields;
 }
 
+// -- Sub-collection Handlers --
+// Each returns an array of Prisma client calls to use in a transaction.
+function getEmergencyContactsOps(username: string, data: any[]): any[] {
+  if (!Array.isArray(data)) return [];
+  return [
+    prisma.emergencyContact.deleteMany({ where: { userUsername: username } }),
+    prisma.emergencyContact.createMany({
+      data: data.map((contact) => ({
+        name: contact.name,
+        relationship: contact.relationship,
+        phoneNumber: contact.phoneNumber,
+        email: contact.email,
+        userUsername: username,
+      })),
+    }),
+  ];
+}
+
+function getQualificationsOps(username: string, data: any[]): any[] {
+  if (!Array.isArray(data)) return [];
+  return [
+    prisma.qualification.deleteMany({ where: { username } }),
+    prisma.qualification.createMany({
+      data: data.map((qual) => {
+        const record: any = {
+          name: qual.name,
+          level: qual.level,
+          specializations: qual.specializations || [],
+          institution: qual.institution || null,
+          username,
+        };
+        if (qual.startDate) record.startDate = new Date(qual.startDate);
+        if (qual.endDate) record.endDate = new Date(qual.endDate);
+        return record;
+      }),
+    }),
+  ];
+}
+
+function getExperiencesOps(username: string, data: any[]): any[] {
+  if (!Array.isArray(data)) return [];
+  return [
+    prisma.experience.deleteMany({ where: { username } }),
+    prisma.experience.createMany({
+      data: data.map((exp) => {
+        const record: any = {
+          jobTitle: exp.jobTitle,
+          company: exp.company,
+          description: exp.description,
+          username,
+        };
+        if (exp.startDate) record.startDate = new Date(exp.startDate);
+        if (exp.endDate) record.endDate = new Date(exp.endDate);
+        return record;
+      }),
+    }),
+  ];
+}
+
+function getCertificationsOps(username: string, data: any[]): any[] {
+  if (!Array.isArray(data)) return [];
+  return [
+    prisma.certification.deleteMany({ where: { username } }),
+    prisma.certification.createMany({
+      data: data.map((cert) => {
+        const record: any = {
+          name: cert.name,
+          issuingAuthority: cert.issuingAuthority,
+          licenseNumber: cert.licenseNumber || null,
+          username,
+        };
+        if (cert.issueDate) record.issueDate = new Date(cert.issueDate);
+        if (cert.expiryDate) record.expiryDate = new Date(cert.expiryDate);
+        return record;
+      }),
+    }),
+  ];
+}
+
+function getDocumentsOps(username: string, documents: any): any[] {
+  if (!documents || typeof documents !== "object") return [];
+  // Flatten out all docs from each category
+  const allDocs = Object.keys(documents).flatMap((category) => {
+    const docs = Array.isArray(documents[category]) ? documents[category] : [];
+    return docs
+      .map((doc: any) => {
+        const mappedCategory = mapToDocumentCategory(category);
+        if (!mappedCategory) {
+          console.warn(`Invalid document category: ${category}`);
+          return null;
+        }
+        return {
+          userUsername: username,
+          filename: doc.displayName || doc.fileName || "Untitled",
+          fileType: doc.fileType || null,
+          data: doc.fileData ? Buffer.from(doc.fileData, "base64") : Buffer.from([]),
+          size: doc.size || 0,
+          category: mappedCategory,
+        };
+      })
+      .filter((d) => d !== null);
+  });
+
+  return [
+    prisma.employeeDocument.deleteMany({ where: { userUsername: username } }),
+    prisma.employeeDocument.createMany({ data: allDocs }),
+  ];
+}
+
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "10mb",
+    },
+  },
+};
+
 export default async function handle(req: NextApiRequest, res: NextApiResponse) {
   // 1) Only allow PUT requests.
   if (req.method !== "PUT") {
@@ -166,7 +287,11 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
   try {
     // 2) Check session and ensure user has proper role.
     const session = await getServerSession(req, res, authOptions);
-    if (!session || !session.user || !ALLOWED_ROLES.includes(session.user.role as string)) {
+    if (
+      !session ||
+      !session.user ||
+      !ALLOWED_ROLES.includes(session.user.role as string)
+    ) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
@@ -202,7 +327,9 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
 
     // 4) Basic validation
     if (!username || !firstName || !lastName || !email || !role) {
-      return res.status(400).json({ message: "Missing mandatory fields" });
+      return res
+        .status(400)
+        .json({ message: "Missing mandatory fields (username, first/last name, email, role)." });
     }
 
     // 5) Prepare main user data
@@ -285,7 +412,10 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       EmploymentType.INTERN,
       EmploymentType.OTHER,
     ];
-    if (employmentType && !validEmploymentTypes.includes(employmentType as EmploymentType)) {
+    if (
+      employmentType &&
+      !validEmploymentTypes.includes(employmentType as EmploymentType)
+    ) {
       return res.status(400).json({ message: "Invalid employment type" });
     }
 
@@ -317,72 +447,82 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
         ? permanentAddress
         : null;
 
-    // 10) Update the main user record with nested upserts for addresses
-    await prisma.user.update({
-      where: { username },
-      data: {
-        ...dataToUpdate,
-        residentialAddress: parsedResidentialAddress
-          ? {
-              upsert: {
-                update: {
-                  flat: parsedResidentialAddress.flat,
-                  street: parsedResidentialAddress.street,
-                  landmark: parsedResidentialAddress.landmark,
-                  city: parsedResidentialAddress.city,
-                  district: parsedResidentialAddress.district,
-                  state: parsedResidentialAddress.state,
-                  pin: parsedResidentialAddress.pin,
-                },
-                create: {
-                  flat: parsedResidentialAddress.flat,
-                  street: parsedResidentialAddress.street,
-                  landmark: parsedResidentialAddress.landmark,
-                  city: parsedResidentialAddress.city,
-                  district: parsedResidentialAddress.district,
-                  state: parsedResidentialAddress.state,
-                  pin: parsedResidentialAddress.pin,
-                },
-              },
-            }
-          : undefined,
-        permanentAddress: parsedPermanentAddress
-          ? {
-              upsert: {
-                update: {
-                  flat: parsedPermanentAddress.flat,
-                  street: parsedPermanentAddress.street,
-                  landmark: parsedPermanentAddress.landmark,
-                  city: parsedPermanentAddress.city,
-                  district: parsedPermanentAddress.district,
-                  state: parsedPermanentAddress.state,
-                  pin: parsedPermanentAddress.pin,
-                },
-                create: {
-                  flat: parsedPermanentAddress.flat,
-                  street: parsedPermanentAddress.street,
-                  landmark: parsedPermanentAddress.landmark,
-                  city: parsedPermanentAddress.city,
-                  district: parsedPermanentAddress.district,
-                  state: parsedPermanentAddress.state,
-                  pin: parsedPermanentAddress.pin,
-                },
-              },
-            }
-          : undefined,
-      },
-    });
+    // 10) Build an array of all operations (in a transaction).
+    //     This includes the user update + sub-collection updates.
+    const ops: any[] = [];
 
-    // 11) Update sub-collections concurrently
-    await Promise.all([
-      handleQualifications(username, qualifications),
-      handleExperiences(username, experiences),
-      handleCertifications(username, certifications),
-      handleDocuments(username, documents),
-      handleEmergencyContacts(username, emergencyContacts),
-    ]);
+    // User update (including addresses)
+    ops.push(
+      prisma.user.update({
+        where: { username },
+        data: {
+          ...dataToUpdate,
+          residentialAddress: parsedResidentialAddress
+            ? {
+                upsert: {
+                  update: {
+                    flat: parsedResidentialAddress.flat,
+                    street: parsedResidentialAddress.street,
+                    landmark: parsedResidentialAddress.landmark,
+                    city: parsedResidentialAddress.city,
+                    district: parsedResidentialAddress.district,
+                    state: parsedResidentialAddress.state,
+                    pin: parsedResidentialAddress.pin,
+                  },
+                  create: {
+                    flat: parsedResidentialAddress.flat,
+                    street: parsedResidentialAddress.street,
+                    landmark: parsedResidentialAddress.landmark,
+                    city: parsedResidentialAddress.city,
+                    district: parsedResidentialAddress.district,
+                    state: parsedResidentialAddress.state,
+                    pin: parsedResidentialAddress.pin,
+                  },
+                },
+              }
+            : undefined,
+          permanentAddress: parsedPermanentAddress
+            ? {
+                upsert: {
+                  update: {
+                    flat: parsedPermanentAddress.flat,
+                    street: parsedPermanentAddress.street,
+                    landmark: parsedPermanentAddress.landmark,
+                    city: parsedPermanentAddress.city,
+                    district: parsedPermanentAddress.district,
+                    state: parsedPermanentAddress.state,
+                    pin: parsedPermanentAddress.pin,
+                  },
+                  create: {
+                    flat: parsedPermanentAddress.flat,
+                    street: parsedPermanentAddress.street,
+                    landmark: parsedPermanentAddress.landmark,
+                    city: parsedPermanentAddress.city,
+                    district: parsedPermanentAddress.district,
+                    state: parsedPermanentAddress.state,
+                    pin: parsedPermanentAddress.pin,
+                  },
+                },
+              }
+            : undefined,
+        },
+      })
+    );
 
-    // 12) Re-fetch the updated user
+    // Sub-collections
+    ops.push(...getQualificationsOps(username, qualifications));
+    ops.push(...getExperiencesOps(username, experiences));
+    ops.push(...getCertificationsOps(username, certifications));
+    ops.push(...getDocumentsOps(username, documents));
+    ops.push(...getEmergencyContactsOps(username, emergencyContacts));
+
+    // 11) Execute all in a transaction.
+    // The first item in the returned array is the updated user from prisma.user.update(...)
+    // The rest correspond to each sub-operation which may be returns from createMany, etc.
+    const [updatedUser] = await prisma.$transaction(ops);
+
+    // 12) Re-fetch the updated user (with all relations). Alternatively, if you prefer,
+    // you could have included it in the transaction, but this is simpler to read.
     const newUser = (await prisma.user.findUnique({
       where: { username },
       include: {
@@ -420,11 +560,10 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       },
     });
 
-    // 16) Instead of creating the Notification directly, call createNotification
-    //     This sets up pivot rows for each user who should see it.
+    // 16) Create a Notification
     await createNotification({
       message: `User "${username}" was updated by ${session.user.username}`,
-      roleTargets: ["ADMIN"], // or any roles you want to notify
+      roleTargets: ["ADMIN"], // or whatever roles
       targetUrl: `/activity?highlightLog=${auditLog.id}`,
     });
 
@@ -441,132 +580,3 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     });
   }
 }
-
-// ------------------------------
-// Sub-collection Handlers
-// ------------------------------
-async function handleEmergencyContacts(username: string, emergencyContacts: any[]) {
-  if (Array.isArray(emergencyContacts)) {
-    await prisma.emergencyContact.deleteMany({ where: { userUsername: username } });
-    const data = emergencyContacts.map((contact) => ({
-      name: contact.name,
-      relationship: contact.relationship,
-      phoneNumber: contact.phoneNumber,
-      email: contact.email,
-      userUsername: username,
-    }));
-    if (data.length > 0) {
-      await prisma.emergencyContact.createMany({ data });
-    }
-  }
-}
-
-async function handleQualifications(username: string, qualifications: any[]) {
-  if (Array.isArray(qualifications)) {
-    await prisma.qualification.deleteMany({ where: { username } });
-    const data = qualifications.map((qual) => {
-      const record: any = {
-        name: qual.name,
-        level: qual.level,
-        specializations: qual.specializations || [],
-        institution: qual.institution || null,
-        username,
-      };
-      if (qual.startDate) {
-        record.startDate = new Date(qual.startDate);
-      }
-      if (qual.endDate) {
-        record.endDate = new Date(qual.endDate);
-      }
-      return record;
-    });
-    if (data.length > 0) {
-      await prisma.qualification.createMany({ data });
-    }
-  }
-}
-
-async function handleExperiences(username: string, experiences: any[]) {
-  if (Array.isArray(experiences)) {
-    await prisma.experience.deleteMany({ where: { username } });
-    const data = experiences.map((exp) => {
-      const record: any = {
-        jobTitle: exp.jobTitle,
-        company: exp.company,
-        description: exp.description,
-        username,
-      };
-      if (exp.startDate) {
-        record.startDate = new Date(exp.startDate);
-      }
-      if (exp.endDate) {
-        record.endDate = new Date(exp.endDate);
-      }
-      return record;
-    });
-    if (data.length > 0) {
-      await prisma.experience.createMany({ data });
-    }
-  }
-}
-
-async function handleCertifications(username: string, certifications: any[]) {
-  if (Array.isArray(certifications)) {
-    await prisma.certification.deleteMany({ where: { username } });
-    const data = certifications.map((cert) => {
-      const record: any = {
-        name: cert.name,
-        issuingAuthority: cert.issuingAuthority,
-        licenseNumber: cert.licenseNumber || null,
-        username,
-      };
-      if (cert.issueDate) {
-        record.issueDate = new Date(cert.issueDate);
-      }
-      if (cert.expiryDate) {
-        record.expiryDate = new Date(cert.expiryDate);
-      }
-      return record;
-    });
-    if (data.length > 0) {
-      await prisma.certification.createMany({ data });
-    }
-  }
-}
-
-async function handleDocuments(username: string, documents: any) {
-  if (documents && typeof documents === "object") {
-    await prisma.employeeDocument.deleteMany({ where: { userUsername: username } });
-    const allDocs = Object.keys(documents).flatMap((category) => {
-      const docs = Array.isArray(documents[category]) ? documents[category] : [];
-      return docs
-        .map((doc: any) => {
-          const mappedCategory = mapToDocumentCategory(category);
-          if (!mappedCategory) {
-            console.warn(`Invalid document category: ${category}`);
-            return null;
-          }
-          return {
-            userUsername: username,
-            filename: doc.displayName || doc.fileName || "Untitled",
-            fileType: doc.fileType || null,
-            data: doc.fileData ? Buffer.from(doc.fileData, "base64") : Buffer.from([]),
-            size: doc.size || 0,
-            category: mappedCategory,
-          };
-        })
-        .filter((doc) => doc !== null);
-    });
-    if (allDocs.length > 0) {
-      await prisma.employeeDocument.createMany({ data: allDocs });
-    }
-  }
-}
-
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: "10mb",
-    },
-  },
-};

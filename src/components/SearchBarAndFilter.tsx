@@ -1,9 +1,9 @@
-// src/components/announcements/SearchBarAndFilter.tsx
-
 import { Dispatch, SetStateAction } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Icon } from "@iconify/react"
+// If you have a helper for merging class names (like ShadCN's `cn` util), import that. Otherwise, you can do a manual conditional.
+import { cn } from "@/lib/utils"
 
 interface SearchBarProps {
   searchTerm: string
@@ -16,6 +16,9 @@ interface SearchBarProps {
 
   onClearAll?: () => void
   isLoading?: boolean
+
+  // Add the optional className prop
+  className?: string
 }
 
 export function SearchBarAndFilter({
@@ -27,9 +30,16 @@ export function SearchBarAndFilter({
   setShowArchived,
   onClearAll,
   isLoading,
+  className, // receive here
 }: SearchBarProps) {
   return (
-    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+    <div
+      // Merge your default styling classes with the optional className passed in
+      className={cn(
+        "flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4",
+        className
+      )}
+    >
       {/* Search Input */}
       <Input
         placeholder="Search Announcements..."

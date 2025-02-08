@@ -1,4 +1,3 @@
-// src/pages/announcements/index.tsx
 "use client";
 
 import Head from "next/head";
@@ -20,7 +19,10 @@ import { Badge } from "@/components/ui/badge";
 import { XCircle } from "lucide-react";
 
 // Notification logic
-import { useSidebarNotifications, NotificationItem } from "@/hooks/useSidebarNotifications";
+import {
+  useSidebarNotifications,
+  NotificationItem,
+} from "@/hooks/useSidebarNotifications";
 import { NotificationListCard } from "@/components/NotificationCard";
 
 // For Searching/Filtering announcements
@@ -29,9 +31,10 @@ import { SearchBarAndFilter } from "@/components/SearchBarAndFilter";
 // ExtendedAnnouncement type
 import { ExtendedAnnouncement } from "@/types/ExtendedAnnouncement";
 
-// The grid-based display
+// The new bento-grid-based display
 import { AnnouncementsGrid } from "@/components/AnnouncementsGrid";
 
+// Fetch announcements from the server
 export const getServerSideProps: GetServerSideProps = async (context) => {
   const session = await getServerSession(context.req, context.res, authOptions);
   if (!session) {
@@ -47,15 +50,9 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
 
   const announcements = await prisma.announcement.findMany({
     where: {
-      OR: [
-        { roleTargets: { has: userRole } },
-        { roleTargets: { equals: [] } },
-      ],
+      OR: [{ roleTargets: { has: userRole } }, { roleTargets: { equals: [] } }],
     },
-    orderBy: [
-      { pinned: "desc" },
-      { dateCreated: "desc" },
-    ],
+    orderBy: [{ pinned: "desc" }, { dateCreated: "desc" }],
   });
 
   return {
@@ -65,6 +62,7 @@ export const getServerSideProps: GetServerSideProps = async (context) => {
   };
 };
 
+// Helper functions
 async function togglePinAnnouncement(id: string, pinned: boolean) {
   const resp = await fetch("/api/announcements/pin", {
     method: "PATCH",
@@ -137,6 +135,7 @@ export default function AnnouncementsIndex({
     return matchesSearch;
   });
 
+  // Handlers
   async function handlePinToggle(a: ExtendedAnnouncement) {
     try {
       setLoading(true);
@@ -144,10 +143,8 @@ export default function AnnouncementsIndex({
       setAnnouncements((prev) =>
         prev.map((ann) => (ann.id === a.id ? { ...ann, pinned: !ann.pinned } : ann))
       );
-    
     } catch (err) {
       console.error(err);
-     
     } finally {
       setLoading(false);
     }
@@ -158,24 +155,23 @@ export default function AnnouncementsIndex({
       setLoading(true);
       await deleteAnnouncementById(id);
       setAnnouncements((prev) => prev.filter((a) => a.id !== id));
-      
     } catch (err) {
       console.error(err);
-    
     } finally {
       setLoading(false);
     }
   }
 
   async function handleClearAll() {
+    if (!window.confirm("Are you sure you want to delete ALL announcements?")) {
+      return;
+    }
     try {
       setLoading(true);
       await Promise.all(announcements.map((a) => deleteAnnouncementById(a.id)));
       setAnnouncements([]);
-      
     } catch (err) {
       console.error(err);
-
     } finally {
       setLoading(false);
     }
@@ -190,7 +186,6 @@ export default function AnnouncementsIndex({
 
   // Use a controlled Tabs state
   const [selectedTab, setSelectedTab] = useState("announcements");
-
   useEffect(() => {
     if (router.query.tab && typeof router.query.tab === "string") {
       setSelectedTab(router.query.tab);
@@ -206,97 +201,141 @@ export default function AnnouncementsIndex({
       </Head>
       <ToastContainer position="top-right" autoClose={3000} hideProgressBar />
 
-      <div className="p-4 md:p-8 min-h-screen text-white">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold">All Updates</h1>
-          {(userRole === "HR" || userRole === "ADMIN") && (
-            <Link href="/announcements/new">
-              <Button variant="default">Create Announcement</Button>
-            </Link>
-          )}
-        </div>
+      {/* Container with less padding to make layout more compact */}
+      <div className="p-2 md:p-4 min-h-screen bg-gray-50 text-gray-900 rounded-lg">
+        <div className="max-w-7xl mx-auto w-full">
+          {/* 
+            Removed the "All Updates" heading; 
+            If you want a subtle heading, you can keep a smaller label here:
+            <h2 className="text-sm font-semibold uppercase text-gray-500 mb-2">Updates</h2>
+          */}
 
-        <Tabs value={selectedTab} onValueChange={setSelectedTab}>
-          <TabsList>
-            <TabsTrigger value="announcements">Announcements</TabsTrigger>
-            <TabsTrigger value="notifications">
-              Notifications
-              {unreadCount > 0 && (
-                <Badge variant="outline" className="ml-2">
-                  {unreadCount}
-                </Badge>
-              )}
-            </TabsTrigger>
-          </TabsList>
-
-          {/* Announcements Tab */}
-          <TabsContent value="announcements">
-            <SearchBarAndFilter
-              searchTerm={searchTerm}
-              setSearchTerm={setSearchTerm}
-              showPinnedOnly={showPinnedOnly}
-              setShowPinnedOnly={setShowPinnedOnly}
-              showArchived={showArchived}
-              setShowArchived={setShowArchived}
-              onClearAll={
-                (userRole === "HR" || userRole === "ADMIN") && announcements.length > 0
-                  ? handleClearAll
-                  : undefined
-              }
-              isLoading={loading}
-            />
-
-            {filteredAnnouncements.length === 0 ? (
-              <div className="flex flex-col items-center justify-center text-gray-300 mt-10">
-                <XCircle className="w-16 h-16 mb-4" />
-                <h2 className="text-2xl font-semibold">No announcements found</h2>
-              </div>
-            ) : (
-              <AnnouncementsGrid
-                announcements={filteredAnnouncements}
-                onPinToggle={(userRole === "HR" || userRole === "ADMIN") ? handlePinToggle : undefined}
-                onDelete={(userRole === "HR" || userRole === "ADMIN") ? handleDeleteAnnouncement : undefined}
-                loading={loading}
-              />
-            )}
-          </TabsContent>
-
-          {/* Notifications Tab */}
-          <TabsContent value="notifications">
-            <div className="flex justify-end mb-3">
-              {unreadCount > 0 && (
-                <Button variant="outline" onClick={handleMarkAllRead}>
-                  Mark All Read
-                </Button>
-              )}
-            </div>
-
-            <div className="rounded-lg p-2 shadow-md min-h-[200px]">
-              <AnimatePresence>
-                {notifications.map((notif) => (
-                  <motion.div
-                    key={notif.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 10 }}
-                    transition={{ duration: 0.2 }}
+          {/* Tabs with a tighter design */}
+          <Tabs
+            value={selectedTab}
+            onValueChange={setSelectedTab}
+            className="space-y-2"
+          >
+            <TabsList className="bg-gray-200 rounded-md p-1 flex space-x-1">
+              <TabsTrigger
+                value="announcements"
+                className="text-xs font-medium px-2 py-1 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded"
+              >
+                Announcements
+              </TabsTrigger>
+              <TabsTrigger
+                value="notifications"
+                className="text-xs font-medium px-2 py-1 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded"
+              >
+                Notifications
+                {unreadCount > 0 && (
+                  <Badge
+                    variant="default"
+                    className="ml-2 bg-yellow-300 text-black text-[10px] font-semibold"
                   >
-                    <NotificationListCard
-                      title={notif.message}
-                      time={notif.createdAt}
-                      isNew={!notif.isRead}
-                      onClick={() => handleViewDetails(notif)}
-                    />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
+                    {unreadCount}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            </TabsList>
 
-              {notifications.length === 0 && (
-                <p className="text-sm text-gray-400 mt-2">No notifications found.</p>
+            {/* Announcements Tab */}
+            <TabsContent value="announcements" className="mt-3">
+              <div className="flex items-center justify-between mb-3">
+                {(userRole === "HR" || userRole === "ADMIN") && (
+                  <Link href="/announcements/new">
+                    {/* A green button, smaller style */}
+                    <Button
+                      variant="default"
+                      className="h-6 px-2 text-xs bg-green-600 hover:bg-green-700 border-none"
+                    >
+                      Create
+                    </Button>
+                  </Link>
+                )}
+              </div>
+
+              <SearchBarAndFilter
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+                showPinnedOnly={showPinnedOnly}
+                setShowPinnedOnly={setShowPinnedOnly}
+                showArchived={showArchived}
+                setShowArchived={setShowArchived}
+                onClearAll={
+                  (userRole === "HR" || userRole === "ADMIN") && announcements.length > 0
+                    ? handleClearAll
+                    : undefined
+                }
+                isLoading={loading}
+                // Pass smaller prop (if you want to customize the search bar styling)
+                className="mb-3"
+              />
+
+              {filteredAnnouncements.length === 0 ? (
+                <div className="flex flex-col items-center justify-center text-gray-500 mt-10">
+                  <XCircle className="w-10 h-10 mb-2" />
+                  <h2 className="text-sm font-semibold">No announcements found</h2>
+                </div>
+              ) : (
+                <AnnouncementsGrid
+                  announcements={filteredAnnouncements}
+                  onPinToggle={
+                    userRole === "HR" || userRole === "ADMIN"
+                      ? handlePinToggle
+                      : undefined
+                  }
+                  onDelete={
+                    userRole === "HR" || userRole === "ADMIN"
+                      ? handleDeleteAnnouncement
+                      : undefined
+                  }
+                  loading={loading}
+                />
               )}
-            </div>
-          </TabsContent>
-        </Tabs>
+            </TabsContent>
+
+            {/* Notifications Tab */}
+            <TabsContent value="notifications" className="mt-3">
+              <div className="flex justify-end mb-2">
+                {unreadCount > 0 && (
+                  <Button
+                    variant="default"
+                    onClick={handleMarkAllRead}
+                    className="h-6 px-2 text-xs bg-teal-600 hover:bg-teal-700 border-none"
+                  >
+                    Mark All Read
+                  </Button>
+                )}
+              </div>
+
+              <div className="rounded-lg p-2 shadow-sm bg-white min-h-[200px] text-sm">
+                <AnimatePresence>
+                  {notifications.map((notif) => (
+                    <motion.div
+                      key={notif.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <NotificationListCard
+                        title={notif.message}
+                        time={notif.createdAt}
+                        isNew={!notif.isRead}
+                        onClick={() => handleViewDetails(notif)}
+                      />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+
+                {notifications.length === 0 && (
+                  <p className="text-xs text-gray-400 mt-2">No notifications found.</p>
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
+        </div>
       </div>
     </>
   );

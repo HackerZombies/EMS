@@ -1,6 +1,8 @@
+// src/pages/api/users/updateUser.ts
+
 import type { NextApiRequest, NextApiResponse } from "next";
-import { prisma } from "@/lib/prisma";
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
 import {
@@ -14,16 +16,27 @@ import {
   Certification,
   EmployeeDocument,
   EmergencyContact,
+  Prisma, // for input types
 } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import sendUpdateEmail from "@/lib/sendUserUpdateEmail";
 import { mapToDocumentCategory } from "@/lib/documentCategory";
 import logger from "@/lib/logger";
-import crypto from "crypto";
 
 // 1) Import your pivot-based createNotification service
 import { createNotification } from "@/services/notificationService";
 
 const ALLOWED_ROLES = ["HR", "ADMIN"];
+
+interface Address {
+  flat: string | null;
+  street: string | null;
+  landmark: string | null;
+  city: string | null;
+  district: string | null;
+  state: string | null;
+  pin: string | null;
+}
 
 /** Helper interface representing a full user with relations. */
 interface FullUser extends PrismaUser {
@@ -32,28 +45,13 @@ interface FullUser extends PrismaUser {
   certifications: Certification[];
   employeeDocuments: EmployeeDocument[];
   emergencyContacts: EmergencyContact[];
-  residentialAddress: {
-    flat: string | null;
-    street: string | null;
-    landmark: string | null;
-    city: string | null;
-    district: string | null;
-    state: string | null;
-    pin: string | null;
-  } | null;
-  permanentAddress: {
-    flat: string | null;
-    street: string | null;
-    landmark: string | null;
-    city: string | null;
-    district: string | null;
-    state: string | null;
-    pin: string | null;
-  } | null;
+  residentialAddress: Address | null;
+  permanentAddress: Address | null;
 }
 
 /**
- * Build a diff object that describes what fields changed (including nested ones).
+ * Build a diff object describing what fields changed (including nested ones).
+ * Strips large Buffer data from being JSON-stringified.
  */
 function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
   const changedFields: Record<string, { old: any; new: any }> = {};
@@ -102,17 +100,17 @@ function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
     }
   }
 
-  // Compare joiningDate separately.
+  // Compare joiningDate separately
   if (oldUser.joiningDate instanceof Date && newUser.joiningDate instanceof Date) {
     if (oldUser.joiningDate.getTime() !== newUser.joiningDate.getTime()) {
-      changedFields["joiningDate"] = {
+      changedFields.joiningDate = {
         old: oldUser.joiningDate,
         new: newUser.joiningDate,
       };
     }
   } else {
     if (oldUser.joiningDate !== newUser.joiningDate) {
-      changedFields["joiningDate"] = {
+      changedFields.joiningDate = {
         old: oldUser.joiningDate,
         new: newUser.joiningDate,
       };
@@ -123,6 +121,12 @@ function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
   function compareArray(fieldName: keyof FullUser) {
     const oldFieldValue = oldUser[fieldName];
     const newFieldValue = newUser[fieldName];
+
+    // Helper to remove large Buffer fields (data)
+    function simplifyRecord(obj: any) {
+      const { id, dateCreated, data, ...rest } = obj;
+      return rest;
+    }
 
     const oldArray = Array.isArray(oldFieldValue)
       ? oldFieldValue.map(simplifyRecord)
@@ -141,12 +145,6 @@ function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
     }
   }
 
-  // IMPORTANT: We remove `data` (the Buffer) to avoid huge JSON or parse errors
-  function simplifyRecord(obj: any) {
-    const { id, dateCreated, data, ...rest } = obj;
-    return rest;
-  }
-
   compareArray("qualifications");
   compareArray("experiences");
   compareArray("certifications");
@@ -157,19 +155,19 @@ function buildChangesDiff(oldUser: FullUser, newUser: FullUser) {
 }
 
 export default async function handle(req: NextApiRequest, res: NextApiResponse) {
-  // 1) Only allow PUT requests.
+  // Only allow PUT requests.
   if (req.method !== "PUT") {
     return res.status(405).json({ message: "Method Not Allowed" });
   }
 
   try {
-    // 2) Check session and ensure user has proper role.
+    // 1) Check session and ensure user has the allowed role.
     const session = await getServerSession(req, res, authOptions);
-    if (!session || !session.user || !ALLOWED_ROLES.includes(session.user.role as string)) {
+    if (!session?.user || !ALLOWED_ROLES.includes(session.user.role as string)) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    // 3) Destructure the payload
+    // 2) Extract body data
     const {
       username,
       firstName,
@@ -199,51 +197,11 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       resetPassword,
     } = req.body;
 
-    // 4) Basic validation
     if (!username || !firstName || !lastName || !email || !role) {
-      return res.status(400).json({ message: "Missing mandatory fields" });
+      return res.status(400).json({ message: "Missing mandatory fields." });
     }
 
-    // 5) Prepare main user data
-    const dataToUpdate: Record<string, any> = {
-      firstName,
-      lastName,
-      email,
-      phoneNumber,
-      role,
-    };
-
-    if (middleName) dataToUpdate.middleName = middleName;
-    if (department) dataToUpdate.department = department;
-    if (position) dataToUpdate.position = position;
-    if (gender) dataToUpdate.gender = gender;
-    if (bloodGroup) dataToUpdate.bloodGroup = bloodGroup;
-    if (employmentType) dataToUpdate.employmentType = employmentType;
-    if (workLocation) dataToUpdate.workLocation = workLocation;
-    if (profileImageUrl) dataToUpdate.profileImageUrl = profileImageUrl;
-    if (dob) dataToUpdate.dob = new Date(dob);
-    if (nationality) dataToUpdate.nationality = nationality;
-    if (joiningDate !== undefined && joiningDate !== null) {
-      dataToUpdate.joiningDate = new Date(joiningDate);
-    }
-
-    // 6) Handle password reset or direct password change
-    if (resetPassword) {
-      const newPassword = crypto.randomBytes(12).toString("hex");
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
-      dataToUpdate.password = hashedPassword;
-
-      // Send password reset email asynchronously
-      sendUpdateEmail(email, username, newPassword)
-        .then(() => logger.info(`Password reset email sent to user ${username}.`))
-        .catch((error) =>
-          logger.error(`Failed to send password reset email to ${username}:`, error)
-        );
-    } else if (password) {
-      dataToUpdate.password = await bcrypt.hash(password, 10);
-    }
-
-    // 7) Validate enum values
+    // 3) Validate enumerations
     const validDepartments: Department[] = [
       Department.Admin,
       Department.HR,
@@ -284,11 +242,14 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       EmploymentType.INTERN,
       EmploymentType.OTHER,
     ];
-    if (employmentType && !validEmploymentTypes.includes(employmentType as EmploymentType)) {
+    if (
+      employmentType &&
+      !validEmploymentTypes.includes(employmentType as EmploymentType)
+    ) {
       return res.status(400).json({ message: "Invalid employment type" });
     }
 
-    // 8) Fetch the old user data (with relations)
+    // 4) Fetch the existing user (with relations) to compare diffs
     const oldUser = (await prisma.user.findUnique({
       where: { username },
       include: {
@@ -306,82 +267,253 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(404).json({ message: "User not found" });
     }
 
-    // 9) Parse addresses
-    const parsedResidentialAddress =
+    // 5) Build updates for user (not including sub-collections yet)
+    const dataToUpdate: Record<string, any> = {
+      firstName,
+      lastName,
+      email,
+      phoneNumber,
+      role,
+      middleName: middleName || null,
+      department: department || null,
+      position: position || null,
+      gender: gender || null,
+      bloodGroup: bloodGroup || null,
+      employmentType: employmentType || null,
+      workLocation: workLocation || null,
+      profileImageUrl: profileImageUrl || null,
+      nationality: nationality || null,
+    };
+
+    // 6) Handle password-related updates
+    if (resetPassword) {
+      // Generate a random password
+      const newPassword = crypto.randomBytes(12).toString("hex");
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      dataToUpdate.password = hashedPassword;
+
+      // Send email asynchronously
+      sendUpdateEmail(email, username, newPassword)
+        .then(() => logger.info(`Password reset email sent to user ${username}.`))
+        .catch((err) =>
+          logger.error(`Failed to send password reset email to ${username}:`, err)
+        );
+    } else if (password) {
+      dataToUpdate.password = await bcrypt.hash(password, 10);
+    }
+
+    // 7) Convert date strings to Date objects if provided (schema requires them if not optional)
+    if (dob) dataToUpdate.dob = new Date(dob);
+    if (joiningDate !== undefined && joiningDate !== null) {
+      dataToUpdate.joiningDate = new Date(joiningDate);
+    }
+
+    // 8) Prepare updates for addresses
+    const parsedResidential =
       residentialAddress && typeof residentialAddress === "object"
         ? residentialAddress
         : null;
-    const parsedPermanentAddress =
+    const parsedPermanent =
       permanentAddress && typeof permanentAddress === "object"
         ? permanentAddress
         : null;
 
-    // 10) Update the main user record with nested upserts for addresses
-    await prisma.user.update({
-      where: { username },
-      data: {
-        ...dataToUpdate,
-        residentialAddress: parsedResidentialAddress
-          ? {
-              upsert: {
-                update: {
-                  flat: parsedResidentialAddress.flat,
-                  street: parsedResidentialAddress.street,
-                  landmark: parsedResidentialAddress.landmark,
-                  city: parsedResidentialAddress.city,
-                  district: parsedResidentialAddress.district,
-                  state: parsedResidentialAddress.state,
-                  pin: parsedResidentialAddress.pin,
-                },
-                create: {
-                  flat: parsedResidentialAddress.flat,
-                  street: parsedResidentialAddress.street,
-                  landmark: parsedResidentialAddress.landmark,
-                  city: parsedResidentialAddress.city,
-                  district: parsedResidentialAddress.district,
-                  state: parsedResidentialAddress.state,
-                  pin: parsedResidentialAddress.pin,
-                },
-              },
-            }
-          : undefined,
-        permanentAddress: parsedPermanentAddress
-          ? {
-              upsert: {
-                update: {
-                  flat: parsedPermanentAddress.flat,
-                  street: parsedPermanentAddress.street,
-                  landmark: parsedPermanentAddress.landmark,
-                  city: parsedPermanentAddress.city,
-                  district: parsedPermanentAddress.district,
-                  state: parsedPermanentAddress.state,
-                  pin: parsedPermanentAddress.pin,
-                },
-                create: {
-                  flat: parsedPermanentAddress.flat,
-                  street: parsedPermanentAddress.street,
-                  landmark: parsedPermanentAddress.landmark,
-                  city: parsedPermanentAddress.city,
-                  district: parsedPermanentAddress.district,
-                  state: parsedPermanentAddress.state,
-                  pin: parsedPermanentAddress.pin,
-                },
-              },
-            }
-          : undefined,
-      },
-    });
+    // 9) Build a single transaction with all operations
+    const transactionOps: any[] = [];
 
-    // 11) Update sub-collections concurrently
-    await Promise.all([
-      handleQualifications(username, qualifications),
-      handleExperiences(username, experiences),
-      handleCertifications(username, certifications),
-      handleDocuments(username, documents),
-      handleEmergencyContacts(username, emergencyContacts),
-    ]);
+    // 9A) Update user (including address upserts)
+    transactionOps.push(
+      prisma.user.update({
+        where: { username },
+        data: {
+          ...dataToUpdate,
+          residentialAddress: parsedResidential
+            ? {
+                upsert: {
+                  update: {
+                    flat: parsedResidential.flat,
+                    street: parsedResidential.street,
+                    landmark: parsedResidential.landmark,
+                    city: parsedResidential.city,
+                    district: parsedResidential.district,
+                    state: parsedResidential.state,
+                    pin: parsedResidential.pin,
+                  },
+                  create: {
+                    flat: parsedResidential.flat,
+                    street: parsedResidential.street,
+                    landmark: parsedResidential.landmark,
+                    city: parsedResidential.city,
+                    district: parsedResidential.district,
+                    state: parsedResidential.state,
+                    pin: parsedResidential.pin,
+                  },
+                },
+              }
+            : undefined,
+          permanentAddress: parsedPermanent
+            ? {
+                upsert: {
+                  update: {
+                    flat: parsedPermanent.flat,
+                    street: parsedPermanent.street,
+                    landmark: parsedPermanent.landmark,
+                    city: parsedPermanent.city,
+                    district: parsedPermanent.district,
+                    state: parsedPermanent.state,
+                    pin: parsedPermanent.pin,
+                  },
+                  create: {
+                    flat: parsedPermanent.flat,
+                    street: parsedPermanent.street,
+                    landmark: parsedPermanent.landmark,
+                    city: parsedPermanent.city,
+                    district: parsedPermanent.district,
+                    state: parsedPermanent.state,
+                    pin: parsedPermanent.pin,
+                  },
+                },
+              }
+            : undefined,
+        },
+      })
+    );
 
-    // 12) Re-fetch the updated user
+    // 9B) Qualifications
+    if (Array.isArray(qualifications)) {
+      transactionOps.push(prisma.qualification.deleteMany({ where: { username } }));
+      if (qualifications.length > 0) {
+        // Build array of QualificationCreateManyInput
+        const qData: Prisma.QualificationCreateManyInput[] = qualifications.map(
+          (qual: any) => {
+            // If your schema requires startDate, do the same approach (fallback or supply a date).
+            // Otherwise, if it's optional, only add the property if provided.
+            const record: Prisma.QualificationCreateManyInput = {
+              name: qual.name,
+              level: qual.level,
+              specializations: qual.specializations || [],
+              institution: qual.institution || null,
+              username,
+            };
+            // If your schema has startDate/endDate as optional, only add them if provided:
+            if (qual.startDate) record.startDate = new Date(qual.startDate);
+            if (qual.endDate) record.endDate = new Date(qual.endDate);
+            return record;
+          }
+        );
+        transactionOps.push(prisma.qualification.createMany({ data: qData }));
+      }
+    }
+
+    // 9C) Experiences
+    if (Array.isArray(experiences)) {
+      transactionOps.push(prisma.experience.deleteMany({ where: { username } }));
+      if (experiences.length > 0) {
+        // Since startDate is required in your schema, fallback to new Date() if missing
+        const eData: Prisma.ExperienceCreateManyInput[] = experiences.map((exp: any) => {
+          const record: Prisma.ExperienceCreateManyInput = {
+            jobTitle: exp.jobTitle,
+            company: exp.company,
+            description: exp.description,
+            username,
+            // If your schema says: startDate Date (no ?), we MUST supply it.
+            startDate: exp.startDate ? new Date(exp.startDate) : new Date(),
+          };
+          // If your schema also requires endDate, fallback to new Date()
+          // If it's optional, only add if present
+          if (typeof exp.endDate !== "undefined" && exp.endDate !== null) {
+            record.endDate = new Date(exp.endDate);
+          } else {
+            // If endDate is mandatory in the schema
+            record.endDate = new Date();
+          }
+
+          return record;
+        });
+        transactionOps.push(prisma.experience.createMany({ data: eData }));
+      }
+    }
+
+    // 9D) Certifications
+    if (Array.isArray(certifications)) {
+      transactionOps.push(prisma.certification.deleteMany({ where: { username } }));
+      if (certifications.length > 0) {
+        const cData: Prisma.CertificationCreateManyInput[] = certifications.map(
+          (cert: any) => {
+            const record: Prisma.CertificationCreateManyInput = {
+              name: cert.name,
+              issuingAuthority: cert.issuingAuthority,
+              licenseNumber: cert.licenseNumber || null,
+              username,
+            };
+            // If issueDate is required, fallback to new Date()
+            if (typeof cert.issueDate !== "undefined" && cert.issueDate !== null) {
+              record.issueDate = new Date(cert.issueDate);
+            }
+            // If expiryDate is optional, only add if present
+            if (typeof cert.expiryDate !== "undefined" && cert.expiryDate !== null) {
+              record.expiryDate = new Date(cert.expiryDate);
+            }
+            return record;
+          }
+        );
+        transactionOps.push(prisma.certification.createMany({ data: cData }));
+      }
+    }
+
+    // 9E) Employee Documents
+    if (documents && typeof documents === "object") {
+      transactionOps.push(
+        prisma.employeeDocument.deleteMany({ where: { userUsername: username } })
+      );
+      const allDocs = Object.keys(documents).flatMap((category) => {
+        const docs = Array.isArray(documents[category]) ? documents[category] : [];
+        return docs
+          .map((doc: any) => {
+            const mappedCategory = mapToDocumentCategory(category);
+            if (!mappedCategory) {
+              console.warn(`Invalid document category: ${category}`);
+              return null;
+            }
+            return {
+              userUsername: username,
+              filename: doc.displayName || doc.fileName || "Untitled",
+              fileType: doc.fileType || null,
+              data: doc.fileData
+                ? Buffer.from(doc.fileData, "base64")
+                : Buffer.from([]),
+              size: doc.size || 0,
+              category: mappedCategory,
+            };
+          })
+          .filter((doc) => doc !== null);
+      });
+      if (allDocs.length > 0) {
+        transactionOps.push(prisma.employeeDocument.createMany({ data: allDocs }));
+      }
+    }
+
+    // 9F) Emergency Contacts
+    if (Array.isArray(emergencyContacts)) {
+      transactionOps.push(
+        prisma.emergencyContact.deleteMany({ where: { userUsername: username } })
+      );
+      if (emergencyContacts.length > 0) {
+        const ecData = emergencyContacts.map((contact: any) => ({
+          name: contact.name,
+          relationship: contact.relationship,
+          phoneNumber: contact.phoneNumber,
+          email: contact.email,
+          userUsername: username,
+        }));
+        transactionOps.push(prisma.emergencyContact.createMany({ data: ecData }));
+      }
+    }
+
+    // 10) Run all DB operations in a single transaction
+    await prisma.$transaction(transactionOps);
+
+    // 11) Now, fetch the updated user
     const newUser = (await prisma.user.findUnique({
       where: { username },
       include: {
@@ -399,16 +531,15 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       return res.status(500).json({ message: "Could not re-fetch updated user." });
     }
 
-    // 13) Build the diff
+    // 12) Build the diff
     const changedFields = buildChangesDiff(oldUser, newUser);
-
-    // 14) Check if there are changes or password reset
     const hasChanges = Object.keys(changedFields).length > 0 || resetPassword;
+
     if (!hasChanges) {
-      return res.status(200).json({ message: "No changes detected" });
+      return res.status(200).json({ message: "No changes detected." });
     }
 
-    // 15) Create an audit log
+    // 13) Create an audit log entry
     const auditLog = await prisma.auditLog.create({
       data: {
         action: "UPDATE_USER",
@@ -419,13 +550,14 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       },
     });
 
-    // 16) Instead of creating the Notification directly, call createNotification
+    // 14) Create notifications via your pivot-based service
     await createNotification({
       message: `User "${username}" was updated by ${session.user.username}`,
-      roleTargets: ["ADMIN"],
+      roleTargets: ["ADMIN"], // Adjust roles if needed
       targetUrl: `/activity?highlightLog=${auditLog.id}`,
     });
 
+    // 15) Respond success
     return res.status(200).json({
       message: "User updated successfully",
       resetPassword: resetPassword ? "Password reset email sent" : undefined,
@@ -440,131 +572,10 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
   }
 }
 
-// ------------------------------
-// Sub-collection Handlers
-// ------------------------------
-async function handleEmergencyContacts(username: string, emergencyContacts: any[]) {
-  if (Array.isArray(emergencyContacts)) {
-    await prisma.emergencyContact.deleteMany({ where: { userUsername: username } });
-    const data = emergencyContacts.map((contact) => ({
-      name: contact.name,
-      relationship: contact.relationship,
-      phoneNumber: contact.phoneNumber,
-      email: contact.email,
-      userUsername: username,
-    }));
-    if (data.length > 0) {
-      await prisma.emergencyContact.createMany({ data });
-    }
-  }
-}
-
-async function handleQualifications(username: string, qualifications: any[]) {
-  if (Array.isArray(qualifications)) {
-    await prisma.qualification.deleteMany({ where: { username } });
-    const data = qualifications.map((qual) => {
-      const record: any = {
-        name: qual.name,
-        level: qual.level,
-        specializations: qual.specializations || [],
-        institution: qual.institution || null,
-        username,
-      };
-      if (qual.startDate) {
-        record.startDate = new Date(qual.startDate);
-      }
-      if (qual.endDate) {
-        record.endDate = new Date(qual.endDate);
-      }
-      return record;
-    });
-    if (data.length > 0) {
-      await prisma.qualification.createMany({ data });
-    }
-  }
-}
-
-async function handleExperiences(username: string, experiences: any[]) {
-  if (Array.isArray(experiences)) {
-    await prisma.experience.deleteMany({ where: { username } });
-    const data = experiences.map((exp) => {
-      const record: any = {
-        jobTitle: exp.jobTitle,
-        company: exp.company,
-        description: exp.description,
-        username,
-      };
-      if (exp.startDate) {
-        record.startDate = new Date(exp.startDate);
-      }
-      if (exp.endDate) {
-        record.endDate = new Date(exp.endDate);
-      }
-      return record;
-    });
-    if (data.length > 0) {
-      await prisma.experience.createMany({ data });
-    }
-  }
-}
-
-async function handleCertifications(username: string, certifications: any[]) {
-  if (Array.isArray(certifications)) {
-    await prisma.certification.deleteMany({ where: { username } });
-    const data = certifications.map((cert) => {
-      const record: any = {
-        name: cert.name,
-        issuingAuthority: cert.issuingAuthority,
-        licenseNumber: cert.licenseNumber || null,
-        username,
-      };
-      if (cert.issueDate) {
-        record.issueDate = new Date(cert.issueDate);
-      }
-      if (cert.expiryDate) {
-        record.expiryDate = new Date(cert.expiryDate);
-      }
-      return record;
-    });
-    if (data.length > 0) {
-      await prisma.certification.createMany({ data });
-    }
-  }
-}
-
-async function handleDocuments(username: string, documents: any) {
-  if (documents && typeof documents === "object") {
-    await prisma.employeeDocument.deleteMany({ where: { userUsername: username } });
-    const allDocs = Object.keys(documents).flatMap((category) => {
-      const docs = Array.isArray(documents[category]) ? documents[category] : [];
-      return docs
-        .map((doc: any) => {
-          const mappedCategory = mapToDocumentCategory(category);
-          if (!mappedCategory) {
-            console.warn(`Invalid document category: ${category}`);
-            return null;
-          }
-          return {
-            userUsername: username,
-            filename: doc.displayName || doc.fileName || "Untitled",
-            fileType: doc.fileType || null,
-            data: doc.fileData ? Buffer.from(doc.fileData, "base64") : Buffer.from([]),
-            size: doc.size || 0,
-            category: mappedCategory,
-          };
-        })
-        .filter((doc) => doc !== null);
-    });
-    if (allDocs.length > 0) {
-      await prisma.employeeDocument.createMany({ data: allDocs });
-    }
-  }
-}
-
 export const config = {
   api: {
     bodyParser: {
-      sizeLimit: "10mb", // Note: Vercel free tier may reject requests over ~4–5MB
+      sizeLimit: "4mb", // typical limit for Vercel free tier
     },
   },
 };

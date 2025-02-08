@@ -517,3 +517,13 @@ model PermanentAddress {
   userUsername String @unique
   user         User   @relation(fields: [userUsername], references: [username], onDelete: Cascade)
 }
+
+model Geofence {
+  id        String   @id @map("_id") @db.ObjectId @default(auto())
+  name      String
+  latitude  Float
+  longitude Float
+  radius    Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

@@ -1,13 +1,15 @@
 // pages/api/mobile/attendance/[action].ts
+
 import { NextApiRequest, NextApiResponse } from 'next'
 import Cors from 'nextjs-cors'
-import { prisma } from '@/lib/prisma'
 import jwt from 'jsonwebtoken'
+import type { Geofence } from '@prisma/client'
 
-// 1) Import your Mapbox reverse geocode function
+import { prisma } from '@/lib/prisma'
 import { reverseGeocodeFromMapbox } from '@/lib/mapbox'
+import { haversineDistance } from '@/lib/utils'
 
-// 2) (Optional) If you want socket broadcasts or notifications:
+// (Optional) If you have socket/notifications:
 import { broadcastAttendanceUpdate } from '@/pages/api/socket'
 import { createNotification } from '@/services/notificationService'
 
@@ -29,18 +31,18 @@ export default async function attendanceHandler(
     return res.status(200).end()
   }
 
-  // 3) Only POST
+  // 3) Only POST allowed
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method not allowed' })
   }
 
-  // 4) Check `action`: /api/mobile/attendance/[action] -> "checkin" or "checkout"
+  // 4) Check action in query: /api/mobile/attendance/[action]
   const { action } = req.query
   if (action !== 'checkin' && action !== 'checkout') {
     return res.status(404).json({ message: 'Invalid action' })
   }
 
-  // 5) Parse JWT from Authorization header: "Bearer <token>"
+  // 5) Parse JWT from "Bearer <token>" in Authorization header
   const { authorization } = req.headers
   if (!authorization) {
     return res.status(401).json({ message: 'Missing Authorization header.' })
@@ -60,7 +62,7 @@ export default async function attendanceHandler(
     return res.status(401).json({ message: 'Invalid or expired token.' })
   }
 
-  // 6) Extract fields from the body
+  // 6) Extract fields from the request body
   const {
     date,
     checkInTime,
@@ -71,8 +73,8 @@ export default async function attendanceHandler(
     checkOutLongitude,
   } = req.body
 
-  // 7) Ensure username + date
-  const username = decoded.username // must be present in token payload
+  // 7) Validate username + date
+  const username = decoded.username
   if (!username || !date) {
     return res.status(400).json({ message: 'username and date are required' })
   }
@@ -99,7 +101,24 @@ export default async function attendanceHandler(
           .json({ message: 'Missing required fields for check-in' })
       }
 
-      // 1) Check if user already checked in today
+      // (A) Geofence enforcement
+      const geofences = await prisma.geofence.findMany()
+      const latNum = parseFloat(checkInLatitude)
+      const lonNum = parseFloat(checkInLongitude)
+
+      // Check if user is within at least ONE geofence
+      const isInsideAnyGeofence = geofences.some((g: Geofence) => {
+        const dist = haversineDistance(latNum, lonNum, g.latitude, g.longitude)
+        return dist <= g.radius
+      })
+
+      if (!isInsideAnyGeofence) {
+        return res
+          .status(400)
+          .json({ message: 'You are outside the permitted geofence area.' })
+      }
+
+      // (B) Check if user already checked in today
       const existing = await prisma.attendance.findUnique({
         where: {
           userUsername_date: {
@@ -112,23 +131,19 @@ export default async function attendanceHandler(
         return res.status(400).json({ message: 'Already checked in today' })
       }
 
-      // 2) Reverse-geocode the check-in address
-      const checkInAddress = await reverseGeocodeFromMapbox(
-        parseFloat(checkInLatitude),
-        parseFloat(checkInLongitude)
-      )
+      // (C) Reverse-geocode the check-in address
+      const checkInAddress = await reverseGeocodeFromMapbox(latNum, lonNum)
 
-      // 3) Create new attendance record
+      // (D) Create new attendance record
       updatedAttendance = await prisma.attendance.create({
         data: {
           date: parsedDate,
           checkInTime: new Date(checkInTime),
-          checkInLatitude: parseFloat(checkInLatitude),
-          checkInLongitude: parseFloat(checkInLongitude),
+          checkInLatitude: latNum,
+          checkInLongitude: lonNum,
           checkInAddress,
           userUsername: username,
         },
-        // If you need user data in the response for notifications:
         include: {
           user: {
             select: {
@@ -141,7 +156,7 @@ export default async function attendanceHandler(
         },
       })
 
-      // 4) (Optional) Create notifications & broadcast
+      // (E) Optional notifications + broadcast
       if (updatedAttendance) {
         await createNotification({
           message: `User ${updatedAttendance.user.username} just checked in`,
@@ -166,7 +181,23 @@ export default async function attendanceHandler(
           .json({ message: 'Missing required fields for check-out' })
       }
 
-      // 1) Must have an existing check-in
+      // (A) Geofence enforcement
+      const geofences = await prisma.geofence.findMany()
+      const latNum = parseFloat(checkOutLatitude)
+      const lonNum = parseFloat(checkOutLongitude)
+
+      const isInsideAnyGeofence = geofences.some((g: Geofence) => {
+        const dist = haversineDistance(latNum, lonNum, g.latitude, g.longitude)
+        return dist <= g.radius
+      })
+
+      if (!isInsideAnyGeofence) {
+        return res
+          .status(400)
+          .json({ message: 'You are outside the permitted geofence area.' })
+      }
+
+      // (B) Must have an existing check-in
       const attendance = await prisma.attendance.findUnique({
         where: {
           userUsername_date: {
@@ -184,19 +215,16 @@ export default async function attendanceHandler(
         return res.status(400).json({ message: 'Already checked out today' })
       }
 
-      // 2) Reverse-geocode the check-out address
-      const checkOutAddress = await reverseGeocodeFromMapbox(
-        parseFloat(checkOutLatitude),
-        parseFloat(checkOutLongitude)
-      )
+      // (C) Reverse-geocode the check-out address
+      const checkOutAddress = await reverseGeocodeFromMapbox(latNum, lonNum)
 
-      // 3) Update the existing record with check-out details
+      // (D) Update the existing record
       updatedAttendance = await prisma.attendance.update({
         where: { id: attendance.id },
         data: {
           checkOutTime: new Date(checkOutTime),
-          checkOutLatitude: parseFloat(checkOutLatitude),
-          checkOutLongitude: parseFloat(checkOutLongitude),
+          checkOutLatitude: latNum,
+          checkOutLongitude: lonNum,
           checkOutAddress,
         },
         include: {
@@ -211,7 +239,7 @@ export default async function attendanceHandler(
         },
       })
 
-      // 4) (Optional) Create notifications & broadcast
+      // (E) Optional notifications + broadcast
       if (updatedAttendance) {
         await createNotification({
           message: `User ${updatedAttendance.user.username} just checked out`,
@@ -222,7 +250,7 @@ export default async function attendanceHandler(
       }
     }
 
-    // Return updated record
+    // 8) Return updated record
     return res.status(200).json(updatedAttendance)
   } catch (error) {
     console.error('Attendance handler error:', error)

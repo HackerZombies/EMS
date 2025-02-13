@@ -1,20 +1,6 @@
 # EMS
 
-for testing purposes please use following credentials 
-id - 40161
-password - Hr@123456789
-role - TECHNICIAN 
-(can create delete and add new EMployess and can ressolve technical issues and tickets )
 
-id - 29625
-password HR123456789
-role - HR
-(can manage document verification of EMPLOYEES , LEAVE MANAGEMENT , PAYSLIP UPLOAD for specific user , more functionalities )
-
-id - 76495
-password - sk123456789
-role - Employee
-(regular EMPLOYEE , cant access any of the above superadmin features , can apply for leave , create tickets , submit documents , more functionalities check it out yourself )
 
 
 ## Features

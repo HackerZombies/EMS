@@ -2,7 +2,37 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
-import { Upload, RefreshCw, FileText, AlertCircle, ChevronLeft, ChevronRight, CheckCircle2, XCircle, Clock, FileUp } from "lucide-react";
+import {
+  FileUp,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  Clock,
+  FileText,
+  ChevronLeft,
+  ChevronRight,
+  RefreshCw,
+} from "lucide-react";
+
+// Shadcn UI components (adjust import paths as needed)
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Separator } from "@/components/ui/separator";
 
 interface Document {
   id: string;
@@ -11,6 +41,12 @@ interface Document {
   status: string;
   rejectionReason?: string;
 }
+
+// Helper: sanitize the custom filename input to remove unwanted characters
+const sanitizeFilename = (name: string): string => {
+  // Allow only letters, numbers, spaces, hyphens, and underscores
+  return name.replace(/[^a-zA-Z0-9-_ ]/g, "").trim();
+};
 
 export default function SubmitDocument() {
   const { data: session } = useSession();
@@ -22,20 +58,52 @@ export default function SubmitDocument() {
   const [page, setPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [customFilename, setCustomFilename] = useState<string>("");
-  const [isRenaming, setIsRenaming] = useState<boolean>(false);
 
+  // Handle file selection and load the default filename (without extension)
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0] || null;
+    if (selectedFile) {
+      // Validate file type and size (max 10MB)
+      const allowedTypes = [
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ];
+      if (!allowedTypes.includes(selectedFile.type)) {
+        setError("Unsupported file type. Only PDF, DOC, and DOCX are allowed.");
+        return;
+      }
+      if (selectedFile.size > 10 * 1024 * 1024) {
+        setError("File is too large. Maximum allowed size is 10MB.");
+        return;
+      }
+      setFile(selectedFile);
+      const nameWithoutExt = selectedFile.name.replace(/\.[^/.]+$/, "");
+      setCustomFilename(nameWithoutExt);
+      setError(null);
+    }
+  };
+
+  // Rename the file using a sanitized version of the custom filename
+  const renameFile = (originalFile: File, newName: string): File => {
+    const fileExtension = originalFile.name.split(".").pop();
+    const sanitizedNewName = sanitizeFilename(newName);
+    const finalName = sanitizedNewName
+      ? `${sanitizedNewName}.${fileExtension}`
+      : originalFile.name;
+    return new File([originalFile], finalName, { type: originalFile.type });
+  };
+
+  // Fetch documents for the logged-in user
   const fetchDocuments = useCallback(async () => {
     if (!session) return;
-
     setLoading(true);
     try {
-      const response = await fetch(
+      const res = await fetch(
         `/api/hr/documents?submittedBy=${session.user.username}&page=${page}`
       );
-      if (!response.ok) {
-        throw new Error("Failed to fetch documents");
-      }
-      const data = await response.json();
+      if (!res.ok) throw new Error("Failed to fetch documents");
+      const data = await res.json();
       setDocuments(data.documents || []);
       setTotalPages(data.totalPages || 1);
     } catch (err) {
@@ -51,331 +119,285 @@ export default function SubmitDocument() {
     fetchDocuments();
   }, [fetchDocuments]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0] || null;
-    setFile(selectedFile);
-    setCustomFilename(selectedFile?.name.split(".").slice(0, -1).join(".") || "");
-    setIsRenaming(true);
-  };
-
-  const handleRename = () => {
-    if (!file) return;
-    const fileExtension = file.name.split(".").pop();
-    const newFileName = `${customFilename}.${fileExtension}`;
-    const renamedFile = new File([file], newFileName, { type: file.type });
-    setFile(renamedFile);
-    setIsRenaming(false);
-  };
-
+  // Handle the document upload submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+    setSuccess(null);
     if (!file) {
       setError("Please select a file to upload.");
       return;
     }
-
+    const renamedFile = renameFile(file, customFilename);
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("file", renamedFile);
     formData.append("submittedBy", session?.user?.username || "");
-
     setLoading(true);
     try {
-      const response = await fetch("/api/hr/documents", {
+      const res = await fetch("/api/hr/documents", {
         method: "POST",
         body: formData,
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        setError(
-          errorData.error || "An error occurred while uploading the document."
-        );
+      const result = await res.json();
+      if (!res.ok) {
+        setError(result.error || "Upload failed. Please try again.");
         return;
       }
-
-      const result = await response.json();
       setSuccess(`Document submitted successfully: ${result.filename}`);
       setFile(null);
       setCustomFilename("");
-      setIsRenaming(false);
       await fetchDocuments();
     } catch (err) {
+      console.error(err);
       setError("An unexpected error occurred.");
     } finally {
       setLoading(false);
     }
   };
 
+  // Handle resubmission for rejected documents
   const handleResubmit = async (documentId: string) => {
+    setError(null);
+    setSuccess(null);
     if (!file) {
-      setError("Please select a file to upload for resubmission.");
+      setError("Please select a file for resubmission.");
       return;
     }
-
+    const renamedFile = renameFile(file, customFilename);
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("file", renamedFile);
     formData.append("submittedBy", session?.user?.username || "");
-
     setLoading(true);
     try {
-      const response = await fetch(`/api/hr/documents/resubmit?id=${documentId}`, {
+      const res = await fetch(`/api/hr/documents/resubmit?id=${documentId}`, {
         method: "POST",
         body: formData,
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        setError(
-          errorData.error || "An error occurred while resubmitting the document."
-        );
+      const result = await res.json();
+      if (!res.ok) {
+        setError(result.error || "Resubmission failed.");
         return;
       }
-
-      const result = await response.json();
       setSuccess(`Document resubmitted successfully: ${result.filename}`);
       setFile(null);
+      setCustomFilename("");
       await fetchDocuments();
     } catch (err) {
+      console.error(err);
       setError("An unexpected error occurred.");
     } finally {
       setLoading(false);
     }
   };
 
+  // Helper functions for status display
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'approved':
-        return 'text-emerald-400';
-      case 'rejected':
-        return 'text-red-400';
-      case 'pending':
-        return 'text-yellow-400';
+      case "approved":
+        return "text-green-600";
+      case "rejected":
+        return "text-red-600";
+      case "pending":
+        return "text-yellow-600";
       default:
-        return 'text-gray-400';
+        return "text-gray-600";
     }
   };
 
-
   const getStatusIcon = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'approved':
+      case "approved":
         return <CheckCircle2 className="w-4 h-4" />;
-      case 'rejected':
+      case "rejected":
         return <XCircle className="w-4 h-4" />;
-      case 'pending':
+      case "pending":
         return <Clock className="w-4 h-4" />;
       default:
         return <FileText className="w-4 h-4" />;
     }
   };
 
-  const getStatusStyle = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'approved':
-        return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
-      case 'rejected':
-        return 'bg-red-500/20 text-red-300 border-red-500/30';
-      case 'pending':
-        return 'bg-amber-500/20 text-amber-300 border-amber-500/30';
-      default:
-        return 'bg-slate-500/20 text-slate-300 border-slate-500/30';
-    }
-  };
-
   return (
-    <div>
-
-      <div className="relative max-w-7xl mx-auto p-6 space-y-8">
-        {/* Header */}
-        <div className="text-center space-y-4">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-            Document Management Portal
-          </h1>
-          <p className="text-slate-400 max-w-2xl mx-auto">
-            Upload, manage, and track your documents submission and verification process.
+    <div className="space-y-10 p-6 md:p-10 rounded-lg bg-black bg-opacity-20 min-h-screen">
+      {/* Upload Card */}
+      <Card className="bg-white shadow-2xl rounded-lg border border-gray-200 transition-transform transform hover:scale-105">
+        <CardHeader className="text-center border-b border-gray-200 p-6">
+          <CardTitle className="text-3xl font-semibold text-gray-900">
+            Document Portal
+          </CardTitle>
+          <p className="text-gray-700 text-sm mt-2">
+            Upload, manage, and track your document submissions.
           </p>
-        </div>
-
-        {/* Upload Card */}
-        <div className="bg-slate-900/50 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-8 transition-all duration-300 hover:border-slate-600/50">
+        </CardHeader>
+        <CardContent className="p-6">
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="relative group">
+            <div className="relative">
               <input
                 type="file"
+                accept=".pdf,.doc,.docx"
                 onChange={handleFileChange}
-                className="w-full h-48 opacity-0 cursor-pointer absolute inset-0 z-10"
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               />
-              <div className="h-48 border-2 border-dashed border-slate-700 rounded-xl flex items-center justify-center bg-slate-800/30 group-hover:bg-slate-800/50 group-hover:border-slate-600 transition-all duration-300">
-                <div className="text-center space-y-4">
-                  <div className="relative">
-                    <FileUp className="w-16 h-16 mx-auto text-slate-500 group-hover:text-slate-400 transition-colors" />
-                    <div className="absolute inset-0 animate-ping opacity-30">
-                      <FileUp className="w-16 h-16 mx-auto text-slate-500" />
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-slate-400 group-hover:text-slate-300">
-                      {file ? file.name : "Drop your document here or click to browse"}
+              <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-md p-8 bg-white hover:bg-gray-100 transition-colors">
+                {file ? (
+                  <>
+                    <FileUp className="w-10 h-10 text-gray-600" />
+                    <p className="text-gray-800 mt-3 font-medium">{file.name}</p>
+                  </>
+                ) : (
+                  <>
+                    <FileUp className="w-10 h-10 text-gray-600" />
+                    <p className="text-gray-600 mt-3 font-medium">
+                      Click or drag &amp; drop to upload
                     </p>
-                    <p className="text-sm text-slate-500 mt-2">
-                      Supported formats: PDF, DOC, DOCX (Max 10MB)
-                    </p>
-                  </div>
-                </div>
+                  </>
+                )}
               </div>
             </div>
-
-            {file && isRenaming && (
-              <div className="bg-slate-800/50 backdrop-blur-md rounded-xl border border-slate-700/50 p-6">
-                <p className="text-slate-400 mb-3">Customize filename according to ducument's type ie, Adhaar Card, Pan Card, Reprts etc.</p>
-                <div className="flex gap-3">
-                  <input
-                    type="text"
+            {file && (
+              <div className="flex flex-col md:flex-row gap-4 items-center">
+                <div className="flex-1">
+                  <Label htmlFor="customFilename" className="sr-only">
+                    Filename
+                  </Label>
+                  <Input
+                    id="customFilename"
                     value={customFilename}
                     onChange={(e) => setCustomFilename(e.target.value)}
-                    className="flex-1 bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-slate-600 transition-colors"
-                    placeholder="Enter new filename"
+                    placeholder="Enter desired filename"
+                    className="w-full border border-gray-300 text-gray-900"
                   />
-                  <button
-                    type="button"
-                    onClick={handleRename}
-                    className="px-6 py-2.5 bg-slate-700 text-slate-200 rounded-lg hover:bg-slate-600 transition-colors"
-                  >
-                    Rename
-                  </button>
+                </div>
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="px-6 py-3 bg-blue-600 text-white rounded-md shadow hover:bg-blue-700 transition-colors"
+                >
+                  {loading ? (
+                    <RefreshCw className="animate-spin w-5 h-5" />
+                  ) : (
+                    "Upload"
+                  )}
+                </Button>
+              </div>
+            )}
+            {(error || success) && (
+              <div
+                className={`p-4 rounded-md text-sm ${
+                  error
+                    ? "bg-red-100 text-red-700"
+                    : "bg-green-100 text-green-700"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {error ? (
+                    <AlertCircle className="w-5 h-5" />
+                  ) : (
+                    <CheckCircle2 className="w-5 h-5" />
+                  )}
+                  <span>{error || success}</span>
                 </div>
               </div>
             )}
-
-            <button
-              type="submit"
-              disabled={loading || (!!file && isRenaming)}
-              className={`w-full py-4 rounded-xl font-semibold text-lg transition-all duration-300 ${
-                loading || (!!file && isRenaming)
-                  ? "bg-slate-800/50 text-slate-500 cursor-not-allowed"
-                  : "bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white shadow-lg hover:shadow-xl"
-              }`}
-            >
-              {loading ? (
-                <RefreshCw className="w-6 h-6 mx-auto animate-spin" />
-              ) : (
-                "Upload Document"
-              )}
-            </button>
           </form>
+        </CardContent>
+      </Card>
 
-          {(error || success) && (
-            <div className={`mt-6 p-4 rounded-xl backdrop-blur-md ${
-              error ? "bg-red-900/20 border border-red-700/30" : "bg-emerald-900/20 border border-emerald-700/30"
-            }`}>
-              <div className="flex items-center gap-3">
-                {error ? (
-                  <AlertCircle className="w-5 h-5 text-red-400" />
-                ) : (
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                )}
-                <p className={error ? "text-red-300" : "text-emerald-300"}>
-                  {error || success}
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Documents List */}
-        <div className="bg-slate-900/50 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-8">
-          <h2 className="text-2xl font-bold mb-8 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+      {/* Documents List Card */}
+      <Card className="bg-white shadow-2xl rounded-lg border border-gray-200 transition-transform transform hover:scale-105">
+        <CardHeader className="border-b border-gray-200 p-6">
+          <CardTitle className="text-xl font-semibold text-gray-900">
             Recent Submissions
-          </h2>
-
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-slate-700/50">
-                  <th className="text-left py-4 px-6 text-slate-400 font-medium">Document</th>
-                  <th className="text-left py-4 px-6 text-slate-400 font-medium">Date</th>
-                  <th className="text-left py-4 px-6 text-slate-400 font-medium">Status</th>
-                  <th className="text-left py-4 px-6 text-slate-400 font-medium">Notes</th>
-                  <th className="text-left py-4 px-6 text-slate-400 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-700/50">
-                {documents.length > 0 ? (
-                  documents.map((doc) => (
-                    <tr key={doc.id} className="group hover:bg-slate-800/30 transition-colors">
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-3">
-                          <FileText className="w-5 h-5 text-slate-400 group-hover:text-slate-300" />
-                          <span className="text-slate-300 group-hover:text-slate-200">{doc.filename}</span>
-                        </div>
-                      </td>
-                      <td className="py-4 px-6 text-slate-400">
-                        {new Date(doc.dateSubmitted).toLocaleString()}
-                      </td>
-                      <td className="py-4 px-6">
-                        <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border ${getStatusStyle(doc.status)}`}>
-                          {getStatusIcon(doc.status)}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-6">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="text-gray-700">Document</TableHead>
+                <TableHead className="text-gray-700">Date</TableHead>
+                <TableHead className="text-gray-700">Status</TableHead>
+                <TableHead className="text-gray-700">Notes</TableHead>
+                <TableHead className="text-gray-700">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {documents.length > 0 ? (
+                documents.map((doc) => (
+                  <TableRow
+                    key={doc.id}
+                    className="hover:bg-gray-100 transition-colors"
+                  >
+                    <TableCell className="flex items-center gap-3 text-gray-900">
+                      <FileText className="w-5 h-5 text-gray-600" />
+                      <span>{doc.filename}</span>
+                    </TableCell>
+                    <TableCell className="text-gray-800">
+                      {new Date(doc.dateSubmitted).toLocaleString()}
+                    </TableCell>
+                    <TableCell>
+                      <div className={`flex items-center gap-2 ${getStatusColor(doc.status)}`}>
+                        {getStatusIcon(doc.status)}
+                        <span className="capitalize text-sm">
                           {doc.status}
                         </span>
-                      </td>
-                      <td className="py-4 px-6 text-slate-400">
-                        {doc.rejectionReason || "—"}
-                      </td>
-                      <td className="py-4 px-6">
-                        {doc.status === "Rejected" && (
-                          <button
-                            onClick={() => handleResubmit(doc.id)}
-                            className="inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors"
-                          >
-                            Resubmit
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={5} className="py-12 text-center text-slate-500">
-                      No documents found
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination */}
-          <div className="flex items-center justify-between mt-6">
-            <button
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-gray-800">
+                      {doc.rejectionReason || "—"}
+                    </TableCell>
+                    <TableCell>
+                      {doc.status.toLowerCase() === "rejected" && (
+                        <Button
+                          size="sm"
+                          onClick={() => handleResubmit(doc.id)}
+                          variant="destructive"
+                          className="px-4 py-2 bg-red-600 text-white rounded-md shadow hover:bg-red-700 transition-colors"
+                        >
+                          Resubmit
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={5}
+                    className="text-center text-gray-700 py-4"
+                  >
+                    No documents found.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+          <Separator className="my-4" />
+          <div className="flex justify-between items-center">
+            <Button
+              size="sm"
               onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
               disabled={page === 1}
-              className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                page === 1
-                  ? "bg-slate-800/50 text-slate-600 cursor-not-allowed"
-                  : "bg-slate-700 text-slate-200 hover:bg-slate-600"
-              }`}
+              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md shadow hover:bg-gray-300 transition-colors"
             >
               <ChevronLeft className="w-4 h-4 mr-1" />
-              Previous
-            </button>
-            <span className="text-sm text-slate-400">
+              Prev
+            </Button>
+            <span className="text-sm text-gray-700">
               Page {page} of {totalPages}
             </span>
-            <button
+            <Button
+              size="sm"
               onClick={() => setPage((prev) => Math.min(prev + 1, totalPages))}
               disabled={page === totalPages}
-              className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                page === totalPages
-                  ? "bg-slate-800/50 text-slate-600 cursor-not-allowed"
-                  : "bg-slate-700 text-slate-200 hover:bg-slate-600"
-              }`}
+              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md shadow hover:bg-gray-300 transition-colors"
             >
               Next
               <ChevronRight className="w-4 h-4 ml-1" />
-            </button>
+            </Button>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

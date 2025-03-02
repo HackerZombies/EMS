@@ -1,4 +1,4 @@
-// lib/sendUpdateEmail.ts
+// lib/sendUserUpdateEmail.ts
 
 import nodemailer from 'nodemailer';
 import * as dotenv from 'dotenv';
@@ -36,7 +36,7 @@ const transporter = nodemailer.createTransport({
 });
 
 // Verify the transporter configuration (optional but recommended)
-transporter.verify(function (error, success) {
+transporter.verify((error, success) => {
   if (error) {
     console.error('Error with SMTP configuration:', error);
   } else {
@@ -44,13 +44,66 @@ transporter.verify(function (error, success) {
   }
 });
 
-// Function to send update email
+// Function to send user update email with an HTML template
 export const sendUpdateEmail = async (to: string, username: string, password: string) => {
   const mailOptions = {
     from: smtpUser, // Sender address from environment variable
     to,
-    subject: 'Your Account Information Has Been Updated', // Subject line
-    text: `Hey ${username},\n\nYour account information has been successfully updated! Here are your updated credentials:\n\nUsername: ${username}\nPassword: ${password}\n\nPlease update your credentials after logging in.\n\nThank You.`, // Plain text body
+    subject: 'Your Account Information Has Been Updated',
+    // Fallback plain text message
+    text: `Hey ${username},
+
+Your account information has been successfully updated! Here are your updated credentials:
+
+Username: ${username}
+Password: ${password}
+
+Please update your credentials after logging in.
+
+Thank You.`,
+    // HTML version of the email
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>Account Information Updated</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; margin: 0; padding: 0; background-color: #f6f6f6;">
+          <table align="center" width="600" cellpadding="0" cellspacing="0" style="border-collapse: collapse; background-color: #ffffff;">
+            <!-- Header with company name -->
+            <tr>
+              <td align="center" style="padding: 20px; background-color: #2C3E50;">
+                <h1 style="margin: 0; color: #ffffff; font-size: 24px;">
+                  Psitech Consultancy Services Pvt Ltd.
+                </h1>
+              </td>
+            </tr>
+            <!-- Email Body -->
+            <tr>
+              <td style="padding: 20px;">
+                <h2 style="color: #333333;">Hello ${username},</h2>
+                <p style="color: #333333;">Your account information has been successfully updated! Here are your updated credentials:</p>
+                <p style="color: #333333;">
+                  <strong>Username:</strong> ${username}<br/>
+                  <strong>Password:</strong> ${password}
+                </p>
+                <p style="color: #333333;">
+                  Please log in and update your credentials as soon as possible.
+                </p>
+                <p style="color: #333333;">Thank You.</p>
+              </td>
+            </tr>
+            <!-- Footer -->
+            <tr>
+              <td align="center" style="padding: 20px; background-color: #f0f0f0; color: #777777; font-size: 12px;">
+                &copy; ${new Date().getFullYear()} Psitech Consultancy Services Pvt Ltd. All rights reserved.
+              </td>
+            </tr>
+          </table>
+        </body>
+      </html>
+    `,
   };
 
   try {
@@ -67,4 +120,4 @@ export const sendUpdateEmail = async (to: string, username: string, password: st
   }
 };
 
-export default sendUpdateEmail; // Default export
+export default sendUpdateEmail;

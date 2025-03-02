@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -36,6 +36,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 
@@ -58,11 +59,9 @@ export interface CreateUserFormData {
   email: string;
   phoneNumber: string;
   dob: string;
-
   // Residential & Permanent addresses as proper objects
   residentialAddress: Address;
   permanentAddress: Address;
-
   nationality: string;
   gender: string;
   bloodGroup: string;
@@ -79,7 +78,6 @@ export interface CreateUserFormData {
   documents: UploadedDocuments;
   profileImageUrl: string;
   avatarImageUrl: string;
-
   // Used for "Same as Residential" checkbox
   sameAsResidential?: boolean;
 }
@@ -98,18 +96,11 @@ export default function CreateUserPage() {
 
   // Authorization logic
   const allowedRoles = ["ADMIN"];
-  if (status === "loading") {
-    return (
-      <div className="flex justify-center items-center h-screen bg-gray-900">
-        <span className="text-white text-xl">Loading...</span>
-      </div>
-    );
-  }
-
-  if (!session || !session.user || !allowedRoles.includes(session.user.role)) {
-    router.push("/unauthorized");
-    return null;
-  }
+  useEffect(() => {
+    if (status !== "loading" && (!session || !session.user || !allowedRoles.includes(session.user.role))) {
+      router.push("/unauthorized");
+    }
+  }, [session, status, router]);
 
   const [activeTab, setActiveTab] = useState("personal");
 
@@ -238,8 +229,8 @@ export default function CreateUserPage() {
     sameAsResidential: false,
   });
 
-  // Validation for each tab
-  const validateCurrentTab = (): boolean => {
+  // Enhanced validation for the current tab, memoized to prevent unnecessary re-renders
+  const validateCurrentTab = useCallback((): boolean => {
     let errors: string[] = [];
     if (activeTab === "personal") {
       errors = validatePersonalInfo(formData);
@@ -250,20 +241,18 @@ export default function CreateUserPage() {
     } else if (activeTab === "documents") {
       errors = validateDocuments(formData);
     }
-
     if (errors.length > 0) {
       setErrorMessage(errors.join(" "));
       return false;
-    } else {
-      setErrorMessage(null);
-      return true;
     }
-  };
+    setErrorMessage(null);
+    return true;
+  }, [activeTab, formData]);
 
-  const handleTabChange = (direction: "next" | "prev") => {
+  // Memoized tab change handler
+  const handleTabChange = useCallback((direction: "next" | "prev") => {
     const tabs = ["personal", "job", "qualifications", "documents"];
     const currentIndex = tabs.indexOf(activeTab);
-
     if (direction === "next") {
       if (!validateCurrentTab()) return;
       if (currentIndex < tabs.length - 1) {
@@ -274,11 +263,73 @@ export default function CreateUserPage() {
         setActiveTab(tabs[currentIndex - 1]);
       }
     }
-  };
+  }, [activeTab, validateCurrentTab]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Refactored helper function to build FormData from formData state
+  const buildFormData = useCallback((): FormData => {
+    const formDataToSend = new FormData();
+    // Append simple fields
+    const simpleFields: Array<keyof CreateUserFormData> = [
+      "firstName",
+      "middleName",
+      "lastName",
+      "email",
+      "phoneNumber",
+      "dob",
+      "nationality",
+      "gender",
+      "bloodGroup",
+      "role",
+      "department",
+      "position",
+      "workLocation",
+      "employmentType",
+      "joiningDate",
+      "profileImageUrl",
+      "avatarImageUrl",
+      "sameAsResidential",
+    ];
+    simpleFields.forEach((field) => {
+      const value = formData[field];
+      if (value !== undefined && value !== null) {
+        formDataToSend.append(field, String(value));
+      }
+    });
+    // Append address fields individually
+    Object.entries(formData.residentialAddress).forEach(([key, value]) => {
+      formDataToSend.append(`residentialAddress_${key}`, value);
+    });
+    Object.entries(formData.permanentAddress).forEach(([key, value]) => {
+      formDataToSend.append(`permanentAddress_${key}`, value);
+    });
+    // Append array fields as JSON strings
+    const arrayFields: Array<keyof CreateUserFormData> = [
+      "emergencyContacts",
+      "qualifications",
+      "experiences",
+      "certifications",
+    ];
+    arrayFields.forEach((field) => {
+      const value = formData[field];
+      if (Array.isArray(value)) {
+        formDataToSend.append(field, JSON.stringify(value));
+      }
+    });
+    // Append documents if they exist
+    Object.entries(formData.documents).forEach(([docType, docsArray]) => {
+      (docsArray as UploadedDocument[]).forEach((doc: UploadedDocument, index: number) => {
+        formDataToSend.append(`documents[${docType}][${index}][file]`, doc.file);
+        formDataToSend.append(`documents[${docType}][${index}][displayName]`, doc.displayName);
+        formDataToSend.append(`documents[${docType}][${index}][category]`, docType);
+        formDataToSend.append(`documents[${docType}][${index}][id]`, doc.id);
+      });
+    });
+    return formDataToSend;
+  }, [formData]);
+
+  // Memoized submit handler with enhanced error handling and UX
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-
     setSuccessMessage(null);
     setErrorMessage(null);
 
@@ -289,17 +340,14 @@ export default function CreateUserPage() {
       ...validateQualifications(formData),
       ...validateDocuments(formData),
     ];
-
     if (allErrors.length > 0) {
       setErrorMessage(allErrors.join(" "));
       return;
     }
-
-    // Start submission
     setIsSubmitting(true);
     setProgress(0);
 
-    // Simulate progress
+    // Simulate progress (if you later integrate real progress tracking, replace this)
     let currentProgress = 0;
     const fakeProgressInterval = setInterval(() => {
       currentProgress += 20;
@@ -311,91 +359,21 @@ export default function CreateUserPage() {
     }, 100);
 
     try {
-      // Build FormData
-      const formDataToSend = new FormData();
-
-      // Append simple fields
-      const simpleFields: Array<keyof CreateUserFormData> = [
-        "firstName",
-        "middleName",
-        "lastName",
-        "email",
-        "phoneNumber",
-        "dob",
-        "nationality",
-        "gender",
-        "bloodGroup",
-        "role",
-        "department",
-        "position",
-        "workLocation",
-        "employmentType",
-        "joiningDate",
-        "profileImageUrl",
-        "avatarImageUrl",
-        "sameAsResidential",
-      ];
-
-      simpleFields.forEach((field) => {
-        const value = formData[field];
-        if (value !== undefined && value !== null) {
-          formDataToSend.append(field, String(value));
-        }
-      });
-
-      // Append addresses field by field (without JSON.stringify)
-      Object.entries(formData.residentialAddress).forEach(([key, value]) => {
-        formDataToSend.append(`residentialAddress_${key}`, value);
-      });
-      Object.entries(formData.permanentAddress).forEach(([key, value]) => {
-        formDataToSend.append(`permanentAddress_${key}`, value);
-      });
-
-      // Append array fields
-      const complexFields: Array<keyof CreateUserFormData> = [
-        "emergencyContacts",
-        "qualifications",
-        "experiences",
-        "certifications",
-      ];
-      complexFields.forEach((field) => {
-        const value = formData[field];
-        if (Array.isArray(value)) {
-          formDataToSend.append(field, JSON.stringify(value));
-        }
-      });
-
-      // Append documents (assuming your document handling remains the same)
-      Object.entries(formData.documents).forEach(([docType, docsArray]) => {
-        (docsArray as UploadedDocument[]).forEach((doc: UploadedDocument, index) => {
-          formDataToSend.append(`documents[${docType}][${index}][file]`, doc.file);
-          formDataToSend.append(`documents[${docType}][${index}][displayName]`, doc.displayName);
-          formDataToSend.append(`documents[${docType}][${index}][category]`, docType);
-          formDataToSend.append(`documents[${docType}][${index}][id]`, doc.id);
-        });
-      });
-
-      // Send to API
+      const formDataToSend = buildFormData();
       const response = await fetch("/api/users/newUser", {
         method: "POST",
         body: formDataToSend,
       });
-
       setProgress(100);
-
       if (response.status === 409) {
         const errorData = await response.json();
         throw new Error(errorData.message || "Conflict: User may already exist.");
       }
-
       if (!response.ok) {
         throw new Error("Failed to create user");
       }
-
       const data = await response.json();
       setSuccessMessage(`New user created with username: ${data.username}`);
-
-      // Show 100% for a short delay, then navigate
       setTimeout(() => {
         setIsSubmitting(false);
         router.push(`/manage/users/user/${data.username}`);
@@ -405,7 +383,7 @@ export default function CreateUserPage() {
       setErrorMessage(error.message || "Failed to create user. Please try again.");
       setIsSubmitting(false);
     }
-  };
+  }, [formData, buildFormData, router]);
 
   return (
     <div className="container mx-auto p-4">
@@ -498,11 +476,11 @@ export default function CreateUserPage() {
         <DialogContent className="text-center space-y-4">
           <DialogHeader>
             <DialogTitle>Creating User...</DialogTitle>
+            <DialogDescription>
+              Please wait while we submit your data.
+            </DialogDescription>
           </DialogHeader>
           <Progress value={progress} className="w-full" />
-          <p className="text-sm text-muted-foreground">
-            Please wait while we submit your data.
-          </p>
         </DialogContent>
       </Dialog>
     </div>

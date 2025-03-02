@@ -16,7 +16,6 @@ import {
   WorkLocation,
   Department,
   Position,
-  // MaritalStatus,
 } from "@prisma/client";
 
 // Disable default body parser to handle multipart/form-data
@@ -37,9 +36,6 @@ interface FormFields {
   dob?: string;
   phoneNumber?: string;
   email?: string;
-  // We no longer expect these as JSON strings:
-  // residentialAddress?: string;
-  // permanentAddress?: string;
   nationality?: string;
   gender?: string;
   bloodGroup?: string;
@@ -207,7 +203,6 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
             };
           }
 
-          // If this is "displayName" or "category"
           if (docField === "displayName") {
             documentsMap[docCategory][docIndex].displayName = value;
           } else if (docField === "category") {
@@ -225,7 +220,6 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
 
       // Handle files
       bb.on("file", (fieldname, file, info) => {
-        // fieldname = "documents[resume][0][file]"
         const { filename, mimeType } = info;
         const allowedFileTypes = [
           "application/pdf",
@@ -266,7 +260,6 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
           };
         }
 
-        // Accumulate file buffers
         const fileBuffers: Buffer[] = [];
         file.on("data", (data: Buffer) => fileBuffers.push(data));
         file.on("error", (err) => {
@@ -282,13 +275,11 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
         });
       });
 
-      // Busboy error
       bb.on("error", (err) => {
         console.error("Busboy error:", err);
         reject(err);
       });
 
-      // All done
       bb.on("finish", () => {
         resolve();
       });
@@ -296,7 +287,6 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       req.pipe(bb);
     });
 
-  // 6) Try parsing and process the data
   try {
     await parseForm();
 
@@ -343,6 +333,26 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     }
 
     // ───────────────────────────────────────────────────────
+    // Pre-check for duplicate email
+    // ───────────────────────────────────────────────────────
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+    });
+    if (existingUser) {
+      return res.status(409).json({ message: "The email is already in use." });
+    }
+
+    // Optionally, you could also pre-check for username conflicts
+    let username = generateUsername(firstName);
+    const existingUsername = await prisma.user.findUnique({
+      where: { username },
+    });
+    // If a conflict exists, regenerate username (this is a simple example; you may loop until unique)
+    if (existingUsername) {
+      username = generateUsername(firstName);
+    }
+
+    // ───────────────────────────────────────────────────────
     // Build address objects from individual fields (no JSON parsing)
     // ───────────────────────────────────────────────────────
     const parsedResidentialAddress = {
@@ -366,15 +376,12 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
     };
 
     // Parse arrays from JSON strings
-    const parsedEmergencyContacts = safeJsonParse<EmergencyContactInput>(
-      emergencyContacts
-    );
+    const parsedEmergencyContacts = safeJsonParse<EmergencyContactInput>(emergencyContacts);
     const parsedQualifications = safeJsonParse<QualificationInput>(qualifications);
     const parsedExperiences = safeJsonParse<ExperienceInput>(experiences);
     const parsedCertifications = safeJsonParse<CertificationInput>(certifications);
 
-    // Generate username & hashed password
-    const username = generateUsername(firstName);
+    // Generate password and hash it
     const generatedPassword = generateSecurePassword();
     const hashedPassword = await bcrypt.hash(generatedPassword, 10);
 
@@ -465,11 +472,8 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
         role: role as UserRole,
         gender: gender ? (gender as Gender) : undefined,
         bloodGroup: bloodGroup ? (bloodGroup as BloodGroup) : undefined,
-        employmentType: employmentType
-          ? (employmentType as EmploymentType)
-          : undefined,
+        employmentType: employmentType ? (employmentType as EmploymentType) : undefined,
         dob: dob ? new Date(dob) : undefined,
-        // Nested create for address models
         residentialAddress: {
           create: parsedResidentialAddress,
         },
@@ -516,12 +520,9 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
 
     // Create experiences
     if (parsedExperiences.length > 0) {
-      // The 'startDate' is required in DB, so check
       for (const exp of parsedExperiences) {
         if (!exp.startDate) {
-          return res
-            .status(400)
-            .json({ message: "Experience startDate is required." });
+          return res.status(400).json({ message: "Experience startDate is required." });
         }
       }
 
@@ -558,7 +559,7 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
       for (const idxStr of docIndices) {
         const idx = parseInt(idxStr, 10);
         const docObj = documentsMap[cat][idx];
-        if (!docObj.file) continue; // no file
+        if (!docObj.file) continue; // no file uploaded
         const category = docObj.category || DocumentCategory.others;
 
         docsToCreate.push({
@@ -581,14 +582,11 @@ export default async function handle(req: NextApiRequest, res: NextApiResponse) 
 
     return res.status(200).json({ username: newUser.username });
   } catch (error: any) {
-    // Handle Prisma unique constraint errors
     if (error instanceof PrismaClientKnownRequestError) {
       if (error.code === "P2002") {
         const target = error.meta?.target;
         const field = Array.isArray(target) ? target.join(", ") : target;
-        return res
-          .status(409)
-          .json({ message: `The ${field} is already in use.` });
+        return res.status(409).json({ message: `The ${field} is already in use.` });
       }
     }
     console.error("Failed to create user:", error);

@@ -6,6 +6,7 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from './auth/[...nextauth]'
 import { prisma } from '@/lib/prisma'
 import { IncomingMessage } from 'http'
+import cookie from 'cookie' // Import cookie parsing library
 
 let wss: WebSocketServer | undefined
 
@@ -28,20 +29,24 @@ const wsHandler = async (req: NextApiRequest, res: NextApiResponse) => {
 
   // Attach an 'upgrade' event to handle the WebSocket handshake
   server.on('upgrade', async (upgradeReq, socket, head) => {
-    // ensure we can parse session
     try {
-      // For NextAuth session checks
-      // We create a “fake” request with cookies
+      // Parse cookies using the cookie library
+      const cookies = cookie.parse(upgradeReq.headers.cookie || '') as Record<string, string>;
+      console.log('Upgrade request cookies:', cookies);
+
+      // Enhance the request to include parsed cookies
       const enhancedReq = upgradeReq as IncomingMessage & {
         cookies: Record<string, string>
       }
-      enhancedReq.cookies = enhancedReq.cookies || {}
+      enhancedReq.cookies = cookies
 
+      // Retrieve session using getServerSession
       const session = await getServerSession({
         req: enhancedReq,
         res,
         ...authOptions,
       })
+      console.log('Session retrieved:', session)
 
       // Allow only HR/ADMIN to connect
       if (!session || !['HR', 'ADMIN'].includes(session.user?.role)) {
@@ -51,6 +56,7 @@ const wsHandler = async (req: NextApiRequest, res: NextApiResponse) => {
         return
       }
 
+      // Complete the upgrade process
       wss!.handleUpgrade(upgradeReq, socket, head, (ws) => {
         wss!.emit('connection', ws, upgradeReq, session)
       })
@@ -61,15 +67,16 @@ const wsHandler = async (req: NextApiRequest, res: NextApiResponse) => {
     }
   })
 
+  // Attach the WebSocket server to the HTTP server instance
   server.wss = wss
 
-  // Handle new connections
+  // Handle new WebSocket connections
   wss.on('connection', (ws: WebSocket, req: IncomingMessage, session: any) => {
     console.log(`WebSocket connected: ${session.user.username}`)
-    // Example: let client know server is ready
+    // Inform client that server is ready
     ws.send(JSON.stringify({ type: 'serverReady' }))
 
-    // Handle messages from client
+    // Handle incoming messages from the client
     ws.on('message', async (message: WebSocket.Data) => {
       try {
         const parsedMessage = JSON.parse(
